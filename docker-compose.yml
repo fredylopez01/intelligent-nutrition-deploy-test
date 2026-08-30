@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: intelligent-nutrition-backend
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: intelligent-nutrition-frontend
+    ports:
+      - "5173:5173"
+
+  database:
+    image: postgres:17
+    container_name: intelligent-nutrition-db
+    environment:
+      POSTGRES_DB: intelligent_nutrition
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
