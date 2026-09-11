@@ -1,29 +1,61 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: intelligent-nutrition-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: intelligent_nutrition
+      POSTGRES_PASSWORD: change_me
+      POSTGRES_DB: intelligent_nutrition
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U intelligent_nutrition -d intelligent_nutrition",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
+      dockerfile: Dockerfile
+
     container_name: intelligent-nutrition-backend
+    restart: unless-stopped
+
+    environment:
+      DATABASE_URL: "postgresql://intelligent_nutrition:change_me@postgres:5432/intelligent_nutrition?schema=public"
+
     ports:
       - "3000:3000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   frontend:
     build:
       context: ./frontend
-    container_name: intelligent-nutrition-frontend
-    ports:
-      - "5173:5173"
+      dockerfile: Dockerfile
 
-  database:
-    image: postgres:17
-    container_name: intelligent-nutrition-db
-    environment:
-      POSTGRES_DB: intelligent_nutrition
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+    container_name: intelligent-nutrition-frontend
+    restart: unless-stopped
+
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - "5173:80"
+
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:
