@@ -35,6 +35,8 @@ services:
 
     environment:
       DATABASE_URL: "postgresql://intelligent_nutrition:change_me@postgres:5432/intelligent_nutrition?schema=public"
+      JWT_SECRET: "change_this_to_a_long_random_secret"
+      JWT_EXPIRES_IN: "15m"
 
     ports:
       - "3000:3000"

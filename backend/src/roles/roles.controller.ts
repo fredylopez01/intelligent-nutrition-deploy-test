@@ -7,9 +7,9 @@ import {
   Patch,
   Post,
 } from "@nestjs/common";
-import { CreateRoleDto } from "./dto/create-role.dto";
-import { RolesService } from "./roles.service";
-import { UpdateRoleDto } from "./dto/update-role.dto";
+import { CreateRoleDto } from "./dto/create-role.dto.js";
+import { RolesService } from "./roles.service.js";
+import { UpdateRoleDto } from "./dto/update-role.dto.js";
 
 @Controller("roles")
 export class RolesController {

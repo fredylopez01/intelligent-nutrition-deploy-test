@@ -4,8 +4,8 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import * as argon2 from "argon2";
-import { PrismaService } from "../prisma/prisma.service";
-import { CreateUserDto } from "./dto/create-user.dto";
+import { PrismaService } from "../prisma/prisma.service.js";
+import { CreateUserDto } from "./dto/create-user.dto.js";
 
 @Injectable()
 export class UsersService {
