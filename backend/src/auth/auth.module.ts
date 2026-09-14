@@ -7,6 +7,9 @@ import { AuthController } from "./auth.controller.js";
 import { AuthService } from "./auth.service.js";
 import { JwtStrategy } from "./strategies/jwt.strategy.js";
 import type { StringValue } from "ms";
+import { RolesGuard } from "./guards/roles.guard.js";
+import { JwtAuthGuard } from "./guards/jwt-auth.guard.js";
+import { APP_GUARD } from "@nestjs/core";
 
 @Module({
   imports: [
@@ -36,7 +39,16 @@ import type { StringValue } from "ms";
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    JwtAuthGuard,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    RolesGuard,
+  ],
+  exports: [AuthService, JwtAuthGuard],
 })
 export class AuthModule {}
