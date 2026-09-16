@@ -1,22 +1,22 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
-import { UsersService } from './users.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateUserDto } from './dto/create-user.dto';
+import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 
-jest.mock('../prisma/prisma.service', () => {
-  return {
-    PrismaService: jest.fn().mockImplementation(() => ({
-      userAccount: {
-        findUnique: jest.fn(),
-        create: jest.fn(),
-      },
-      role: {
-        findUnique: jest.fn(),
-      },
-    })),
-  };
-});
+jest.unstable_mockModule('../prisma/prisma.service.js', () => ({
+  PrismaService: jest.fn().mockImplementation(() => ({
+    userAccount: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+    },
+    role: {
+      findUnique: jest.fn(),
+    },
+  })),
+}));
+
+const { Test } = await import('@nestjs/testing');
+const { ConflictException } = await import('@nestjs/common');
+const { UsersService } = await import('./users.service');
+const { PrismaService } = await import('../prisma/prisma.service.js');
+const { CreateUserDto } = await import('./dto/create-user.dto');
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -36,12 +36,12 @@ describe('UsersService', () => {
   };
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    const module = await Test.createTestingModule({
       providers: [UsersService, PrismaService],
     }).compile();
 
     service = module.get<UsersService>(UsersService);
-    prisma = module.get<PrismaService>(PrismaService);
+    prisma = module.get<any>(PrismaService);
   });
 
   it('should be defined', () => {
@@ -49,12 +49,12 @@ describe('UsersService', () => {
   });
 
   describe('create', () => {
-    const createUserDto: CreateUserDto = {
+    const createUserDto = {
       fullName: 'Juan Pérez',
       email: 'juan@test.com',
       password: 'password123',
       roleId: 'role-uuid-1',
-    };
+    } as CreateUserDto;
 
     it('should create a user successfully', async () => {
       prisma.userAccount.findUnique.mockResolvedValue(null);
@@ -81,7 +81,7 @@ describe('UsersService', () => {
       prisma.role.findUnique.mockResolvedValue(null);
 
       await expect(service.create(createUserDto)).rejects.toThrow(
-        NotFoundException,
+        'Role not found',
       );
     });
 

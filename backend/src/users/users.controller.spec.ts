@@ -1,26 +1,13 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import request from 'supertest';
-import { App } from 'supertest/types';
-import { UsersModule } from './users.module';
-import { PrismaService } from '../prisma/prisma.service';
+import { jest, describe, beforeAll, afterAll, it, expect } from '@jest/globals';
 
-jest.mock('../prisma/prisma.service', () => {
-  return {
-    PrismaService: jest.fn().mockImplementation(() => ({
-      userAccount: {
-        findUnique: jest.fn(),
-        create: jest.fn(),
-      },
-      role: {
-        findUnique: jest.fn(),
-      },
-    })),
-  };
-});
+const { Test } = await import('@nestjs/testing');
+const { INestApplication, ValidationPipe } = await import('@nestjs/common');
+const { UsersModule } = await import('./users.module');
+const { PrismaService } = await import('../prisma/prisma.service.js');
+const request = (await import('supertest')).default;
 
 describe('UsersController (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication;
   let prisma: any;
 
   const mockRole = { id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', name: 'SUPERADMIN' };
@@ -37,15 +24,28 @@ describe('UsersController (e2e)', () => {
   };
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
+    const mockPrisma = {
+      userAccount: {
+        findUnique: jest.fn(),
+        create: jest.fn(),
+      },
+      role: {
+        findUnique: jest.fn(),
+      },
+    };
+
+    const moduleFixture = await Test.createTestingModule({
       imports: [UsersModule],
-    }).compile();
+    })
+      .overrideProvider(PrismaService)
+      .useValue(mockPrisma)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
     await app.init();
 
-    prisma = moduleFixture.get<PrismaService>(PrismaService);
+    prisma = mockPrisma;
   });
 
   afterAll(async () => {
@@ -70,6 +70,19 @@ describe('UsersController (e2e)', () => {
 
       expect(response.body).toEqual(mockUser);
       expect(response.body).not.toHaveProperty('passwordHash');
+      expect(response.body.email).toBe('juan@test.com');
+      expect(response.body.fullName).toBe('Juan Pérez');
+      expect(response.body.roleId).toBe('a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+      expect(response.body.active).toBe(true);
+      expect(prisma.userAccount.create).toHaveBeenCalledTimes(1);
+      expect(prisma.userAccount.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            email: 'juan@test.com',
+            fullName: 'Juan Pérez',
+          }),
+        }),
+      );
     });
 
     it('should return 409 when email already exists', async () => {
