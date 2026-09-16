@@ -1,12 +1,12 @@
 import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 import { AuthService } from "./auth.service.js";
 import { LoginDto } from "./dto/login.dto.js";
-import { CurrentUser } from "./decorators/current-user.decorator.js";
-import type { AuthenticatedUser } from "../common/interfaces/AuthenticatedUser.js";
-import { Public } from "./decorators/public.decorator.js";
+import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
+import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
+import { Public } from "../../common/decorators/public.decorator.js";
 import { ActivateAccountDto } from "./dto/activate.dto.js";
-import { RolesGuard } from "./guards/roles.guard.js";
-import { Roles } from "./decorators/roles.decorator.js";
+import { RolesGuard } from "../../common/guards/roles.guard.js";
+import { Roles } from "../../common/decorators/roles.decorator.js";
 import { ResendActivationDto } from "./dto/resend-activation.dto.js";
 
 @Controller("auth")

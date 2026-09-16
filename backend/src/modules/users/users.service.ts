@@ -5,28 +5,28 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service.js";
+import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { CreateUserDto } from "./dto/create-user.dto.js";
 import { ConfigService } from "@nestjs/config";
 import { EmailService } from "../email/email.service.js";
-import { createHash, randomBytes } from "node:crypto";
+import { CryptoUtil } from "../../common/utils/crypto.util.js";
+import { AuthService } from "../auth/auth.service.js";
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
   ) {}
-  private readonly logger = new Logger(UsersService.name);
 
   async create(createUserDto: CreateUserDto) {
     const email = createUserDto.email.trim().toLowerCase();
 
     const existingUser = await this.prisma.userAccount.findUnique({
-      where: {
-        email,
-      },
+      where: { email },
     });
 
     if (existingUser) {
@@ -34,29 +34,21 @@ export class UsersService {
     }
 
     const role = await this.prisma.role.findUnique({
-      where: {
-        id: createUserDto.roleId,
-      },
+      where: { id: createUserDto.roleId },
     });
 
     if (!role) {
       throw new NotFoundException("Role not found");
     }
 
-    const rawToken = randomBytes(32).toString("hex");
-
-    const activationTokenHash = createHash("sha256")
-      .update(rawToken)
-      .digest("hex");
-
+    const rawToken = CryptoUtil.generateRandomToken();
+    const activationTokenHash = CryptoUtil.hashToken(rawToken);
     const expirationMinutes = this.configService.get<number>(
       "ACTIVATION_TOKEN_EXPIRATION_MINUTES",
       4320,
     );
-
-    const activationTokenExpiresAt = new Date(
-      Date.now() + expirationMinutes * 60 * 1000,
-    );
+    const activationTokenExpiresAt =
+      CryptoUtil.getExpirationDate(expirationMinutes);
 
     const user = await this.prisma.userAccount.create({
       data: {
@@ -80,13 +72,10 @@ export class UsersService {
       },
     });
 
-    const frontendUrl = this.configService.get<string>("FRONTEND_URL");
-
-    if (!frontendUrl) {
-      throw new Error("FRONTEND_URL environment variable is not configured");
-    }
-
-    const activationUrl = `${frontendUrl}/activate-account?token=${encodeURIComponent(rawToken)}`;
+    const activationUrl = CryptoUtil.buildActivationUrl(
+      this.configService,
+      rawToken,
+    );
 
     try {
       await this.emailService.sendUserActivationEmail(
@@ -96,10 +85,9 @@ export class UsersService {
       );
     } catch (error) {
       this.logger.error(
-        `User ${user.id} was created, but activation email could not be sent`,
+        `User ${user.id} created, but activation email failed`,
         error,
       );
-
       throw new InternalServerErrorException(
         "User was created, but the activation email could not be sent",
       );

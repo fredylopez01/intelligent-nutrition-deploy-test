@@ -11,8 +11,8 @@ import {
 import { CreateRoleDto } from "./dto/create-role.dto.js";
 import { RolesService } from "./roles.service.js";
 import { UpdateRoleDto } from "./dto/update-role.dto.js";
-import { RolesGuard } from "../auth/guards/roles.guard.js";
-import { Roles } from "../auth/decorators/roles.decorator.js";
+import { RolesGuard } from "../../common/guards/roles.guard.js";
+import { Roles } from "../../common/decorators/roles.decorator.js";
 
 @Controller("roles")
 export class RolesController {

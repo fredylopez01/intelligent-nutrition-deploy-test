@@ -1,6 +1,6 @@
-import { jest, describe, beforeEach, it, expect } from '@jest/globals';
+import { jest, describe, beforeEach, it, expect } from "@jest/globals";
 
-jest.unstable_mockModule('../prisma/prisma.service.js', () => ({
+jest.unstable_mockModule("../prisma/prisma.service.js", () => ({
   PrismaService: jest.fn().mockImplementation(() => ({
     userAccount: {
       findUnique: jest.fn(),
@@ -12,23 +12,23 @@ jest.unstable_mockModule('../prisma/prisma.service.js', () => ({
   })),
 }));
 
-const { Test } = await import('@nestjs/testing');
-const { ConflictException } = await import('@nestjs/common');
-const { UsersService } = await import('./users.service');
-const { PrismaService } = await import('../prisma/prisma.service.js');
-const { CreateUserDto } = await import('./dto/create-user.dto');
+const { Test } = await import("@nestjs/testing");
+const { ConflictException } = await import("@nestjs/common");
+const { UsersService } = await import("./users.service");
+const { PrismaService } = await import("../database/prisma/prisma.service.js");
+const { CreateUserDto } = await import("./dto/create-user.dto");
 
-describe('UsersService', () => {
+describe("UsersService", () => {
   let service: UsersService;
   let prisma: any;
 
-  const mockRole = { id: 'role-uuid-1', name: 'SUPERADMIN' };
+  const mockRole = { id: "role-uuid-1", name: "SUPERADMIN" };
 
   const mockUser = {
-    id: 'user-uuid-1',
-    fullName: 'Juan Pérez',
-    email: 'juan@test.com',
-    roleId: 'role-uuid-1',
+    id: "user-uuid-1",
+    fullName: "Juan Pérez",
+    email: "juan@test.com",
+    roleId: "role-uuid-1",
     active: true,
     lastLoginAt: null,
     createdAt: new Date(),
@@ -44,19 +44,19 @@ describe('UsersService', () => {
     prisma = module.get<any>(PrismaService);
   });
 
-  it('should be defined', () => {
+  it("should be defined", () => {
     expect(service).toBeDefined();
   });
 
-  describe('create', () => {
+  describe("create", () => {
     const createUserDto = {
-      fullName: 'Juan Pérez',
-      email: 'juan@test.com',
-      password: 'password123',
-      roleId: 'role-uuid-1',
+      fullName: "Juan Pérez",
+      email: "juan@test.com",
+      password: "password123",
+      roleId: "role-uuid-1",
     } as CreateUserDto;
 
-    it('should create a user successfully', async () => {
+    it("should create a user successfully", async () => {
       prisma.userAccount.findUnique.mockResolvedValue(null);
       prisma.role.findUnique.mockResolvedValue(mockRole);
       prisma.userAccount.create.mockResolvedValue(mockUser);
@@ -64,11 +64,11 @@ describe('UsersService', () => {
       const result = await service.create(createUserDto);
 
       expect(result).toEqual(mockUser);
-      expect(result.email).toBe('juan@test.com');
-      expect(result).not.toHaveProperty('passwordHash');
+      expect(result.email).toBe("juan@test.com");
+      expect(result).not.toHaveProperty("passwordHash");
     });
 
-    it('should throw ConflictException when email already exists', async () => {
+    it("should throw ConflictException when email already exists", async () => {
       prisma.userAccount.findUnique.mockResolvedValue(mockUser);
 
       await expect(service.create(createUserDto)).rejects.toThrow(
@@ -76,42 +76,42 @@ describe('UsersService', () => {
       );
     });
 
-    it('should throw NotFoundException when role does not exist', async () => {
+    it("should throw NotFoundException when role does not exist", async () => {
       prisma.userAccount.findUnique.mockResolvedValue(null);
       prisma.role.findUnique.mockResolvedValue(null);
 
       await expect(service.create(createUserDto)).rejects.toThrow(
-        'Role not found',
+        "Role not found",
       );
     });
 
-    it('should trim and lowercase email', async () => {
+    it("should trim and lowercase email", async () => {
       prisma.userAccount.findUnique.mockResolvedValue(null);
       prisma.role.findUnique.mockResolvedValue(mockRole);
       prisma.userAccount.create.mockResolvedValue(mockUser);
 
-      await service.create({ ...createUserDto, email: '  JUAN@TEST.COM  ' });
+      await service.create({ ...createUserDto, email: "  JUAN@TEST.COM  " });
 
       expect(prisma.userAccount.findUnique).toHaveBeenCalledWith({
-        where: { email: 'juan@test.com' },
+        where: { email: "juan@test.com" },
       });
     });
 
-    it('should trim fullName', async () => {
+    it("should trim fullName", async () => {
       prisma.userAccount.findUnique.mockResolvedValue(null);
       prisma.role.findUnique.mockResolvedValue(mockRole);
       prisma.userAccount.create.mockResolvedValue(mockUser);
 
-      await service.create({ ...createUserDto, fullName: '  Juan Pérez  ' });
+      await service.create({ ...createUserDto, fullName: "  Juan Pérez  " });
 
       expect(prisma.userAccount.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ fullName: 'Juan Pérez' }),
+          data: expect.objectContaining({ fullName: "Juan Pérez" }),
         }),
       );
     });
 
-    it('should hash the password', async () => {
+    it("should hash the password", async () => {
       prisma.userAccount.findUnique.mockResolvedValue(null);
       prisma.role.findUnique.mockResolvedValue(mockRole);
       prisma.userAccount.create.mockResolvedValue(mockUser);
@@ -119,18 +119,18 @@ describe('UsersService', () => {
       await service.create(createUserDto);
 
       const createCall = prisma.userAccount.create.mock.calls[0][0];
-      expect(createCall.data.passwordHash).not.toBe('password123');
+      expect(createCall.data.passwordHash).not.toBe("password123");
       expect(createCall.data.passwordHash.length).toBeGreaterThan(0);
     });
 
-    it('should not return passwordHash in response', async () => {
+    it("should not return passwordHash in response", async () => {
       prisma.userAccount.findUnique.mockResolvedValue(null);
       prisma.role.findUnique.mockResolvedValue(mockRole);
       prisma.userAccount.create.mockResolvedValue(mockUser);
 
       const result = await service.create(createUserDto);
 
-      expect(result).not.toHaveProperty('passwordHash');
+      expect(result).not.toHaveProperty("passwordHash");
     });
   });
 });

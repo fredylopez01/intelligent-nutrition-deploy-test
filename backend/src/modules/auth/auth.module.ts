@@ -2,15 +2,15 @@ import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
-import { PrismaModule } from "../prisma/prisma.module.js";
+import { PrismaModule } from "../../database/prisma/prisma.module.js";
 import { AuthController } from "./auth.controller.js";
 import { AuthService } from "./auth.service.js";
 import { JwtStrategy } from "./strategies/jwt.strategy.js";
 import type { StringValue } from "ms";
-import { RolesGuard } from "./guards/roles.guard.js";
-import { JwtAuthGuard } from "./guards/jwt-auth.guard.js";
+import { RolesGuard } from "../../common/guards/roles.guard.js";
+import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard.js";
 import { APP_GUARD } from "@nestjs/core";
-import { EmailModule } from "../email/email.module.js";
+import { EmailModule } from "../../modules/email/email.module.js";
 
 @Module({
   imports: [

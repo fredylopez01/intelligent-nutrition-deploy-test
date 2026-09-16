@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { PrismaService } from "../prisma/prisma.service.js";
+import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { CreateRoleDto } from "./dto/create-role.dto.js";
 import { UpdateRoleDto } from "./dto/update-role.dto.js";
 

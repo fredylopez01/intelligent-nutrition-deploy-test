@@ -6,13 +6,13 @@ import {
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as argon2 from "argon2";
-import { PrismaService } from "../prisma/prisma.service.js";
+import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { LoginDto } from "./dto/login.dto.js";
 import { ActivateAccountDto } from "./dto/activate.dto.js";
-import { createHash, randomBytes } from "node:crypto";
 import { ResendActivationDto } from "./dto/resend-activation.dto.js";
 import { ConfigService } from "@nestjs/config";
-import { EmailService } from "../email/email.service.js";
+import { EmailService } from "../../modules/email/email.service.js";
+import { CryptoUtil } from "../../common/utils/crypto.util.js";
 
 @Injectable()
 export class AuthService {
@@ -27,9 +27,7 @@ export class AuthService {
     const email = loginDto.email.trim().toLowerCase();
 
     const user = await this.prisma.userAccount.findUnique({
-      where: {
-        email,
-      },
+      where: { email },
     });
 
     if (!user) {
@@ -54,42 +52,27 @@ export class AuthService {
     }
 
     await this.prisma.userAccount.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        lastLoginAt: new Date(),
-      },
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
     });
 
-    const payload = {
-      sub: user.id,
-    };
-
-    const accessToken = await this.jwtService.signAsync(payload);
+    const accessToken = await this.jwtService.signAsync({ sub: user.id });
 
     return {
       accessToken,
-      expiresIn: process.env.JWT_EXPIRES_IN ?? "15m",
+      expiresIn: this.configService.get<string>("JWT_EXPIRES_IN", "15m"),
     };
   }
 
   async activateAccount(activateAccountDto: ActivateAccountDto) {
-    const tokenHash = createHash("sha256")
-      .update(activateAccountDto.token)
-      .digest("hex");
+    const tokenHash = CryptoUtil.hashToken(activateAccountDto.token);
 
     const user = await this.prisma.userAccount.findUnique({
-      where: {
-        activationTokenHash: tokenHash,
-      },
+      where: { activationTokenHash: tokenHash },
     });
 
-    if (!user) {
-      throw new BadRequestException("Invalid or expired activation token");
-    }
-
     if (
+      !user ||
       !user.activationTokenExpiresAt ||
       user.activationTokenExpiresAt <= new Date()
     ) {
@@ -103,9 +86,7 @@ export class AuthService {
     const passwordHash = await argon2.hash(activateAccountDto.password);
 
     await this.prisma.userAccount.update({
-      where: {
-        id: user.id,
-      },
+      where: { id: user.id },
       data: {
         passwordHash,
         mustChangePassword: false,
@@ -114,9 +95,7 @@ export class AuthService {
       },
     });
 
-    return {
-      message: "User account activated successfully",
-    };
+    return { message: "User account activated successfully" };
   }
 
   async resendActivation(resendActivationDto: ResendActivationDto) {
@@ -134,47 +113,33 @@ export class AuthService {
       throw new BadRequestException("User account is already activated");
     }
 
-    const rawToken = randomBytes(32).toString("hex");
-
-    const activationTokenHash = createHash("sha256")
-      .update(rawToken)
-      .digest("hex");
-
+    const rawToken = CryptoUtil.generateRandomToken();
+    const activationTokenHash = CryptoUtil.hashToken(rawToken);
     const expirationMinutes = this.configService.get<number>(
       "ACTIVATION_TOKEN_EXPIRATION_MINUTES",
       4320,
     );
-
-    const activationTokenExpiresAt = new Date(
-      Date.now() + expirationMinutes * 60 * 1000,
-    );
+    const activationTokenExpiresAt =
+      CryptoUtil.getExpirationDate(expirationMinutes);
 
     await this.prisma.userAccount.update({
-      where: {
-        id: user.id,
-      },
+      where: { id: user.id },
       data: {
         activationTokenHash,
         activationTokenExpiresAt,
       },
     });
 
-    const frontendUrl = this.configService.get<string>("FRONTEND_URL");
-
-    if (!frontendUrl) {
-      throw new Error("FRONTEND_URL environment variable is not configured");
-    }
-
-    const activationUrl = `${frontendUrl}/activate-account?token=${encodeURIComponent(rawToken)}`;
-
+    const activationUrl = CryptoUtil.buildActivationUrl(
+      this.configService,
+      rawToken,
+    );
     await this.emailService.sendUserActivationEmail(
       user.email,
       user.fullName,
       activationUrl,
     );
 
-    return {
-      message: "Activation email sent successfully",
-    };
+    return { message: "Activation email sent successfully" };
   }
 }
