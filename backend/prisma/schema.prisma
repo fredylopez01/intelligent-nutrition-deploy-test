@@ -25,17 +25,20 @@ model Role {
 }
 
 model UserAccount {
-  id           String    @id @default(uuid()) @db.Uuid
-  fullName     String    @db.VarChar(150)
-  email        String    @unique @db.VarChar(150)
-  passwordHash String    @map("password_hash") @db.VarChar(255)
-  roleId       String    @map("role_id") @db.Uuid
-  active       Boolean   @default(true)
-  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamp(6)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  id                      String    @id @default(uuid()) @db.Uuid
+  fullName                String    @db.VarChar(150)
+  email                   String    @unique @db.VarChar(150)
+  passwordHash            String?   @map("password_hash") @db.VarChar(255)
+  roleId                  String    @map("role_id") @db.Uuid
+  active                  Boolean   @default(true)
+  mustChangePassword      Boolean   @default(true) @map("must_change_password")
+  activationTokenHash     String?   @unique @map("activation_token_hash") @db.VarChar(255)
+  activationTokenExpiresAt DateTime? @map("activation_token_expires_at") @db.Timestamp(6)
+  lastLoginAt             DateTime? @map("last_login_at") @db.Timestamp(6)
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  role         Role      @relation(fields: [roleId], references: [id])
+  role                    Role      @relation(fields: [roleId], references: [id])
 
   @@map("user_account")
 }
