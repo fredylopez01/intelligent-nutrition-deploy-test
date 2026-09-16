@@ -3,20 +3,18 @@ import {
   IsNotEmpty,
   IsString,
   IsUUID,
-  MinLength,
+  MaxLength,
 } from "class-validator";
 
 export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(150)
   fullName!: string;
 
   @IsEmail()
+  @MaxLength(150)
   email!: string;
-
-  @IsString()
-  @MinLength(8)
-  password!: string;
 
   @IsUUID()
   roleId!: string;

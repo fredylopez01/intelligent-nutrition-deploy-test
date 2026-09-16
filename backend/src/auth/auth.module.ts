@@ -10,6 +10,7 @@ import type { StringValue } from "ms";
 import { RolesGuard } from "./guards/roles.guard.js";
 import { JwtAuthGuard } from "./guards/jwt-auth.guard.js";
 import { APP_GUARD } from "@nestjs/core";
+import { EmailModule } from "../email/email.module.js";
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { APP_GUARD } from "@nestjs/core";
         };
       },
     }),
+    EmailModule,
   ],
   controllers: [AuthController],
   providers: [
