@@ -35,6 +35,7 @@ temp/
 # Prisma
 prisma/*.db
 prisma/*.db-journal
+backend/generated/
 
 # Logs
 logs
