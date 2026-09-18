@@ -1,78 +1,77 @@
-# React + TypeScript + Vite
+# Intelligent Nutrition — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Aplicación web del sistema de gestión de inventario y punto de venta para las
+sedes de Intelligent Nutrition. Construida con **React + TypeScript + Vite**.
 
-Currently, two official plugins are available:
+## Requisitos previos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 20 o superior
+- npm 10 o superior
+- Backend corriendo (ver `docker-compose.yml` en la raíz del repositorio)
 
-## React Compiler
+## Instalación
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+\`\`\`bash
+npm install
+\`\`\`
 
-Note: This will impact Vite dev & build performances.
-You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
+Copia el archivo de variables de entorno de ejemplo y ajústalo según tu entorno:
 
-## Expanding the ESLint configuration
+\`\`\`bash
+cp .env.example .env.local
+\`\`\`
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+> `.env.local` nunca debe subirse al repositorio (ver Contribuiting.md, sección 18).
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Scripts disponibles
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+| Comando                 | Descripción                                         |
+| ----------------------- | --------------------------------------------------- |
+| `npm run dev`           | Levanta el servidor de desarrollo con hot reload    |
+| `npm run build`         | Compila TypeScript y genera el build de producción  |
+| `npm run lint`          | Corre ESLint sobre todo el proyecto                 |
+| `npm run lint -- --fix` | Corre ESLint y corrige automáticamente lo que pueda |
+| `npm run preview`       | Sirve el build de producción localmente             |
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Calidad de código
 
-```
+El proyecto usa:
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+- **ESLint 10** con reglas de TypeScript, React Hooks, accesibilidad
+  (`jsx-a11y`) y orden de imports (`import-x`).
+- **Prettier** integrado como regla de ESLint (`prettier/prettier`), así que
+  un error de formato se reporta igual que cualquier otro error de lint.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+> Nota: `eslint-plugin-jsx-a11y` aún no declara soporte oficial para
+> ESLint 10 en su `package.json` (funciona correctamente, solo falta que
+> actualicen su rango de peer dependencies). Se instaló con
+> `--legacy-peer-deps` únicamente para ese paquete. Revisar en futuras
+> actualizaciones si ya lo soportan de forma nativa.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Antes de abrir un Pull Request, corre:
 
-```
+\`\`\`bash
+npm run lint
+npm run build
+\`\`\`
+
+## Estructura del proyecto
+
+\`\`\`
+src/
+├── assets/ Imágenes y recursos estáticos
+├── components/ Componentes reutilizables de UI
+├── context/ Contextos de React (ej. sesión de usuario)
+├── hooks/ Hooks personalizados (ej. useAuth, useUsers)
+├── layouts/ Layouts compartidos (ej. AppLayout, AuthLayout)
+├── pages/ Páginas/vistas de la aplicación
+├── routes/ Configuración de rutas y protección por rol
+├── services/ Llamadas a la API backend
+├── types/ Tipos e interfaces de TypeScript
+└── utils/ Funciones auxiliares
+\`\`\`
+
+## Convenciones
+
+El flujo de ramas, commits y Pull Requests sigue lo definido en
+`Contribuiting.md` en la raíz del repositorio.
