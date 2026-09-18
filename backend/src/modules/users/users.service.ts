@@ -11,6 +11,8 @@ import { ConfigService } from "@nestjs/config";
 import { EmailService } from "../email/email.service.js";
 import { CryptoUtil } from "../../common/utils/crypto.util.js";
 import { AuthService } from "../auth/auth.service.js";
+import { ListUsersQueryDto } from "./dto/list-users-query.dto.js";
+import { PaginatedUsersResponseDto } from "./dto/paginated-user-response.dto.js";
 
 @Injectable()
 export class UsersService {
@@ -94,5 +96,53 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  async findAll(query: ListUsersQueryDto): Promise<PaginatedUsersResponseDto> {
+    const { page, limit, active } = query;
+    const skip = (page - 1) * limit;
+
+    const where = active === undefined ? {} : { active };
+
+    const [total, users] = await this.prisma.$transaction([
+      this.prisma.userAccount.count({ where }),
+      this.prisma.userAccount.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          active: true,
+          mustChangePassword: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+          role: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+
+    return {
+      data: users,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+      ...(total === 0 && {
+        message: "No registered users were found.",
+      }),
+    };
   }
 }
