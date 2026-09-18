@@ -16,6 +16,7 @@ import { ListUsersQueryDto } from "./dto/list-users-query.dto.js";
 import { PaginatedUsersResponseDto } from "./dto/paginated-user-response.dto.js";
 import { ChangeUserRoleDto } from "./dto/change-user-role.dto.js";
 import { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
+import { UpdateUserDto } from "./dto/update-user.dto.js";
 
 @Injectable()
 export class UsersService {
@@ -224,6 +225,67 @@ export class UsersService {
         },
       },
     });
+
+    return updatedUser;
+  }
+
+  async update(
+    userId: string,
+    updateUserDto: UpdateUserDto,
+    currentUser: AuthenticatedUser,
+  ) {
+    if (currentUser.id !== userId && currentUser.role.name !== "SUPER ADMIN") {
+      throw new BadRequestException("You can only update your own account");
+    }
+
+    const { fullName, email } = updateUserDto;
+
+    if (fullName === undefined && email === undefined) {
+      throw new BadRequestException(
+        "At least one field must be provided to update",
+      );
+    }
+
+    const existingUser = await this.findUserById(userId);
+
+    if (email && email !== existingUser.email) {
+      const emailTaken = await this.prisma.userAccount.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+
+      if (emailTaken) {
+        throw new ConflictException("Email is already registered");
+      }
+    }
+
+    const data: { fullName?: string; email?: string } = {};
+    if (fullName !== undefined) data.fullName = fullName;
+    if (email !== undefined && email !== existingUser.email) data.email = email;
+
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException("No changes detected");
+    }
+
+    const updatedUser = await this.prisma.userAccount.update({
+      where: { id: userId },
+      data,
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        active: true,
+        mustChangePassword: true,
+        lastLoginAt: true,
+        createdAt: true,
+        updatedAt: true,
+        role: { select: { id: true, name: true } },
+      },
+    });
+
+    this.logger.log(
+      `User ${userId} updated. Fields changed: ${Object.keys(data).join(", ")}`,
+    );
 
     return updatedUser;
   }

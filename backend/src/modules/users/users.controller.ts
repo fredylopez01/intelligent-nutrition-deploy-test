@@ -15,6 +15,7 @@ import { ListUsersQueryDto } from "./dto/list-users-query.dto.js";
 import { ChangeUserRoleDto } from "./dto/change-user-role.dto.js";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
+import { UpdateUserDto } from "./dto/update-user.dto.js";
 
 @Controller("users")
 export class UsersController {
@@ -40,5 +41,14 @@ export class UsersController {
     @CurrentUser() currentUser: AuthenticatedUser,
   ) {
     return this.usersService.changeRole(id, changeUserRoleDto, currentUser);
+  }
+
+  @Patch(":id")
+  update(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ) {
+    return this.usersService.update(id, updateUserDto, currentUser);
   }
 }
