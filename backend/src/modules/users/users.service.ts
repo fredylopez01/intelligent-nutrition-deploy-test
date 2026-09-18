@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   InternalServerErrorException,
@@ -13,6 +14,8 @@ import { CryptoUtil } from "../../common/utils/crypto.util.js";
 import { AuthService } from "../auth/auth.service.js";
 import { ListUsersQueryDto } from "./dto/list-users-query.dto.js";
 import { PaginatedUsersResponseDto } from "./dto/paginated-user-response.dto.js";
+import { ChangeUserRoleDto } from "./dto/change-user-role.dto.js";
+import { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 
 @Injectable()
 export class UsersService {
@@ -144,5 +147,84 @@ export class UsersService {
         message: "No registered users were found.",
       }),
     };
+  }
+
+  async findUserById(userId: string) {
+    const user = await this.prisma.userAccount.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        active: true,
+        mustChangePassword: true,
+        lastLoginAt: true,
+        createdAt: true,
+        updatedAt: true,
+        role: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    return user;
+  }
+
+  async changeRole(
+    userId: string,
+    changeUserRoleDto: ChangeUserRoleDto,
+    currentUser: AuthenticatedUser,
+  ) {
+    const { roleId } = changeUserRoleDto;
+
+    const user = await this.findUserById(userId);
+
+    if (user.id === currentUser.id) {
+      throw new BadRequestException("You cannot change your own role");
+    }
+
+    if (user.role.id === roleId) {
+      throw new BadRequestException("User already has the specified role");
+    }
+
+    const targetRole = await this.prisma.role.findUnique({
+      where: { id: roleId },
+      select: { id: true, name: true, active: true },
+    });
+
+    if (!targetRole) {
+      throw new NotFoundException("Role not found");
+    }
+
+    if (!targetRole.active) {
+      throw new BadRequestException("Cannot assign an inactive role");
+    }
+
+    const updatedUser = await this.prisma.userAccount.update({
+      where: { id: userId },
+      data: { roleId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        active: true,
+        mustChangePassword: true,
+        lastLoginAt: true,
+        createdAt: true,
+        updatedAt: true,
+        role: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    return updatedUser;
   }
 }
