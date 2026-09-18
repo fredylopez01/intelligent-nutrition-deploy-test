@@ -1,6 +1,6 @@
 import { jest, describe, beforeEach, it, expect } from "@jest/globals";
 
-jest.unstable_mockModule("../prisma/prisma.service.js", () => ({
+jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
   PrismaService: jest.fn().mockImplementation(() => ({
     role: {
       findUnique: jest.fn(),
@@ -17,7 +17,8 @@ jest.unstable_mockModule("../prisma/prisma.service.js", () => ({
 
 const { Test } = await import("@nestjs/testing");
 const { RolesService } = await import("./roles.service.js");
-const { PrismaService } = await import("../database/prisma/prisma.service.js");
+const { PrismaService } =
+  await import("../../database/prisma/prisma.service.js");
 const { ConflictException, NotFoundException } = await import("@nestjs/common");
 
 describe("RolesService", () => {

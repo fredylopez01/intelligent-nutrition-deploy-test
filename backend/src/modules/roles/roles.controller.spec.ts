@@ -1,20 +1,21 @@
 import { jest, describe, beforeAll, afterAll, it, expect } from "@jest/globals";
+import { INestApplication } from "@nestjs/common";
 
 process.env.JWT_SECRET = "test-secret";
 
 const { Test } = await import("@nestjs/testing");
-const { INestApplication, ValidationPipe, Module } =
-  await import("@nestjs/common");
+const { ValidationPipe, Module } = await import("@nestjs/common");
 const { ConfigModule } = await import("@nestjs/config");
 const { PassportModule } = await import("@nestjs/passport");
 const { JwtModule, JwtService } = await import("@nestjs/jwt");
 const { RolesController } = await import("./roles.controller.js");
 const { RolesService } = await import("./roles.service.js");
-const { PrismaService } = await import("../database/prisma/prisma.service.js");
+const { PrismaService } =
+  await import("../../database/prisma/prisma.service.js");
 const { Reflector } = await import("@nestjs/core");
 const { JwtStrategy } = await import("../auth/strategies/jwt.strategy.js");
-const { JwtAuthGuard } = await import("../common/guards/jwt-auth.guard.js");
-const { RolesGuard } = await import("../common/guards/roles.guard.js");
+const { JwtAuthGuard } = await import("../../common/guards/jwt-auth.guard.js");
+const { RolesGuard } = await import("../../common/guards/roles.guard.js");
 const { APP_GUARD } = await import("@nestjs/core");
 const request = (await import("supertest")).default;
 
@@ -46,14 +47,16 @@ const request = (await import("supertest")).default;
           delete: jest.fn(),
         },
         userAccount: {
-          count: jest.fn(),
-          findUnique: jest.fn().mockResolvedValue({
-            id: "user-uuid-1",
-            email: "admin@test.com",
-            roleId: "role-uuid-1",
-            active: true,
-            role: { id: "role-uuid-1", name: "SUPER ADMIN" },
-          }),
+          count: jest.fn<(...args: any[]) => Promise<any>>(),
+          findUnique: jest
+            .fn<(...args: any[]) => Promise<any>>()
+            .mockResolvedValue({
+              id: "user-uuid-1",
+              email: "admin@test.com",
+              roleId: "role-uuid-1",
+              active: true,
+              role: { id: "role-uuid-1", name: "SUPER ADMIN" },
+            }),
         },
       },
     },

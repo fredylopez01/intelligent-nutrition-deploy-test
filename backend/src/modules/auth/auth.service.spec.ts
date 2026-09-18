@@ -11,7 +11,7 @@ jest.unstable_mockModule("argon2", () => ({
   verify: jest.fn(),
 }));
 
-jest.unstable_mockModule("../prisma/prisma.service.js", () => ({
+jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
   PrismaService: jest.fn().mockImplementation(() => ({
     userAccount: {
       findUnique: jest.fn(),
@@ -22,10 +22,13 @@ jest.unstable_mockModule("../prisma/prisma.service.js", () => ({
 
 const argon2 = await import("argon2");
 const { Test } = await import("@nestjs/testing");
-const { AuthService } = await import("./auth.service");
-const { PrismaService } = await import("../database/prisma/prisma.service.js");
+const { AuthService } = await import("./auth.service.js");
+const { PrismaService } =
+  await import("../../database/prisma/prisma.service.js");
 const { JwtService } = await import("@nestjs/jwt");
 const { UnauthorizedException } = await import("@nestjs/common");
+const { ConfigService } = await import("@nestjs/config");
+const { EmailService } = await import("../email/email.service.js");
 
 describe("AuthService", () => {
   let service: any;
@@ -52,7 +55,22 @@ describe("AuthService", () => {
         {
           provide: JwtService,
           useValue: {
-            signAsync: jest.fn().mockResolvedValue("mock-jwt-token"),
+            signAsync: jest
+              .fn<(...args: any[]) => Promise<any>>()
+              .mockResolvedValue("mock-jwt-token"),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn<(...args: any[]) => any>().mockReturnValue("15m"),
+          },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendUserActivationEmail:
+              jest.fn<(...args: any[]) => Promise<any>>(),
           },
         },
       ],

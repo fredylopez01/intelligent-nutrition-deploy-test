@@ -1,6 +1,9 @@
 import { jest, describe, beforeEach, it, expect } from "@jest/globals";
 
-jest.unstable_mockModule("../prisma/prisma.service.js", () => ({
+import type { UsersService } from "./users.service.js";
+import type { CreateUserDto } from "./dto/create-user.dto.js";
+
+jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
   PrismaService: jest.fn().mockImplementation(() => ({
     userAccount: {
       findUnique: jest.fn(),
@@ -13,10 +16,22 @@ jest.unstable_mockModule("../prisma/prisma.service.js", () => ({
 }));
 
 const { Test } = await import("@nestjs/testing");
-const { ConflictException } = await import("@nestjs/common");
-const { UsersService } = await import("./users.service");
-const { PrismaService } = await import("../database/prisma/prisma.service.js");
-const { CreateUserDto } = await import("./dto/create-user.dto");
+const { ConflictException, NotFoundException } = await import("@nestjs/common");
+const { ConfigService } = await import("@nestjs/config");
+const { UsersService: UsersServiceClass } = await import("./users.service.js");
+const { PrismaService } =
+  await import("../../database/prisma/prisma.service.js");
+const { EmailService } = await import("../email/email.service.js");
+
+const mockConfigService = {
+  get: jest.fn<(...args: any[]) => any>().mockReturnValue(4320),
+};
+
+const mockEmailService = {
+  sendUserActivationEmail: jest
+    .fn<(...args: any[]) => Promise<any>>()
+    .mockResolvedValue(undefined),
+};
 
 describe("UsersService", () => {
   let service: UsersService;
@@ -30,18 +45,26 @@ describe("UsersService", () => {
     email: "juan@test.com",
     roleId: "role-uuid-1",
     active: true,
-    lastLoginAt: null,
+    mustChangePassword: true,
     createdAt: new Date(),
-    updatedAt: new Date(),
   };
 
   beforeEach(async () => {
     const module = await Test.createTestingModule({
-      providers: [UsersService, PrismaService],
+      providers: [
+        UsersServiceClass,
+        PrismaService,
+        { provide: ConfigService, useValue: mockConfigService },
+        { provide: EmailService, useValue: mockEmailService },
+      ],
     }).compile();
 
-    service = module.get<UsersService>(UsersService);
+    service = module.get<UsersService>(UsersServiceClass);
     prisma = module.get<any>(PrismaService);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   it("should be defined", () => {
@@ -81,7 +104,7 @@ describe("UsersService", () => {
       prisma.role.findUnique.mockResolvedValue(null);
 
       await expect(service.create(createUserDto)).rejects.toThrow(
-        "Role not found",
+        NotFoundException,
       );
     });
 
@@ -111,16 +134,19 @@ describe("UsersService", () => {
       );
     });
 
-    it("should hash the password", async () => {
+    it("should send activation email after creating user", async () => {
       prisma.userAccount.findUnique.mockResolvedValue(null);
       prisma.role.findUnique.mockResolvedValue(mockRole);
       prisma.userAccount.create.mockResolvedValue(mockUser);
 
       await service.create(createUserDto);
 
-      const createCall = prisma.userAccount.create.mock.calls[0][0];
-      expect(createCall.data.passwordHash).not.toBe("password123");
-      expect(createCall.data.passwordHash.length).toBeGreaterThan(0);
+      expect(mockEmailService.sendUserActivationEmail).toHaveBeenCalledTimes(1);
+      expect(mockEmailService.sendUserActivationEmail).toHaveBeenCalledWith(
+        mockUser.email,
+        mockUser.fullName,
+        expect.any(String),
+      );
     });
 
     it("should not return passwordHash in response", async () => {

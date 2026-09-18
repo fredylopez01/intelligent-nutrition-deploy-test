@@ -14,29 +14,32 @@ jest.unstable_mockModule("argon2", () => ({
 
 const argon2 = await import("argon2");
 const { Test } = await import("@nestjs/testing");
-const {
-  INestApplication,
-  ValidationPipe,
-  Module: NestModule,
-} = await import("@nestjs/common");
-const { AuthController } = await import("./auth.controller");
-const { AuthService } = await import("./auth.service");
-const { PrismaService } = await import("../database/prisma/prisma.service.js");
-const { JwtService } = await import("@nestjs/jwt");
-const { ConfigModule, ConfigService } = await import("@nestjs/config");
+const { ValidationPipe, Module: NestModule } = await import("@nestjs/common");
+const { AuthController } = await import("./auth.controller.js");
+const { AuthService } = await import("./auth.service.js");
+const { PrismaService } =
+  await import("../../database/prisma/prisma.service.js");
+const { ConfigModule } = await import("@nestjs/config");
 const { Reflector, APP_GUARD } = await import("@nestjs/core");
 const { PassportModule } = await import("@nestjs/passport");
 const { JwtModule } = await import("@nestjs/jwt");
-const { JwtAuthGuard } = await import("../common/guards/jwt-auth.guard");
-const { RolesGuard } = await import("../common/guards/roles.guard");
-const { JwtStrategy } = await import("./strategies/jwt.strategy");
+const { JwtAuthGuard } = await import("../../common/guards/jwt-auth.guard.js");
+const { RolesGuard } = await import("../../common/guards/roles.guard.js");
+const { JwtStrategy } = await import("./strategies/jwt.strategy.js");
 const request = (await import("supertest")).default;
 
 const mockPrismaService = {
   userAccount: {
-    findUnique: jest.fn(),
-    update: jest.fn(),
+    findUnique: jest.fn<(...args: any[]) => Promise<any>>(),
+    update: jest.fn<(...args: any[]) => Promise<any>>(),
   },
+};
+
+const { EmailService } = await import("../email/email.service.js");
+const { ConfigService } = await import("@nestjs/config");
+
+const mockEmailService = {
+  sendUserActivationEmail: jest.fn<(...args: any[]) => Promise<any>>(),
 };
 
 @NestModule({
@@ -55,18 +58,13 @@ const mockPrismaService = {
   controllers: [AuthController],
   providers: [
     AuthService,
-    {
-      provide: PrismaService,
-      useValue: mockPrismaService,
-    },
+    { provide: PrismaService, useValue: mockPrismaService },
+    { provide: EmailService, useValue: mockEmailService },
     Reflector,
     JwtStrategy,
     JwtAuthGuard,
     RolesGuard,
-    {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
-    },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
 })
 class TestAuthModule {}
