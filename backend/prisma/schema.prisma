@@ -1,0 +1,44 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Role {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String  @unique @db.VarChar(50)
+  description String? @db.VarChar(255)
+  active      Boolean @default(true)
+
+  users       UserAccount[]
+
+  @@map("role")
+}
+
+model UserAccount {
+  id                      String    @id @default(uuid()) @db.Uuid
+  fullName                String    @db.VarChar(150)
+  email                   String    @unique @db.VarChar(150)
+  passwordHash            String?   @map("password_hash") @db.VarChar(255)
+  roleId                  String    @map("role_id") @db.Uuid
+  active                  Boolean   @default(true)
+  mustChangePassword      Boolean   @default(true) @map("must_change_password")
+  activationTokenHash     String?   @unique @map("activation_token_hash") @db.VarChar(255)
+  activationTokenExpiresAt DateTime? @map("activation_token_expires_at") @db.Timestamp(6)
+  lastLoginAt             DateTime? @map("last_login_at") @db.Timestamp(6)
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  role                    Role      @relation(fields: [roleId], references: [id])
+
+  @@map("user_account")
+}
