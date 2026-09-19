@@ -1,0 +1,27 @@
+# azure-pipelines.yml
+# Sincroniza la rama main de Azure Repos hacia GitHub
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - group: github-sync-secrets # Grupo con GH_PAT
+
+steps:
+  - checkout: self
+    fetchDepth: 0 # Clonar todo el historial
+
+  - script: |
+      git config --global user.email "ci-bot@intelligentnutrition.shop"
+      git config --global user.name "CI-CD Bot"
+
+      git remote add github https://$(GH_PAT)@github.com/fredylopez01/intelligent-nutrition.git
+
+      # Push forzado de la rama main hacia GitHub
+      git push github main -f
+    displayName: "Sync main branch to GitHub"
