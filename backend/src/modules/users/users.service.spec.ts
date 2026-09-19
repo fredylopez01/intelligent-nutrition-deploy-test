@@ -1,13 +1,22 @@
-import { jest, describe, beforeEach, it, expect } from "@jest/globals";
+import {
+  jest,
+  describe,
+  beforeEach,
+  afterEach,
+  it,
+  expect,
+} from "@jest/globals";
 
 import type { UsersService } from "./users.service.js";
 import type { CreateUserDto } from "./dto/create-user.dto.js";
+import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 
 jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
   PrismaService: jest.fn().mockImplementation(() => ({
     userAccount: {
       findUnique: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     },
     role: {
       findUnique: jest.fn(),
@@ -16,7 +25,8 @@ jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
 }));
 
 const { Test } = await import("@nestjs/testing");
-const { ConflictException, NotFoundException } = await import("@nestjs/common");
+const { ConflictException, NotFoundException, BadRequestException } =
+  await import("@nestjs/common");
 const { ConfigService } = await import("@nestjs/config");
 const { UsersService: UsersServiceClass } = await import("./users.service.js");
 const { PrismaService } =
@@ -157,6 +167,124 @@ describe("UsersService", () => {
       const result = await service.create(createUserDto);
 
       expect(result).not.toHaveProperty("passwordHash");
+    });
+  });
+
+  describe("changeRole", () => {
+    const currentUser: AuthenticatedUser = {
+      id: "admin-uuid-1",
+      fullName: "Admin",
+      email: "admin@test.com",
+      roleId: "role-admin",
+      active: true,
+      role: { name: "SUPER ADMIN" },
+    };
+
+    const mockUserWithRole = {
+      id: "user-uuid-1",
+      fullName: "Juan Pérez",
+      email: "juan@test.com",
+      roleId: "role-uuid-1",
+      active: true,
+      mustChangePassword: true,
+      lastLoginAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      role: { id: "role-uuid-1", name: "SUPERADMIN" },
+    };
+
+    const mockNewRole = { id: "role-uuid-2", name: "LIDER SEDE", active: true };
+
+    const mockUpdatedUser = {
+      ...mockUserWithRole,
+      roleId: "role-uuid-2",
+      role: { id: "role-uuid-2", name: "LIDER SEDE" },
+    };
+
+    it("should change user role successfully", async () => {
+      prisma.userAccount.findUnique.mockResolvedValue(mockUserWithRole);
+      prisma.role.findUnique.mockResolvedValue(mockNewRole);
+      prisma.userAccount.update.mockResolvedValue(mockUpdatedUser);
+
+      const result = await service.changeRole(
+        "user-uuid-1",
+        { roleId: "role-uuid-2" },
+        currentUser,
+      );
+
+      expect(result.role.id).toBe("role-uuid-2");
+      expect(result.role.name).toBe("LIDER SEDE");
+      expect(prisma.userAccount.update).toHaveBeenCalledTimes(1);
+    });
+
+    it("should throw BadRequestException when changing own role", async () => {
+      prisma.userAccount.findUnique.mockResolvedValue({
+        ...mockUserWithRole,
+        id: "admin-uuid-1",
+        role: { id: "role-admin", name: "SUPER ADMIN" },
+      });
+
+      await expect(
+        service.changeRole(
+          "admin-uuid-1",
+          { roleId: "role-uuid-2" },
+          currentUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("should throw BadRequestException when role is the same", async () => {
+      prisma.userAccount.findUnique.mockResolvedValue(mockUserWithRole);
+
+      await expect(
+        service.changeRole(
+          "user-uuid-1",
+          { roleId: "role-uuid-1" },
+          currentUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("should throw NotFoundException when user does not exist", async () => {
+      prisma.userAccount.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.changeRole(
+          "nonexistent-uuid",
+          { roleId: "role-uuid-2" },
+          currentUser,
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it("should throw NotFoundException when target role does not exist", async () => {
+      prisma.userAccount.findUnique.mockResolvedValue(mockUserWithRole);
+      prisma.role.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.changeRole(
+          "user-uuid-1",
+          { roleId: "nonexistent-role" },
+          currentUser,
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it("should throw BadRequestException when target role is inactive", async () => {
+      prisma.userAccount.findUnique.mockResolvedValue(mockUserWithRole);
+      prisma.role.findUnique.mockResolvedValue({
+        id: "role-uuid-3",
+        name: "INACTIVE",
+        active: false,
+      });
+
+      await expect(
+        service.changeRole(
+          "user-uuid-1",
+          { roleId: "role-uuid-3" },
+          currentUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });
