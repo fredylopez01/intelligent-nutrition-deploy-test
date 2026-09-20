@@ -1,0 +1,22 @@
+/* Tokens del sistema de diseño (extraídos del mockup S3 / S14).
+   Se importa una sola vez en main.tsx y los usa toda la app. */
+:root {
+  --color-bg: #070506;
+  --color-panel: #0e0b0c;
+  --color-surface: #120e0f;
+  --color-surface-elevated: #1b1516;
+  --color-border: #1f1819;
+  --color-border-strong: #2e2426;
+  --color-primary: #8e1418;
+  --color-primary-strong: #d61a1a;
+  --color-hover: #e8302f;
+  --color-warning: #e8b33d;
+  --color-text: #f2efef;
+  --color-text-secondary: #cfc8c9;
+  --color-text-muted: #a79e9f;
+  --color-text-disabled: #5e5557;
+
+  --font-heading: 'Space Grotesk', sans-serif;
+  --font-body: 'Figtree', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
