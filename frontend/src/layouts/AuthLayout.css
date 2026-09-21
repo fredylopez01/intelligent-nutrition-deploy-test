@@ -1,12 +1,3 @@
-/* Marco de pantalla dividida para las páginas de autenticación.
-   Solo define la estructura y el panel de marca; el contenido del
-   formulario se estiliza en la página que lo use (ej. LoginPage.css). */
-
-/*
- * position: fixed + inset: 0 saca el layout del contenedor #root, así no le
- * afectan los estilos de plantilla de Vite (max-width, padding, text-align: center,
- * body con display:flex). Si el contenido no cabe, el propio layout hace scroll.
- */
 .auth-layout {
   position: fixed;
   inset: 0;
@@ -24,8 +15,6 @@
 .auth-layout *::after {
   box-sizing: border-box;
 }
-
-/* ---------- Panel de marca (izquierda) ---------- */
 
 .auth-layout__brand {
   position: relative;
@@ -46,7 +35,6 @@
   pointer-events: none;
 }
 
-/* Isotipo como marca de agua: dos copias recortadas por los bordes del panel */
 .auth-layout__mark {
   position: absolute;
   height: auto;
@@ -97,16 +85,11 @@
   color: var(--color-text-muted);
 }
 
-/* ---------- Panel del formulario (derecha) ---------- */
-
 .auth-layout__form {
-  /* position: relative permite que la página ancle elementos propios
-     (ej. el enlace "Volver") a la esquina de este panel. */
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* El padding superior deja espacio libre para ese enlace. */
   padding: 5rem 2rem 3rem;
   background: var(--color-bg);
 }
@@ -116,14 +99,11 @@
   max-width: 390px;
 }
 
-/* ---------- Responsive ---------- */
-
 @media (max-width: 860px) {
   .auth-layout {
     grid-template-columns: 1fr;
     grid-template-rows: max-content 1fr;
   }
-
   .auth-layout__brand {
     gap: 1.5rem;
     padding: 1.5rem;
@@ -134,7 +114,6 @@
   .auth-layout__mark--top {
     display: none;
   }
-
   .auth-layout__mark--bottom {
     width: 200px;
     left: auto;
@@ -145,11 +124,9 @@
   .auth-layout__logo {
     width: 100px;
   }
-
   .auth-layout__tagline {
     font-size: 1.15rem;
   }
-
   .auth-layout__form {
     padding: 4.5rem 1.5rem 2.5rem;
   }
