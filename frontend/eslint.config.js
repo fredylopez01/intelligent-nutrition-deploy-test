@@ -10,10 +10,6 @@ import prettier from 'eslint-plugin-prettier'
 import prettierConfig from 'eslint-config-prettier'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
-// eslint-plugin-jsx-a11y aún no declara soporte oficial para ESLint 10
-// (funciona correctamente, solo falta que actualicen su peerDependencies).
-// Se instaló con --legacy-peer-deps. Revisar en el futuro si ya lo soportan.
-
 export default defineConfig([
   globalIgnores(['dist', 'node_modules']),
   {
