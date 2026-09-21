@@ -1,5 +1,4 @@
 import type { RoleName } from '../types/auth'
-// TODO: confirmar el nombre exacto de "Ayudante de sede" contra GET /roles
 export const roleHome: Record<RoleName, string> = {
   'SUPER ADMIN': '/dashboard',
   'Lider de sede': '/dashboard',

@@ -1,4 +1,3 @@
-// TODO: falta confirmar el nombre exacto de "Ayudante de sede" en /roles.
 export type RoleName = 'SUPER ADMIN' | 'Lider de sede' | 'Ayudante de sede'
 
 export interface UserRole {

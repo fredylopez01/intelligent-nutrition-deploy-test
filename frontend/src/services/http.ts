@@ -16,8 +16,6 @@ interface RequestOptions extends RequestInit {
   token?: string | null
 }
 
-// Se asigna desde AuthContext para poder cerrar sesión ante un 401
-// sin crear una dependencia circular entre el contexto y este cliente.
 let onUnauthorized: (() => void) | null = null
 
 export function setUnauthorizedHandler(handler: () => void) {
