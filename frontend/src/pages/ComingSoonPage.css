@@ -1,0 +1,12 @@
+.coming-soon {
+  background: var(--color-surface-field);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+}
+
+.coming-soon__description {
+  max-width: 46ch;
+  font-size: 0.845rem;
+  line-height: 1.6;
+  color: var(--color-text-faint);
+}
