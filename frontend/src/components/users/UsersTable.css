@@ -1,0 +1,96 @@
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.users-table th {
+  padding: 0.75rem 1.125rem;
+  background: var(--color-surface-elevated);
+  border-bottom: 1px solid var(--color-border-soft);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--color-text-faint);
+}
+
+.users-table th:first-child {
+  width: 46%;
+}
+
+.users-table__col-status {
+  text-align: right;
+}
+
+.users-table td {
+  padding: 0.5rem 1.125rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.815rem;
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.users-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.users-table__row--selected td {
+  background: rgba(214, 26, 26, 0.05);
+}
+
+.users-table__cell-muted {
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.users-table__selector {
+  display: flex;
+  align-items: center;
+  gap: 0.6875rem;
+  width: 100%;
+  padding: 0.25rem 0;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.users-table__identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.users-table__name {
+  font-size: 0.845rem;
+  color: var(--color-text);
+}
+
+.users-table__selector:hover .users-table__name {
+  color: var(--color-hover);
+}
+
+.users-table__email {
+  font-size: 0.72rem;
+  color: var(--color-text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 767px) {
+  .users-table th:nth-child(2),
+  .users-table td:nth-child(2),
+  .users-table th:nth-child(3),
+  .users-table td:nth-child(3) {
+    display: none;
+  }
+  .users-table th:first-child {
+    width: auto;
+  }
+}
