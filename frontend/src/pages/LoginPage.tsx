@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
+import { Alert } from '../components/ui/Alert'
 import { useAuth } from '../hooks/useAuth'
 import { AuthLayout } from '../layouts/AuthLayout'
 import { getRoleHome } from '../routes/roleHome'
@@ -17,11 +18,28 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>
 
-const roleScopes = [
-  { role: 'Superadmin', scope: 'Las tres sedes' },
-  { role: 'Líder de Sede', scope: 'Su sede completa' },
-  { role: 'Ayudante de Sede', scope: 'Operación diaria' },
-]
+function GoogleMark() {
+  return (
+    <svg className="login-page__google-mark" viewBox="0 0 48 48" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"
+      />
+      <path
+        fill="#34A853"
+        d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M11.69 28.18A13.2 13.2 0 0 1 11 24c0-1.45.25-2.86.69-4.18v-5.7H4.34A21.99 21.99 0 0 0 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7z"
+      />
+      <path
+        fill="#EA4335"
+        d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"
+      />
+    </svg>
+  )
+}
 
 export function LoginPage() {
   const { login, status } = useAuth()
@@ -29,7 +47,7 @@ export function LoginPage() {
   const location = useLocation()
   const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-
+  const [showGoogleNotice, setShowGoogleNotice] = useState(false)
   const {
     register,
     handleSubmit,
@@ -122,17 +140,30 @@ export function LoginPage() {
         </button>
       </form>
 
-      <section className="login-page__roles" aria-labelledby="roles-title">
-        <h2 id="roles-title">Qué ve cada rol</h2>
-        <ul>
-          {roleScopes.map((item) => (
-            <li key={item.role}>
-              <strong>{item.role}</strong>
-              <span>{item.scope}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <div className="login-page__divider">
+        <span>o</span>
+      </div>
+
+      <button
+        type="button"
+        className="login-page__google"
+        onClick={() => setShowGoogleNotice(true)}
+        aria-expanded={showGoogleNotice}
+        aria-controls="google-notice"
+      >
+        <GoogleMark />
+        Continuar con Google
+      </button>
+
+      {showGoogleNotice && (
+        <div className="login-page__notice" id="google-notice">
+          <Alert tone="info">
+            <span className="login-page__notice-eyebrow">Coming next</span>
+            El ingreso con Google llega en un próximo sprint. Por ahora entra con el correo y la
+            contraseña que te envió el Superadmin.
+          </Alert>
+        </div>
+      )}
 
       <p className="login-page__legal">
         Al continuar aceptas los <Link to="/terminos">Términos</Link> y la{' '}

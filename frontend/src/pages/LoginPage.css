@@ -1,8 +1,4 @@
-/* Estilos propios de la página de login (el marco vive en AuthLayout.css,
-   los tokens en styles/tokens.css). */
-
 .login-page__back {
-  /* Se ancla a la esquina del panel de formulario (.auth-layout__form). */
   position: absolute;
   top: 2.5rem;
   left: 2.5rem;
@@ -30,9 +26,6 @@
   line-height: 1.5;
   color: var(--color-text-muted);
 }
-
-/* ---------- Campos ---------- */
-/* Cuando exista un segundo formulario, mover .form-field* a un forms.css compartido. */
 
 .form-field {
   margin-bottom: 1.25rem;
@@ -74,7 +67,6 @@
   border-color: var(--color-primary-strong);
 }
 
-/* "Mostrar" vive dentro del input, alineado a la derecha */
 .form-field__password {
   position: relative;
 }
@@ -119,8 +111,6 @@
   color: var(--color-hover);
 }
 
-/* ---------- Botón principal ---------- */
-
 .login-page__submit {
   width: 100%;
   margin-top: 0.25rem;
@@ -146,48 +136,70 @@
   cursor: not-allowed;
 }
 
-/* ---------- Tarjeta "Qué ve cada rol" ---------- */
-
-.login-page__roles {
-  margin-top: 1.5rem;
-  padding: 1rem 1.15rem;
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
+.login-page__divider {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  margin: 1.5rem 0;
 }
 
-.login-page__roles h2 {
-  margin: 0 0 0.75rem;
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  font-weight: 400;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+.login-page__divider::before,
+.login-page__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.login-page__divider span {
+  font-size: 0.75rem;
   color: var(--color-text-muted);
 }
 
-.login-page__roles ul {
+.login-page__google {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.login-page__roles li {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.login-page__roles strong {
-  font-weight: 500;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.8rem;
+  background: transparent;
+  border: 1px solid var(--color-border-outline);
+  border-radius: 10px;
   color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 
-/* ---------- Legal ---------- */
+.login-page__google:hover {
+  background: var(--color-surface-field);
+  border-color: var(--color-border-strong);
+}
+
+.login-page__google-mark {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.login-page__notice {
+  margin-top: 0.875rem;
+}
+
+.login-page__notice-eyebrow {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
 
 .login-page__legal {
   margin: 1.5rem 0 0;
@@ -206,18 +218,15 @@
   color: var(--color-hover);
 }
 
-/* ---------- Foco visible (teclado) ---------- */
-
 .login-page__back:focus-visible,
 .login-page__forgot:focus-visible,
 .login-page__legal a:focus-visible,
 .form-field__toggle:focus-visible,
-.login-page__submit:focus-visible {
+.login-page__submit:focus-visible,
+.login-page__google:focus-visible {
   outline: 2px solid var(--color-primary-strong);
   outline-offset: 2px;
 }
-
-/* ---------- Responsive ---------- */
 
 @media (max-width: 860px) {
   .login-page__back {
@@ -228,7 +237,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .form-field input,
-  .login-page__submit {
+  .login-page__submit,
+  .login-page__google {
     transition: none;
   }
 }
