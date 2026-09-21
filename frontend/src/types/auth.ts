@@ -24,6 +24,12 @@ export interface LoginResponse {
   expiresIn: string
 }
 
+/** POST /auth/activate: el usuario define su contraseña inicial con el token del correo. */
+export interface ActivateAccountPayload {
+  token: string
+  password: string
+}
+
 export type AuthStatus = 'idle' | 'loading' | 'authenticated' | 'error'
 
 export interface AuthState {

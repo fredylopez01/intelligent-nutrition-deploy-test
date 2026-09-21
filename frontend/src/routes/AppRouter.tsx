@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
+import { ActivateAccountPage } from '../pages/activation/ActivateAccountPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
 import { LandingPage } from '../pages/LandingPage'
 import { LoginPage } from '../pages/LoginPage'
@@ -13,6 +14,7 @@ export function AppRouter() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/activate-account" element={<ActivateAccountPage />} />
 
       <Route
         path="/usuarios"

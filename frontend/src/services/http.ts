@@ -14,6 +14,12 @@ export class ApiError extends Error {
 
 interface RequestOptions extends RequestInit {
   token?: string | null
+  /**
+   * Para endpoints públicos (activación de cuenta, etc.): un 401 aquí NO significa
+   * "sesión expirada", así que no se dispara el handler global y se conserva el
+   * mensaje del backend.
+   */
+  skipUnauthorizedHandler?: boolean
 }
 
 let onUnauthorized: (() => void) | null = null
@@ -23,7 +29,7 @@ export function setUnauthorizedHandler(handler: () => void) {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { token, headers, ...rest } = options
+  const { token, headers, skipUnauthorizedHandler, ...rest } = options
 
   const response = await fetch(`${API_URL}${path}`, {
     ...rest,
@@ -34,7 +40,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     },
   })
 
-  if (response.status === 401) {
+  if (response.status === 401 && !skipUnauthorizedHandler) {
     onUnauthorized?.()
     throw new ApiError('Sesión expirada, vuelve a iniciar sesión.', 401)
   }
