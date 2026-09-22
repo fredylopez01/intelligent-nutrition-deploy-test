@@ -22,7 +22,7 @@ steps:
       git checkout -B main
 
       AUTH_HEADER="AUTHORIZATION: basic $(echo -n x-access-token:$GH_PAT | base64 -w0)"
-      # git -c http.https://github.com/.extraheader="$AUTH_HEADER" push deploy main --force
+      git -c http.https://github.com/.extraheader="$AUTH_HEADER" push deploy main --force
     displayName: "Sync main branch to GitHub"
     env:
       GH_PAT: $(GH_PAT)
