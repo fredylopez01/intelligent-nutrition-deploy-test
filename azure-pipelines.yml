@@ -1,6 +1,3 @@
-# azure-pipelines.yml
-# Sincroniza la rama main de Azure Repos hacia GitHub
-
 trigger:
   branches:
     include:
@@ -20,15 +17,12 @@ steps:
       git config --global user.email "ci-bot@intelligentnutrition.shop"
       git config --global user.name "CI-CD Bot"
 
-      # Usar "deploy" como nombre del remoto, sin tocar "origin"
-      git remote add deploy "https://$GH_PAT@github.com/fredylopez01/intelligent-nutrition.git"
+      git remote add deploy "https://github.com/fredylopez01/intelligent-nutrition.git"
 
-      # En vez de "git branch -M main" (falla en detached HEAD),
-      # creamos/movemos la rama main al commit actual y nos ubicamos en ella
       git checkout -B main
 
-      # Push hacia GitHub
-      git push -u deploy main --force
+      AUTH_HEADER="AUTHORIZATION: basic $(echo -n x-access-token:$GH_PAT | base64 -w0)"
+      # git -c http.https://github.com/.extraheader="$AUTH_HEADER" push deploy main --force
     displayName: "Sync main branch to GitHub"
     env:
       GH_PAT: $(GH_PAT)
