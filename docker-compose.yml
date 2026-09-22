@@ -5,9 +5,9 @@ services:
     restart: unless-stopped
 
     environment:
-      POSTGRES_USER: intelligent_nutrition
-      POSTGRES_PASSWORD: change_me
-      POSTGRES_DB: intelligent_nutrition
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
 
     ports:
       - "5432:5432"
@@ -34,9 +34,13 @@ services:
     restart: unless-stopped
 
     environment:
-      DATABASE_URL: "postgresql://intelligent_nutrition:change_me@postgres:5432/intelligent_nutrition?schema=public"
-      JWT_SECRET: "change_this_to_a_long_random_secret"
-      JWT_EXPIRES_IN: "15m"
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
+      RESEND_REPLY_TO_EMAIL: ${RESEND_REPLY_TO_EMAIL}
+      FRONTEND_URL: ${FRONTEND_URL}
 
     ports:
       - "3000:3000"
@@ -52,6 +56,11 @@ services:
 
     container_name: intelligent-nutrition-frontend
     restart: unless-stopped
+
+    environment:
+      VITE_API_URL: ${VITE_API_URL}
+      VITE_MOCK_SESSION: ${VITE_MOCK_SESSION}
+      VITE_USE_MOCKS: ${VITE_USE_MOCKS}
 
     ports:
       - "5173:80"

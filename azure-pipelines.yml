@@ -14,14 +14,20 @@ variables:
 
 steps:
   - checkout: self
-    fetchDepth: 0 # Clonar todo el historial
+    fetchDepth: 0
 
   - script: |
       git config --global user.email "ci-bot@intelligentnutrition.shop"
       git config --global user.name "CI-CD Bot"
 
-      git remote add github https://$(GH_PAT)@github.com/fredylopez01/intelligent-nutrition.git
+      # Usar "deploy" como nombre del remoto, sin tocar "origin"
+      git remote add deploy "https://$GH_PAT@github.com/fredylopez01/intelligent-nutrition.git"
 
-      # Push forzado de la rama main hacia GitHub
-      git push github main -f
+      # Renombrar la rama actual (detached HEAD) a main
+      git branch -M main
+
+      # Push hacia GitHub
+      git push -u deploy main --force
     displayName: "Sync main branch to GitHub"
+    env:
+      GH_PAT: $(GH_PAT)
