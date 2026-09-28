@@ -147,5 +147,8 @@ model AuditLog {
 
   userAccount UserAccount @relation(fields: [userId], references: [personId])
 
+  @@index([entity, entityId])
+  @@index([action, createdAt])
+  @@index([createdAt])
   @@map("audit_log")
 }
