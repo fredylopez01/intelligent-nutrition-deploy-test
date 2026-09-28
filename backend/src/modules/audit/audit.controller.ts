@@ -9,7 +9,6 @@ export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
   @Get()
-  @Roles("SUPERADMIN", "DEV")
   findAll(@Query() query: ListAuditLogsQueryDto) {
     return this.auditService.findAll(query);
   }

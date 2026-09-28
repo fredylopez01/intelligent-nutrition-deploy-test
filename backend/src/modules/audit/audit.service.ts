@@ -3,7 +3,7 @@ import { Prisma } from "../../../generated/prisma/client.js";
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { ListAuditLogsQueryDto } from "./dto/list-audit-logs-query.dto.js";
 
-type AuditLogTransaction = Pick<Prisma.TransactionClient, "auditLog">;
+export type AuditLogTransaction = Pick<Prisma.TransactionClient, "auditLog">;
 
 export interface CreateAuditLogInput {
   userId: string;

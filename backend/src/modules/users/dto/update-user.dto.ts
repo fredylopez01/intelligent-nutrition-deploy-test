@@ -1,5 +1,12 @@
 import { Type } from "class-transformer";
-import { IsBoolean, IsOptional, IsUUID, ValidateNested } from "class-validator";
+import {
+  ArrayUnique,
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  IsUUID,
+  ValidateNested,
+} from "class-validator";
 import { UpdatePersonDto } from "../../persons/dto/update-person.dto.js";
 
 export class UpdateUserDto {
@@ -15,4 +22,10 @@ export class UpdateUserDto {
   @ValidateNested()
   @Type(() => UpdatePersonDto)
   person?: UpdatePersonDto;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  branchIds?: string[];
 }

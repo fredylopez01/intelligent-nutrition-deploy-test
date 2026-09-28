@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Ip,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -23,8 +24,12 @@ export class UsersController {
 
   @Post()
   @Roles("SUPERADMIN", "DEV")
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  create(
+    @Body() createUserDto: CreateUserDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.usersService.create(createUserDto, currentUser, ipAddress);
   }
 
   @Get()
@@ -39,8 +44,14 @@ export class UsersController {
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() changeUserRoleDto: ChangeUserRoleDto,
     @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
   ) {
-    return this.usersService.changeRole(id, changeUserRoleDto, currentUser);
+    return this.usersService.changeRole(
+      id,
+      changeUserRoleDto,
+      currentUser,
+      ipAddress,
+    );
   }
 
   @Patch(":id")
@@ -48,7 +59,8 @@ export class UsersController {
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() updateUserDto: UpdateUserDto,
     @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
   ) {
-    return this.usersService.update(id, updateUserDto, currentUser);
+    return this.usersService.update(id, updateUserDto, currentUser, ipAddress);
   }
 }

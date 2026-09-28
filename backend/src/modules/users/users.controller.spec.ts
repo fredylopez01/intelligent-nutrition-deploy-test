@@ -23,12 +23,17 @@ const { PersonsModule } = await import("../persons/persons.module.js");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
 const { EmailService } = await import("../email/email.service.js");
+const { AuditService } = await import("../audit/audit.service.js");
 const { Reflector } = await import("@nestjs/core");
 const { JwtStrategy } = await import("../auth/strategies/jwt.strategy.js");
 const { JwtAuthGuard } = await import("../../common/guards/jwt-auth.guard.js");
 const { RolesGuard } = await import("../../common/guards/roles.guard.js");
 const { APP_GUARD } = await import("@nestjs/core");
 const request = (await import("supertest")).default;
+const mockAuditService = {
+  createAuditLog: jest.fn().mockResolvedValue({}),
+  findAll: jest.fn(),
+};
 
 const mockPrisma = {
   userAccount: {
@@ -80,6 +85,7 @@ mockPrisma.$transaction.mockImplementation((operation: any) =>
           .mockResolvedValue(undefined),
       },
     },
+    { provide: AuditService, useValue: mockAuditService },
   ],
 })
 class TestUsersModule {}
