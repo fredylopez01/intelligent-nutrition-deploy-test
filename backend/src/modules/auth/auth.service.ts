@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -26,41 +28,85 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     const email = loginDto.email.trim().toLowerCase();
 
-    const user = await this.prisma.userAccount.findUnique({
-      where: { email },
+    const user = await this.prisma.userAccount.findFirst({
+      where: { person: { is: { email } } },
+      select: {
+        personId: true,
+        password: true,
+        active: true,
+        mustChangePassword: true,
+        role: { select: { id: true, name: true, active: true } },
+        person: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            active: true,
+          },
+        },
+      },
     });
 
     if (!user) {
-      throw new UnauthorizedException("Invalid credentials");
+      throw new UnauthorizedException({
+        code: "INVALID_CREDENTIALS",
+        message: "The provided credentials are invalid.",
+      });
     }
 
-    if (!user.active) {
-      throw new UnauthorizedException("User account is inactive");
+    if (!user.active || !user.person.active) {
+      throw new ForbiddenException({
+        code: "ACCOUNT_INACTIVE",
+        message: "The user account is inactive.",
+      });
     }
 
-    if (!user.passwordHash || user.mustChangePassword) {
-      throw new UnauthorizedException("Account activation is required");
+    if (!user.role.active) {
+      throw new ForbiddenException({
+        code: "ROLE_INACTIVE",
+        message: "The assigned role is inactive.",
+      });
     }
 
-    const passwordMatches = await argon2.verify(
-      user.passwordHash,
-      loginDto.password,
-    );
+    if (!user.password || user.mustChangePassword) {
+      throw new ForbiddenException({
+        code: "ACCOUNT_NOT_ACTIVATED",
+        message: "The user account has not been activated.",
+      });
+    }
+
+    let passwordMatches = false;
+    try {
+      passwordMatches = await argon2.verify(user.password, loginDto.password);
+    } catch {
+      passwordMatches = false;
+    }
 
     if (!passwordMatches) {
-      throw new UnauthorizedException("Invalid credentials");
+      throw new UnauthorizedException({
+        code: "INVALID_CREDENTIALS",
+        message: "The provided credentials are invalid.",
+      });
     }
 
     await this.prisma.userAccount.update({
-      where: { id: user.id },
+      where: { personId: user.personId },
       data: { lastLoginAt: new Date() },
     });
 
-    const accessToken = await this.jwtService.signAsync({ sub: user.id });
+    const accessToken = await this.jwtService.signAsync({ sub: user.personId });
 
     return {
       accessToken,
+      tokenType: "Bearer",
       expiresIn: this.configService.get<string>("JWT_EXPIRES_IN", "15m"),
+      user: {
+        id: user.personId,
+        personId: user.personId,
+        role: { id: user.role.id, name: user.role.name },
+        mustChangePassword: user.mustChangePassword,
+      },
     };
   }
 
@@ -68,7 +114,14 @@ export class AuthService {
     const tokenHash = CryptoUtil.hashToken(activateAccountDto.token);
 
     const user = await this.prisma.userAccount.findUnique({
-      where: { activationTokenHash: tokenHash },
+      where: { activationToken: tokenHash },
+      select: {
+        personId: true,
+        password: true,
+        active: true,
+        mustChangePassword: true,
+        activationTokenExpiresAt: true,
+      },
     });
 
     if (
@@ -79,18 +132,28 @@ export class AuthService {
       throw new BadRequestException("Invalid or expired activation token");
     }
 
-    if (!user.mustChangePassword || user.passwordHash) {
-      throw new BadRequestException("User account is already activated");
+    if (!user.mustChangePassword || user.password) {
+      throw new ConflictException({
+        code: "ACCOUNT_ALREADY_ACTIVATED",
+        message: "The user account is already activated.",
+      });
     }
 
-    const passwordHash = await argon2.hash(activateAccountDto.password);
+    if (!user.active) {
+      throw new ForbiddenException({
+        code: "ACCOUNT_INACTIVE",
+        message: "The user account is inactive.",
+      });
+    }
+
+    const password = await argon2.hash(activateAccountDto.password);
 
     await this.prisma.userAccount.update({
-      where: { id: user.id },
+      where: { personId: user.personId },
       data: {
-        passwordHash,
+        password,
         mustChangePassword: false,
-        activationTokenHash: null,
+        activationToken: null,
         activationTokenExpiresAt: null,
       },
     });
@@ -101,20 +164,45 @@ export class AuthService {
   async resendActivation(resendActivationDto: ResendActivationDto) {
     const email = resendActivationDto.email.trim().toLowerCase();
 
-    const user = await this.prisma.userAccount.findUnique({
-      where: { email },
+    const user = await this.prisma.userAccount.findFirst({
+      where: { person: { is: { email } } },
+      select: {
+        personId: true,
+        active: true,
+        mustChangePassword: true,
+        password: true,
+        person: {
+          select: {
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
     });
 
     if (!user) {
-      throw new NotFoundException("User account not found");
+      throw new NotFoundException({
+        code: "USER_NOT_FOUND",
+        message: "User account not found.",
+      });
     }
 
-    if (!user.mustChangePassword || user.passwordHash) {
-      throw new BadRequestException("User account is already activated");
+    if (!user.mustChangePassword || user.password) {
+      throw new ConflictException({
+        code: "ACCOUNT_ALREADY_ACTIVATED",
+        message: "The user account is already activated.",
+      });
+    }
+    if (!user.active) {
+      throw new ForbiddenException({
+        code: "ACCOUNT_INACTIVE",
+        message: "The user account is inactive.",
+      });
     }
 
     const rawToken = CryptoUtil.generateRandomToken();
-    const activationTokenHash = CryptoUtil.hashToken(rawToken);
+    const activationToken = CryptoUtil.hashToken(rawToken);
     const expirationMinutes = this.configService.get<number>(
       "ACTIVATION_TOKEN_EXPIRATION_MINUTES",
       4320,
@@ -123,9 +211,9 @@ export class AuthService {
       CryptoUtil.getExpirationDate(expirationMinutes);
 
     await this.prisma.userAccount.update({
-      where: { id: user.id },
+      where: { personId: user.personId },
       data: {
-        activationTokenHash,
+        activationToken,
         activationTokenExpiresAt,
       },
     });
@@ -135,8 +223,8 @@ export class AuthService {
       rawToken,
     );
     await this.emailService.sendUserActivationEmail(
-      user.email,
-      user.fullName,
+      user.person.email!,
+      [user.person.firstName, user.person.lastName].filter(Boolean).join(" "),
       activationUrl,
     );
 

@@ -30,6 +30,7 @@ const request = (await import("supertest")).default;
 
 const mockPrismaService = {
   userAccount: {
+    findFirst: jest.fn<(...args: any[]) => Promise<any>>(),
     findUnique: jest.fn<(...args: any[]) => Promise<any>>(),
     update: jest.fn<(...args: any[]) => Promise<any>>(),
   },
@@ -72,17 +73,24 @@ class TestAuthModule {}
 describe("AuthController (e2e)", () => {
   let app: any;
 
-  const mockRole = { id: "role-uuid-1", name: "SUPERADMIN" };
+  const mockRole = { id: "role-uuid-1", name: "SUPERADMIN", active: true };
 
   const mockUser = {
-    id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-    fullName: "Juan Perez",
-    email: "juan@test.com",
-    passwordHash: "hashed",
+    personId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    password: "hashed",
     roleId: "role-uuid-1",
     active: true,
+    mustChangePassword: false,
     lastLoginAt: null,
     role: mockRole,
+    person: {
+      id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      firstName: "Juan",
+      lastName: "Perez",
+      email: "juan@test.com",
+      active: true,
+    },
+    branchAssignments: [],
   };
 
   beforeAll(async () => {
@@ -110,21 +118,30 @@ describe("AuthController (e2e)", () => {
 
   describe("POST /auth/login", () => {
     it("should return 201 with accessToken on valid credentials", async () => {
-      mockPrismaService.userAccount.findUnique.mockResolvedValue(mockUser);
+      mockPrismaService.userAccount.findFirst.mockResolvedValue(mockUser);
       (argon2.verify as any).mockResolvedValue(true);
       mockPrismaService.userAccount.update.mockResolvedValue(mockUser);
 
       const response = await request(app.getHttpServer())
         .post("/auth/login")
         .send({ email: "juan@test.com", password: "password123" })
-        .expect(201);
+        .expect(200);
 
       expect(response.body).toHaveProperty("accessToken");
       expect(response.body).toHaveProperty("expiresIn");
+      expect(response.body).toMatchObject({
+        tokenType: "Bearer",
+        user: {
+          id: mockUser.personId,
+          personId: mockUser.personId,
+          role: { id: mockRole.id, name: mockRole.name },
+          mustChangePassword: false,
+        },
+      });
     });
 
     it("should return 401 when email does not exist", async () => {
-      mockPrismaService.userAccount.findUnique.mockResolvedValue(null);
+      mockPrismaService.userAccount.findFirst.mockResolvedValue(null);
 
       await request(app.getHttpServer())
         .post("/auth/login")
@@ -133,7 +150,7 @@ describe("AuthController (e2e)", () => {
     });
 
     it("should return 401 when password is wrong", async () => {
-      mockPrismaService.userAccount.findUnique.mockResolvedValue(mockUser);
+      mockPrismaService.userAccount.findFirst.mockResolvedValue(mockUser);
       (argon2.verify as any).mockResolvedValue(false);
 
       await request(app.getHttpServer())
@@ -142,8 +159,8 @@ describe("AuthController (e2e)", () => {
         .expect(401);
     });
 
-    it("should return 401 when user is inactive", async () => {
-      mockPrismaService.userAccount.findUnique.mockResolvedValue({
+    it("should return 403 when user is inactive", async () => {
+      mockPrismaService.userAccount.findFirst.mockResolvedValue({
         ...mockUser,
         active: false,
       });
@@ -151,7 +168,7 @@ describe("AuthController (e2e)", () => {
       await request(app.getHttpServer())
         .post("/auth/login")
         .send({ email: "juan@test.com", password: "password123" })
-        .expect(401);
+        .expect(403);
     });
 
     it("should return 400 when email is missing", async () => {
@@ -189,32 +206,26 @@ describe("AuthController (e2e)", () => {
     });
 
     it("should return user data when token is valid", async () => {
-      mockPrismaService.userAccount.findUnique.mockResolvedValue(mockUser);
+      mockPrismaService.userAccount.findFirst.mockResolvedValue(mockUser);
       (argon2.verify as any).mockResolvedValue(true);
       mockPrismaService.userAccount.update.mockResolvedValue(mockUser);
 
-      const loginRes = await request(app.getHttpServer())
+      const response = await request(app.getHttpServer())
         .post("/auth/login")
         .send({ email: "juan@test.com", password: "password123" })
-        .expect(201);
+        .expect(200);
 
-      mockPrismaService.userAccount.findUnique.mockResolvedValue({
-        id: mockUser.id,
-        fullName: mockUser.fullName,
-        email: mockUser.email,
-        roleId: mockUser.roleId,
-        active: mockUser.active,
-        role: mockUser.role,
-      });
+      mockPrismaService.userAccount.findUnique.mockResolvedValue(mockUser);
 
       const meRes = await request(app.getHttpServer())
         .get("/auth/me")
-        .set("Authorization", `Bearer ${loginRes.body.accessToken}`)
+        .set("Authorization", `Bearer ${response.body.accessToken}`)
         .expect(200);
 
-      expect(meRes.body.email).toBe("juan@test.com");
-      expect(meRes.body.fullName).toBe("Juan Perez");
-      expect(meRes.body).not.toHaveProperty("passwordHash");
+      expect(meRes.body.person.email).toBe("juan@test.com");
+      expect(meRes.body.person.firstName).toBe("Juan");
+      expect(meRes.body.role.name).toBe("SUPERADMIN");
+      expect(meRes.body).not.toHaveProperty("password");
     });
   });
 });

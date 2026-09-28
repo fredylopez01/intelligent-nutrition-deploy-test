@@ -19,14 +19,14 @@ export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
   @UseGuards(RolesGuard)
-  @Roles("SUPER ADMIN")
+  @Roles("SUPERADMIN", "DEV")
   @Post()
   create(@Body() createRoleDto: CreateRoleDto) {
     return this.rolesService.create(createRoleDto);
   }
 
   @UseGuards(RolesGuard)
-  @Roles("SUPER ADMIN")
+  @Roles("SUPERADMIN", "DEV")
   @Get()
   findAll() {
     return this.rolesService.findAll();
@@ -38,7 +38,7 @@ export class RolesController {
   }
 
   @UseGuards(RolesGuard)
-  @Roles("SUPER ADMIN")
+  @Roles("SUPERADMIN", "DEV")
   @Delete(":id")
   remove(@Param("id") id: string) {
     return this.rolesService.remove(id);

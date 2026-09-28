@@ -88,11 +88,21 @@ describe("UsersController (e2e)", () => {
 
   const mockAdmin = {
     id: "admin-uuid-1",
+    personId: "admin-uuid-1",
     fullName: "Admin",
     email: "admin@test.com",
     roleId: "role-admin",
     active: true,
-    role: { id: "role-admin", name: "SUPERADMIN" },
+    mustChangePassword: false,
+    person: {
+      id: "admin-uuid-1",
+      firstName: "Admin",
+      lastName: "",
+      email: "admin@test.com",
+      active: true,
+    },
+    role: { id: "role-admin", name: "SUPERADMIN", active: true },
+    branchAssignments: [],
   };
 
   const mockRole = {
@@ -372,8 +382,8 @@ describe("UsersController (e2e)", () => {
         .mockResolvedValueOnce(mockAdmin)
         .mockResolvedValueOnce({
           ...mockUser,
-          id: "admin-uuid-1",
-          role: { id: "role-admin", name: "SUPER ADMIN" },
+          personId: "admin-uuid-1",
+          role: { id: "role-admin", name: "SUPERADMIN", active: true },
         });
 
       await request(app.getHttpServer())

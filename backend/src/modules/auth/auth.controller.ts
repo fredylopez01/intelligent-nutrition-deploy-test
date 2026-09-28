@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
 import { AuthService } from "./auth.service.js";
 import { LoginDto } from "./dto/login.dto.js";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
@@ -15,6 +23,7 @@ export class AuthController {
 
   @Public()
   @Post("login")
+  @HttpCode(HttpStatus.OK)
   login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
@@ -26,13 +35,15 @@ export class AuthController {
 
   @Post("activate")
   @Public()
+  @HttpCode(HttpStatus.OK)
   async activate(@Body() activateAccountDto: ActivateAccountDto) {
     return this.authService.activateAccount(activateAccountDto);
   }
 
-  @Post("activation/resend")
+  @Post("resend")
   @UseGuards(RolesGuard)
-  @Roles("SUPER ADMIN")
+  @Roles("SUPERADMIN", "DEV")
+  @HttpCode(HttpStatus.OK)
   async resendActivation(@Body() resendActivationDto: ResendActivationDto) {
     return this.authService.resendActivation(resendActivationDto);
   }
