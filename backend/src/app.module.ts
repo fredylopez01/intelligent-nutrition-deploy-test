@@ -7,6 +7,7 @@ import { RolesModule } from "./modules/roles/roles.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { ConfigModule } from "@nestjs/config";
+import { DocumentTypesModule } from "./modules/document-types/document-types.module.js";
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ConfigModule } from "@nestjs/config";
     PrismaModule,
     AuthModule,
     RolesModule,
+    DocumentTypesModule,
     UsersModule,
     HealthModule,
   ],
