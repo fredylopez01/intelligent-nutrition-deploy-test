@@ -1,4 +1,10 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
+const configuredApiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000').replace(
+  /\/+$/,
+  '',
+)
+const API_URL = configuredApiUrl.endsWith('/api/v1')
+  ? configuredApiUrl
+  : `${configuredApiUrl}/api/v1`
 
 export class ApiError extends Error {
   status: number
@@ -49,11 +55,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const body = isJson ? await response.json() : null
 
   if (!response.ok) {
-    const message = body?.message ?? 'Ocurrió un error inesperado. Intenta de nuevo.'
-    throw new ApiError(message, response.status, body)
+    const error = body?.error
+    const message =
+      error?.message ?? body?.message ?? 'Ocurrió un error inesperado. Intenta de nuevo.'
+    throw new ApiError(message, response.status, error?.details ?? error ?? body)
   }
 
-  return body as T
+  return (body?.data ?? body) as T
 }
 
 export const http = {
