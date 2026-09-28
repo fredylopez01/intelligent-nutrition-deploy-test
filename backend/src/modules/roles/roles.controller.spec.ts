@@ -36,6 +36,7 @@ const request = (await import("supertest")).default;
     JwtAuthGuard,
     RolesGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
     {
       provide: PrismaService,
       useValue: {
@@ -51,11 +52,19 @@ const request = (await import("supertest")).default;
           findUnique: jest
             .fn<(...args: any[]) => Promise<any>>()
             .mockResolvedValue({
-              id: "user-uuid-1",
-              email: "admin@test.com",
+              personId: "user-uuid-1",
               roleId: "role-uuid-1",
               active: true,
-              role: { id: "role-uuid-1", name: "SUPER ADMIN" },
+              mustChangePassword: false,
+              person: {
+                id: "user-uuid-1",
+                firstName: "Admin",
+                lastName: "",
+                email: "admin@test.com",
+                active: true,
+              },
+              role: { id: "role-uuid-1", name: "SUPERADMIN", active: true },
+              branchAssignments: [],
             }),
         },
       },
@@ -73,7 +82,7 @@ describe("RolesController (e2e)", () => {
     id: "user-uuid-1",
     email: "admin@test.com",
     roleId: "role-uuid-1",
-    role: { id: "role-uuid-1", name: "SUPER ADMIN" },
+    role: { id: "role-uuid-1", name: "SUPERADMIN" },
   };
 
   const mockRole = {

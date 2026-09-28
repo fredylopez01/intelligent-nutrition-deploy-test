@@ -1,11 +1,17 @@
-import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+} from "@nestjs/common";
 import { AuthService } from "./auth.service.js";
 import { LoginDto } from "./dto/login.dto.js";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { Public } from "../../common/decorators/public.decorator.js";
 import { ActivateAccountDto } from "./dto/activate.dto.js";
-import { RolesGuard } from "../../common/guards/roles.guard.js";
 import { Roles } from "../../common/decorators/roles.decorator.js";
 import { ResendActivationDto } from "./dto/resend-activation.dto.js";
 
@@ -13,8 +19,9 @@ import { ResendActivationDto } from "./dto/resend-activation.dto.js";
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Public()
   @Post("login")
+  @Public()
+  @HttpCode(HttpStatus.OK)
   login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
@@ -26,14 +33,15 @@ export class AuthController {
 
   @Post("activate")
   @Public()
-  async activate(@Body() activateAccountDto: ActivateAccountDto) {
+  @HttpCode(HttpStatus.OK)
+  activate(@Body() activateAccountDto: ActivateAccountDto) {
     return this.authService.activateAccount(activateAccountDto);
   }
 
-  @Post("activation/resend")
-  @UseGuards(RolesGuard)
-  @Roles("SUPER ADMIN")
-  async resendActivation(@Body() resendActivationDto: ResendActivationDto) {
+  @Post("resend")
+  @Roles("SUPERADMIN", "DEV")
+  @HttpCode(HttpStatus.OK)
+  resendActivation(@Body() resendActivationDto: ResendActivationDto) {
     return this.authService.resendActivation(resendActivationDto);
   }
 }

@@ -11,12 +11,39 @@ import { CreateUserDto } from "./dto/create-user.dto.js";
 import { ConfigService } from "@nestjs/config";
 import { EmailService } from "../email/email.service.js";
 import { CryptoUtil } from "../../common/utils/crypto.util.js";
-import { AuthService } from "../auth/auth.service.js";
 import { ListUsersQueryDto } from "./dto/list-users-query.dto.js";
 import { PaginatedUsersResponseDto } from "./dto/paginated-user-response.dto.js";
 import { ChangeUserRoleDto } from "./dto/change-user-role.dto.js";
 import { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { UpdateUserDto } from "./dto/update-user.dto.js";
+import { PersonsService } from "../persons/persons.service.js";
+
+const userSelect = {
+  personId: true,
+  active: true,
+  mustChangePassword: true,
+  lastLoginAt: true,
+  createdAt: true,
+  updatedAt: true,
+  person: {
+    select: { id: true, firstName: true, lastName: true, email: true },
+  },
+  role: { select: { id: true, name: true } },
+  branchAssignments: {
+    where: { active: true },
+    select: { branch: { select: { id: true, name: true } } },
+  },
+};
+
+function toUserResponse(user: any) {
+  const { personId, branchAssignments = [], ...userFields } = user;
+  return {
+    id: personId,
+    personId,
+    ...userFields,
+    branches: branchAssignments.map(({ branch }: any) => branch),
+  };
+}
 
 @Injectable()
 export class UsersService {
@@ -26,29 +53,49 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
+    private readonly personsService: PersonsService,
   ) {}
 
   async create(createUserDto: CreateUserDto) {
-    const email = createUserDto.email.trim().toLowerCase();
-
-    const existingUser = await this.prisma.userAccount.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      throw new ConflictException("Email is already registered");
+    const { person, personId, roleId, branchIds = [] } = createUserDto;
+    if (Boolean(person) === Boolean(personId)) {
+      throw new BadRequestException(
+        "Provide either person or personId, but not both",
+      );
     }
 
     const role = await this.prisma.role.findUnique({
-      where: { id: createUserDto.roleId },
+      where: { id: roleId },
+      select: { id: true, name: true, active: true },
     });
-
     if (!role) {
       throw new NotFoundException("Role not found");
     }
+    if (!role.active) {
+      throw new BadRequestException("Cannot assign an inactive role");
+    }
+
+    if (branchIds.length !== new Set(branchIds).size) {
+      throw new BadRequestException("branchIds cannot contain duplicates");
+    }
+
+    const normalizedEmail = person?.email.trim().toLowerCase();
+    const existingLogin = await this.prisma.userAccount.findFirst({
+      where: normalizedEmail
+        ? { person: { is: { email: normalizedEmail } } }
+        : { personId },
+      select: { personId: true },
+    });
+    if (existingLogin) {
+      throw new ConflictException(
+        normalizedEmail
+          ? "Email is already registered to a user account"
+          : "Person already has a user account",
+      );
+    }
 
     const rawToken = CryptoUtil.generateRandomToken();
-    const activationTokenHash = CryptoUtil.hashToken(rawToken);
+    const activationToken = CryptoUtil.hashToken(rawToken);
     const expirationMinutes = this.configService.get<number>(
       "ACTIVATION_TOKEN_EXPIRATION_MINUTES",
       4320,
@@ -56,28 +103,51 @@ export class UsersService {
     const activationTokenExpiresAt =
       CryptoUtil.getExpirationDate(expirationMinutes);
 
-    const user = await this.prisma.userAccount.create({
-      data: {
-        fullName: createUserDto.fullName.trim(),
-        email,
-        roleId: createUserDto.roleId,
-        passwordHash: null,
-        mustChangePassword: true,
-        activationTokenHash,
-        activationTokenExpiresAt,
-        active: true,
-      },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        roleId: true,
-        active: true,
-        mustChangePassword: true,
-        createdAt: true,
-      },
+    const user = await this.prisma.$transaction(async (transaction) => {
+      const branches = await transaction.branch.findMany({
+        where: { id: { in: branchIds }, active: true },
+        select: { id: true },
+      });
+      if (branches.length !== branchIds.length) {
+        throw new NotFoundException(
+          "One or more active branches were not found",
+        );
+      }
+
+      const resolvedPersonId = person
+        ? await this.personsService.create(
+            transaction,
+            person,
+            normalizedEmail!,
+          )
+        : await this.personsService.findAvailableForUserAccount(
+            transaction,
+            personId!,
+          );
+
+      return transaction.userAccount.create({
+        data: {
+          personId: resolvedPersonId!,
+          roleId,
+          password: null,
+          mustChangePassword: true,
+          activationToken,
+          activationTokenExpiresAt,
+          active: true,
+          branchAssignments: {
+            create: branchIds.map((id) => ({
+              branch: { connect: { id } },
+              assignmentDate: new Date(),
+            })),
+          },
+        },
+        select: userSelect,
+      });
     });
 
+    const fullName = [user.person.firstName, user.person.lastName]
+      .filter(Boolean)
+      .join(" ");
     const activationUrl = CryptoUtil.buildActivationUrl(
       this.configService,
       rawToken,
@@ -85,13 +155,13 @@ export class UsersService {
 
     try {
       await this.emailService.sendUserActivationEmail(
-        user.email,
-        user.fullName,
+        user.person.email!,
+        fullName,
         activationUrl,
       );
     } catch (error) {
       this.logger.error(
-        `User ${user.id} created, but activation email failed`,
+        `User ${user.personId} created, but activation email failed`,
         error,
       );
       throw new InternalServerErrorException(
@@ -99,14 +169,48 @@ export class UsersService {
       );
     }
 
-    return user;
+    return { ...toUserResponse(user), status: "PENDING_ACTIVATION" };
   }
 
   async findAll(query: ListUsersQueryDto): Promise<PaginatedUsersResponseDto> {
-    const { page, limit, active } = query;
+    const { page, limit, active, search, roleId, branchId } = query;
     const skip = (page - 1) * limit;
-
-    const where = active === undefined ? {} : { active };
+    const where = {
+      ...(active === undefined ? {} : { active }),
+      ...(roleId ? { roleId } : {}),
+      ...(branchId
+        ? { branchAssignments: { some: { branchId, active: true } } }
+        : {}),
+      ...(search
+        ? {
+            person: {
+              is: {
+                OR: [
+                  {
+                    firstName: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                  {
+                    lastName: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                  { email: { contains: search, mode: "insensitive" as const } },
+                  {
+                    documentNumber: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                ],
+              },
+            },
+          }
+        : {}),
+    };
 
     const [total, users] = await this.prisma.$transaction([
       this.prisma.userAccount.count({ where }),
@@ -115,67 +219,34 @@ export class UsersService {
         skip,
         take: limit,
         orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          active: true,
-          mustChangePassword: true,
-          lastLoginAt: true,
-          createdAt: true,
-          updatedAt: true,
-          role: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
+        select: userSelect,
       }),
     ]);
 
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
     return {
-      data: users,
+      data: users.map((user) => toUserResponse(user)),
       meta: {
         page,
         limit,
         total,
         totalPages,
       },
-      ...(total === 0 && {
-        message: "No registered users were found.",
-      }),
     };
   }
 
   async findUserById(userId: string) {
     const user = await this.prisma.userAccount.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        active: true,
-        mustChangePassword: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-        role: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      where: { personId: userId },
+      select: userSelect,
     });
 
     if (!user) {
       throw new NotFoundException("User not found");
     }
 
-    return user;
+    return toUserResponse(user);
   }
 
   async changeRole(
@@ -209,24 +280,12 @@ export class UsersService {
     }
 
     const updatedUser = await this.prisma.userAccount.update({
-      where: { id: userId },
+      where: { personId: userId },
       data: { roleId },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        active: true,
-        mustChangePassword: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-        role: {
-          select: { id: true, name: true },
-        },
-      },
+      select: userSelect,
     });
 
-    return updatedUser;
+    return toUserResponse(updatedUser);
   }
 
   async update(
@@ -234,59 +293,88 @@ export class UsersService {
     updateUserDto: UpdateUserDto,
     currentUser: AuthenticatedUser,
   ) {
-    if (currentUser.id !== userId && currentUser.role.name !== "SUPER ADMIN") {
+    const isPrivileged = ["SUPERADMIN", "DEV"].includes(currentUser.role.name);
+    const updatesAccount =
+      updateUserDto.roleId !== undefined || updateUserDto.active !== undefined;
+    if (currentUser.id !== userId && !isPrivileged) {
       throw new BadRequestException("You can only update your own account");
     }
-
-    const { fullName, email } = updateUserDto;
-
-    if (fullName === undefined && email === undefined) {
+    if (updatesAccount && !isPrivileged) {
       throw new BadRequestException(
-        "At least one field must be provided to update",
+        "Only SUPERADMIN or DEV can update account access",
       );
     }
+    if (currentUser.id === userId && updateUserDto.active === false) {
+      throw new BadRequestException("You cannot deactivate your own account");
+    }
 
+    const { person, roleId, active } = updateUserDto;
+    const hasPersonChanges =
+      person !== undefined &&
+      Object.values(person).some((value) => value !== undefined);
+    if (!hasPersonChanges && roleId === undefined && active === undefined) {
+      throw new BadRequestException("At least one field must be provided");
+    }
     const existingUser = await this.findUserById(userId);
 
-    if (email && email !== existingUser.email) {
-      const emailTaken = await this.prisma.userAccount.findUnique({
-        where: { email },
-        select: { id: true },
+    if (roleId !== undefined && roleId !== existingUser.role.id) {
+      const targetRole = await this.prisma.role.findUnique({
+        where: { id: roleId },
+        select: { id: true, active: true },
       });
-
-      if (emailTaken) {
-        throw new ConflictException("Email is already registered");
+      if (!targetRole) {
+        throw new NotFoundException("Role not found");
+      }
+      if (!targetRole.active) {
+        throw new BadRequestException("Cannot assign an inactive role");
       }
     }
 
-    const data: { fullName?: string; email?: string } = {};
-    if (fullName !== undefined) data.fullName = fullName;
-    if (email !== undefined && email !== existingUser.email) data.email = email;
-
-    if (Object.keys(data).length === 0) {
-      throw new BadRequestException("No changes detected");
+    const email = person?.email?.trim().toLowerCase();
+    if (email && email !== existingUser.person.email) {
+      const emailInUse = await this.prisma.userAccount.findFirst({
+        where: {
+          personId: { not: userId },
+          person: { is: { email } },
+        },
+        select: { personId: true },
+      });
+      if (emailInUse) {
+        throw new ConflictException(
+          "Email is already registered to a user account",
+        );
+      }
     }
 
-    const updatedUser = await this.prisma.userAccount.update({
-      where: { id: userId },
-      data,
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        active: true,
-        mustChangePassword: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-        role: { select: { id: true, name: true } },
-      },
+    const updatedUser = await this.prisma.$transaction(async (transaction) => {
+      if (hasPersonChanges) {
+        await this.personsService.update(transaction, userId, person!);
+      }
+
+      if (roleId !== undefined || active !== undefined) {
+        return transaction.userAccount.update({
+          where: { personId: userId },
+          data: {
+            ...(roleId !== undefined && {
+              role: { connect: { id: roleId } },
+            }),
+            ...(active !== undefined && { active }),
+          },
+          select: userSelect,
+        });
+      }
+
+      return transaction.userAccount.findUnique({
+        where: { personId: userId },
+        select: userSelect,
+      });
     });
 
-    this.logger.log(
-      `User ${userId} updated. Fields changed: ${Object.keys(data).join(", ")}`,
-    );
+    if (!updatedUser) {
+      throw new NotFoundException("User not found");
+    }
 
-    return updatedUser;
+    this.logger.log(`User ${userId} updated`);
+    return toUserResponse(updatedUser);
   }
 }

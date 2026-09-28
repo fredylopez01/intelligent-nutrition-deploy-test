@@ -14,31 +14,138 @@ datasource db {
 }
 
 model Role {
-  id          String    @id @default(uuid()) @db.Uuid
-  name        String  @unique @db.VarChar(50)
-  description String? @db.VarChar(255)
-  active      Boolean @default(true)
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @unique @db.VarChar(50)
+  description String?      @db.VarChar(255)
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamp(6)
 
   users       UserAccount[]
 
   @@map("role")
 }
 
+model DocumentType {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(20)
+  name      String   @db.VarChar(100)
+  active    Boolean  @default(true)
+
+  persons Person[]
+
+  @@map("document_type")
+}
+
+model Person {
+  id             String   @id @default(uuid()) @db.Uuid
+  documentTypeId String?  @map("document_type_id") @db.Uuid
+  documentNumber String?  @map("document_number") @db.VarChar(50)
+  firstName      String?  @map("first_name") @db.VarChar(100)
+  lastName       String?  @map("last_name") @db.VarChar(100)
+  businessName   String?  @map("business_name") @db.VarChar(200)
+  email          String?  @db.VarChar(150)
+  phone          String?  @db.VarChar(30)
+  address        String?  @db.VarChar(255)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  documentType DocumentType? @relation(fields: [documentTypeId], references: [id])
+  userAccount  UserAccount?
+  customer     Customer?
+  supplier     Supplier?
+
+  @@unique([documentTypeId, documentNumber])
+  @@map("person")
+}
+
 model UserAccount {
-  id                      String    @id @default(uuid()) @db.Uuid
-  fullName                String    @db.VarChar(150)
-  email                   String    @unique @db.VarChar(150)
-  passwordHash            String?   @map("password_hash") @db.VarChar(255)
-  roleId                  String    @map("role_id") @db.Uuid
-  active                  Boolean   @default(true)
-  mustChangePassword      Boolean   @default(true) @map("must_change_password")
-  activationTokenHash     String?   @unique @map("activation_token_hash") @db.VarChar(255)
+  personId                 String    @id @map("person_id") @db.Uuid
+  password                 String?   @map("password_hash") @db.VarChar(255)
+  roleId                   String    @map("role_id") @db.Uuid
+  active                   Boolean   @default(true)
+  mustChangePassword       Boolean   @default(true) @map("must_change_password")
+  activationToken          String?   @unique @map("activation_token") @db.VarChar(255)
   activationTokenExpiresAt DateTime? @map("activation_token_expires_at") @db.Timestamp(6)
+  passwordResetToken       String?   @unique @map("password_reset_token") @db.VarChar(255)
+  passwordResetTokenExpiresAt DateTime? @map("password_reset_token_expires_at") @db.Timestamp(6)
   lastLoginAt             DateTime? @map("last_login_at") @db.Timestamp(6)
   createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  role                    Role      @relation(fields: [roleId], references: [id])
+  person            Person         @relation(fields: [personId], references: [id])
+  role              Role           @relation(fields: [roleId], references: [id])
+  branchAssignments UserBranch[]
+  auditLogs         AuditLog[]
 
   @@map("user_account")
+}
+
+model Customer {
+  personId  String   @id @map("person_id") @db.Uuid
+  fullName  String?  @map("full_name") @db.VarChar(200)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  person Person @relation(fields: [personId], references: [id])
+
+  @@map("customer")
+}
+
+model Supplier {
+  personId       String   @id @map("person_id") @db.Uuid
+  commercialName String?  @map("commercial_name") @db.VarChar(200)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  person Person @relation(fields: [personId], references: [id])
+
+  @@map("supplier")
+}
+
+model Branch {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(100)
+  address   String   @db.VarChar(255)
+  phone     String   @db.VarChar(30)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  userAssignments UserBranch[]
+
+  @@map("branch")
+}
+
+model UserBranch {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  branchId       String    @map("branch_id") @db.Uuid
+  assignmentDate DateTime  @map("assignment_date") @db.Date
+  endDate        DateTime? @map("end_date") @db.Date
+  active         Boolean   @default(true)
+
+  userAccount UserAccount @relation(fields: [userId], references: [personId])
+  branch      Branch      @relation(fields: [branchId], references: [id])
+
+  @@unique([userId, branchId, assignmentDate])
+  @@map("user_branch")
+}
+
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  userId    String   @map("user_id") @db.Uuid
+  action    String   @db.VarChar(50)
+  entity    String   @db.VarChar(50)
+  entityId  String   @map("entity_id") @db.Uuid
+  oldData   Json?    @map("old_data") @db.Json
+  newData   Json?    @map("new_data") @db.Json
+  reason    String   @db.Text
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  userAccount UserAccount @relation(fields: [userId], references: [personId])
+
+  @@map("audit_log")
 }

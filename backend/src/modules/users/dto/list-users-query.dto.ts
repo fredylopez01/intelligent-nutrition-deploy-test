@@ -1,5 +1,14 @@
 import { Transform, Type } from "class-transformer";
-import { IsBoolean, IsInt, IsOptional, Max, Min } from "class-validator";
+import {
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from "class-validator";
 
 export class ListUsersQueryDto {
   @IsOptional()
@@ -23,4 +32,17 @@ export class ListUsersQueryDto {
   })
   @IsBoolean()
   active?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  search?: string;
+
+  @IsOptional()
+  @IsUUID()
+  roleId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
 }

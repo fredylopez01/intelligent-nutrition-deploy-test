@@ -4,6 +4,7 @@ import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
 
 import { PrismaService } from "../../../database/prisma/prisma.service.js";
+import { AuthExceptions } from "../auth.exceptions.js";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -26,27 +27,57 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: { sub: string }) {
     const user = await this.prisma.userAccount.findUnique({
-      where: {
-        id: payload.sub,
-      },
+      where: { personId: payload.sub },
       select: {
-        id: true,
-        fullName: true,
-        email: true,
+        personId: true,
         roleId: true,
         active: true,
-        role: {
+        mustChangePassword: true,
+        person: {
           select: {
-            name: true,
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            active: true,
+          },
+        },
+        role: {
+          select: { id: true, name: true, active: true },
+        },
+        branchAssignments: {
+          where: { active: true },
+          select: {
+            branch: {
+              select: { id: true, name: true },
+            },
           },
         },
       },
     });
 
-    if (!user || !user.active) {
+    if (!user || !user.active || !user.person.active) {
       throw new UnauthorizedException("User is not authorized");
     }
+    if (!user.role.active) {
+      throw AuthExceptions.roleInactive();
+    }
 
-    return user;
+    const fullName = [user.person.firstName, user.person.lastName]
+      .filter(Boolean)
+      .join(" ");
+
+    return {
+      id: user.personId,
+      personId: user.personId,
+      fullName,
+      email: user.person.email,
+      roleId: user.roleId,
+      active: user.active,
+      mustChangePassword: user.mustChangePassword,
+      person: user.person,
+      role: { id: user.role.id, name: user.role.name },
+      branches: user.branchAssignments.map(({ branch }) => branch),
+    };
   }
 }
