@@ -36,6 +36,7 @@ const request = (await import("supertest")).default;
     JwtAuthGuard,
     RolesGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
     {
       provide: PrismaService,
       useValue: {

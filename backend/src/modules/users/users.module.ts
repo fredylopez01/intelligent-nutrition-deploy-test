@@ -3,9 +3,10 @@ import { PrismaModule } from "../../database/prisma/prisma.module.js";
 import { UsersController } from "./users.controller.js";
 import { UsersService } from "./users.service.js";
 import { EmailModule } from "../../modules/email/email.module.js";
+import { PersonsModule } from "../persons/persons.module.js";
 
 @Module({
-  imports: [PrismaModule, EmailModule],
+  imports: [PrismaModule, EmailModule, PersonsModule],
   controllers: [UsersController],
   providers: [UsersService],
 })

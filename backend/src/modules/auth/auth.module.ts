@@ -49,6 +49,10 @@ import { EmailModule } from "../../modules/email/email.module.js";
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
     RolesGuard,
   ],
   exports: [AuthService, JwtAuthGuard],

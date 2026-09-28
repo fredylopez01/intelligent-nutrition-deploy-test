@@ -6,13 +6,13 @@ import {
   IsUUID,
   ValidateNested,
 } from "class-validator";
-import { CreateUserPersonDto } from "./create-user-person.dto.js";
+import { CreatePersonDto } from "../../persons/dto/create-person.dto.js";
 
 export class CreateUserDto {
   @IsOptional()
   @ValidateNested()
-  @Type(() => CreateUserPersonDto)
-  person?: CreateUserPersonDto;
+  @Type(() => CreatePersonDto)
+  person?: CreatePersonDto;
 
   @IsOptional()
   @IsUUID()

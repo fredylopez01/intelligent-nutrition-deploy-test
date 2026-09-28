@@ -1,13 +1,10 @@
-import {
-  ForbiddenException,
-  Injectable,
-  UnauthorizedException,
-} from "@nestjs/common";
+import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
 
 import { PrismaService } from "../../../database/prisma/prisma.service.js";
+import { AuthExceptions } from "../auth.exceptions.js";
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -63,10 +60,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException("User is not authorized");
     }
     if (!user.role.active) {
-      throw new ForbiddenException({
-        code: "ROLE_INACTIVE",
-        message: "The assigned role is inactive.",
-      });
+      throw AuthExceptions.roleInactive();
     }
 
     const fullName = [user.person.firstName, user.person.lastName]

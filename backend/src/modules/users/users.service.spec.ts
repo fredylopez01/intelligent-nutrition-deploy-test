@@ -21,17 +21,14 @@ jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
 }));
 
 const { Test } = await import("@nestjs/testing");
-const {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-} = await import("@nestjs/common");
+const { BadRequestException, ConflictException, NotFoundException } =
+  await import("@nestjs/common");
 const { ConfigService } = await import("@nestjs/config");
 const { UsersService } = await import("./users.service.js");
-const { PrismaService } = await import(
-  "../../database/prisma/prisma.service.js"
-);
+const { PrismaService } =
+  await import("../../database/prisma/prisma.service.js");
 const { EmailService } = await import("../email/email.service.js");
+const { PersonsService } = await import("../persons/persons.service.js");
 
 const configMock = {
   get: jest.fn((key: string, defaultValue?: unknown) =>
@@ -40,6 +37,11 @@ const configMock = {
 };
 const emailMock = {
   sendUserActivationEmail: jest.fn<(...args: any[]) => Promise<void>>(),
+};
+const personsMock = {
+  create: jest.fn<(...args: any[]) => Promise<string>>(),
+  findAvailableForUserAccount: jest.fn<(...args: any[]) => Promise<string>>(),
+  update: jest.fn<(...args: any[]) => Promise<void>>(),
 };
 
 describe("UsersService contract", () => {
@@ -66,19 +68,14 @@ describe("UsersService contract", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     prismaMock.$transaction.mockImplementation((operation: any) =>
-      Array.isArray(operation)
-        ? Promise.all(operation)
-        : operation(prismaMock),
+      Array.isArray(operation) ? Promise.all(operation) : operation(prismaMock),
     );
     prismaMock.role.findUnique.mockResolvedValue(role);
     prismaMock.userAccount.findFirst.mockResolvedValue(null);
-    prismaMock.documentType.findUnique.mockResolvedValue({
-      id: "document-type-uuid",
-      active: true,
-    });
     prismaMock.branch.findMany.mockResolvedValue([]);
-    prismaMock.person.findUnique.mockResolvedValue(null);
-    prismaMock.person.create.mockResolvedValue({ id: "person-uuid-1" });
+    personsMock.create.mockResolvedValue("person-uuid-1");
+    personsMock.findAvailableForUserAccount.mockResolvedValue("person-uuid-1");
+    personsMock.update.mockResolvedValue(undefined);
     prismaMock.userAccount.create.mockResolvedValue(userRecord);
     prismaMock.userAccount.findUnique.mockResolvedValue(userRecord);
     prismaMock.userAccount.update.mockResolvedValue(userRecord);
@@ -92,6 +89,7 @@ describe("UsersService contract", () => {
         { provide: PrismaService, useValue: prismaMock },
         { provide: ConfigService, useValue: configMock },
         { provide: EmailService, useValue: emailMock },
+        { provide: PersonsService, useValue: personsMock },
       ],
     }).compile();
     service = module.get(UsersService);
@@ -110,18 +108,11 @@ describe("UsersService contract", () => {
       branchIds: [],
     });
 
-    expect(prismaMock.person.create).toHaveBeenCalledWith({
-      data: {
-        documentTypeId: "document-type-uuid",
-        documentNumber: "12345",
-        firstName: "Juan",
-        lastName: "Perez",
-        email: "juan@example.com",
-        phone: undefined,
-        address: undefined,
-      },
-      select: { id: true },
-    });
+    expect(personsMock.create).toHaveBeenCalledWith(
+      prismaMock,
+      expect.objectContaining({ documentNumber: " 12345 " }),
+      "juan@example.com",
+    );
     expect(prismaMock.userAccount.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -147,16 +138,12 @@ describe("UsersService contract", () => {
   });
 
   it("associates an existing Person without duplicating it", async () => {
-    prismaMock.person.findUnique.mockResolvedValue({
-      id: "person-uuid-1",
-      active: true,
-      email: "juan@example.com",
-      userAccount: null,
-    });
-
     await service.create({ personId: "person-uuid-1", roleId: role.id });
 
-    expect(prismaMock.person.create).not.toHaveBeenCalled();
+    expect(personsMock.findAvailableForUserAccount).toHaveBeenCalledWith(
+      prismaMock,
+      "person-uuid-1",
+    );
     expect(prismaMock.userAccount.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ personId: "person-uuid-1" }),
@@ -188,12 +175,9 @@ describe("UsersService contract", () => {
   });
 
   it("rejects associating a Person that already has an account", async () => {
-    prismaMock.person.findUnique.mockResolvedValue({
-      id: "person-uuid-1",
-      active: true,
-      email: "juan@example.com",
-      userAccount: { personId: "person-uuid-1" },
-    });
+    personsMock.findAvailableForUserAccount.mockRejectedValue(
+      new ConflictException("Person already has a user account"),
+    );
 
     await expect(
       service.create({ personId: "person-uuid-1", roleId: role.id }),
@@ -223,7 +207,12 @@ describe("UsersService contract", () => {
       role,
       branches: [],
     });
-    expect(result.meta).toEqual({ page: 1, limit: 20, total: 1, totalPages: 1 });
+    expect(result.meta).toEqual({
+      page: 1,
+      limit: 20,
+      total: 1,
+      totalPages: 1,
+    });
   });
 
   it("changes role by the UserAccount personId key", async () => {
@@ -270,13 +259,15 @@ describe("UsersService contract", () => {
       },
     );
 
+    expect(personsMock.update).toHaveBeenCalledWith(
+      prismaMock,
+      "person-uuid-1",
+      { firstName: " Juan Carlos " },
+    );
     expect(prismaMock.userAccount.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { personId: "person-uuid-1" },
-        data: {
-          active: false,
-          person: { update: { firstName: "Juan Carlos" } },
-        },
+        data: { active: false },
       }),
     );
   });

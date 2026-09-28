@@ -16,6 +16,7 @@ import { PaginatedUsersResponseDto } from "./dto/paginated-user-response.dto.js"
 import { ChangeUserRoleDto } from "./dto/change-user-role.dto.js";
 import { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { UpdateUserDto } from "./dto/update-user.dto.js";
+import { PersonsService } from "../persons/persons.service.js";
 
 const userSelect = {
   personId: true,
@@ -52,6 +53,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
+    private readonly personsService: PersonsService,
   ) {}
 
   async create(createUserDto: CreateUserDto) {
@@ -112,72 +114,16 @@ export class UsersService {
         );
       }
 
-      let resolvedPersonId = personId;
-      if (person) {
-        if (Boolean(person.documentTypeId) !== Boolean(person.documentNumber)) {
-          throw new BadRequestException(
-            "documentTypeId and documentNumber must be provided together",
+      const resolvedPersonId = person
+        ? await this.personsService.create(
+            transaction,
+            person,
+            normalizedEmail!,
+          )
+        : await this.personsService.findAvailableForUserAccount(
+            transaction,
+            personId!,
           );
-        }
-        if (person.documentTypeId) {
-          const documentType = await transaction.documentType.findUnique({
-            where: { id: person.documentTypeId },
-            select: { id: true, active: true },
-          });
-          if (!documentType || !documentType.active) {
-            throw new NotFoundException("Active document type not found");
-          }
-          const personWithDocument = await transaction.person.findUnique({
-            where: {
-              documentTypeId_documentNumber: {
-                documentTypeId: person.documentTypeId,
-                documentNumber: person.documentNumber!.trim(),
-              },
-            },
-            select: { id: true },
-          });
-          if (personWithDocument) {
-            throw new ConflictException(
-              "Person with this document already exists; use personId to associate the account",
-            );
-          }
-        }
-
-        const personRecord = await transaction.person.create({
-          data: {
-            documentTypeId: person.documentTypeId,
-            documentNumber: person.documentNumber?.trim(),
-            firstName: person.firstName.trim(),
-            lastName: person.lastName.trim(),
-            email: normalizedEmail,
-            phone: person.phone?.trim(),
-            address: person.address?.trim(),
-          },
-          select: { id: true },
-        });
-        resolvedPersonId = personRecord.id;
-      } else {
-        const existingPerson = await transaction.person.findUnique({
-          where: { id: personId },
-          select: {
-            id: true,
-            active: true,
-            email: true,
-            userAccount: { select: { personId: true } },
-          },
-        });
-        if (!existingPerson || !existingPerson.active) {
-          throw new NotFoundException("Active person not found");
-        }
-        if (!existingPerson.email) {
-          throw new BadRequestException(
-            "Person must have an email address before creating a user account",
-          );
-        }
-        if (existingPerson.userAccount) {
-          throw new ConflictException("Person already has a user account");
-        }
-      }
 
       return transaction.userAccount.create({
         data: {
@@ -363,7 +309,10 @@ export class UsersService {
     }
 
     const { person, roleId, active } = updateUserDto;
-    if (!person && roleId === undefined && active === undefined) {
+    const hasPersonChanges =
+      person !== undefined &&
+      Object.values(person).some((value) => value !== undefined);
+    if (!hasPersonChanges && roleId === undefined && active === undefined) {
       throw new BadRequestException("At least one field must be provided");
     }
     const existingUser = await this.findUserById(userId);
@@ -381,28 +330,12 @@ export class UsersService {
       }
     }
 
-    const personData: {
-      firstName?: string;
-      lastName?: string;
-      email?: string;
-      phone?: string;
-      address?: string;
-    } = {};
-    if (person?.firstName !== undefined)
-      personData.firstName = person.firstName.trim();
-    if (person?.lastName !== undefined)
-      personData.lastName = person.lastName.trim();
-    if (person?.email !== undefined)
-      personData.email = person.email.trim().toLowerCase();
-    if (person?.phone !== undefined) personData.phone = person.phone.trim();
-    if (person?.address !== undefined)
-      personData.address = person.address.trim();
-
-    if (personData.email && personData.email !== existingUser.person.email) {
+    const email = person?.email?.trim().toLowerCase();
+    if (email && email !== existingUser.person.email) {
       const emailInUse = await this.prisma.userAccount.findFirst({
         where: {
           personId: { not: userId },
-          person: { is: { email: personData.email } },
+          person: { is: { email } },
         },
         select: { personId: true },
       });
@@ -413,17 +346,33 @@ export class UsersService {
       }
     }
 
-    const updatedUser = await this.prisma.userAccount.update({
-      where: { personId: userId },
-      data: {
-        ...(roleId !== undefined && { role: { connect: { id: roleId } } }),
-        ...(active !== undefined && { active }),
-        ...(Object.keys(personData).length > 0 && {
-          person: { update: personData },
-        }),
-      },
-      select: userSelect,
+    const updatedUser = await this.prisma.$transaction(async (transaction) => {
+      if (hasPersonChanges) {
+        await this.personsService.update(transaction, userId, person!);
+      }
+
+      if (roleId !== undefined || active !== undefined) {
+        return transaction.userAccount.update({
+          where: { personId: userId },
+          data: {
+            ...(roleId !== undefined && {
+              role: { connect: { id: roleId } },
+            }),
+            ...(active !== undefined && { active }),
+          },
+          select: userSelect,
+        });
+      }
+
+      return transaction.userAccount.findUnique({
+        where: { personId: userId },
+        select: userSelect,
+      });
     });
+
+    if (!updatedUser) {
+      throw new NotFoundException("User not found");
+    }
 
     this.logger.log(`User ${userId} updated`);
     return toUserResponse(updatedUser);

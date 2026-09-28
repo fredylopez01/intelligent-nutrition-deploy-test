@@ -7,10 +7,8 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from "@nestjs/common";
 import { Roles } from "../../common/decorators/roles.decorator.js";
-import { RolesGuard } from "../../common/guards/roles.guard.js";
 import { CreateDocumentTypeDto } from "./dto/create-document-type.dto.js";
 import { ListDocumentTypesQueryDto } from "./dto/list-document-types-query.dto.js";
 import { UpdateDocumentTypeStatusDto } from "./dto/update-document-type-status.dto.js";
@@ -22,7 +20,6 @@ export class DocumentTypesController {
   constructor(private readonly documentTypesService: DocumentTypesService) {}
 
   @Post()
-  @UseGuards(RolesGuard)
   @Roles("DEV")
   create(@Body() createDocumentTypeDto: CreateDocumentTypeDto) {
     return this.documentTypesService.create(createDocumentTypeDto);
@@ -34,7 +31,6 @@ export class DocumentTypesController {
   }
 
   @Patch(":id")
-  @UseGuards(RolesGuard)
   @Roles("DEV")
   update(
     @Param("id", new ParseUUIDPipe()) id: string,
@@ -44,7 +40,6 @@ export class DocumentTypesController {
   }
 
   @Patch(":id/status")
-  @UseGuards(RolesGuard)
   @Roles("DEV")
   updateStatus(
     @Param("id", new ParseUUIDPipe()) id: string,

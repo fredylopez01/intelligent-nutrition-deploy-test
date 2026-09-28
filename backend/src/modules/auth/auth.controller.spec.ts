@@ -66,6 +66,7 @@ const mockEmailService = {
     JwtAuthGuard,
     RolesGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 class TestAuthModule {}

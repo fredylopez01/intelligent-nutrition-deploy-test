@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as argon2 from "argon2";
 import { PrismaService } from "../../database/prisma/prisma.service.js";
@@ -15,6 +8,7 @@ import { ResendActivationDto } from "./dto/resend-activation.dto.js";
 import { ConfigService } from "@nestjs/config";
 import { EmailService } from "../../modules/email/email.service.js";
 import { CryptoUtil } from "../../common/utils/crypto.util.js";
+import { AuthExceptions } from "./auth.exceptions.js";
 
 @Injectable()
 export class AuthService {
@@ -49,31 +43,19 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException({
-        code: "INVALID_CREDENTIALS",
-        message: "The provided credentials are invalid.",
-      });
+      throw AuthExceptions.invalidCredentials();
     }
 
     if (!user.active || !user.person.active) {
-      throw new ForbiddenException({
-        code: "ACCOUNT_INACTIVE",
-        message: "The user account is inactive.",
-      });
+      throw AuthExceptions.accountInactive();
     }
 
     if (!user.role.active) {
-      throw new ForbiddenException({
-        code: "ROLE_INACTIVE",
-        message: "The assigned role is inactive.",
-      });
+      throw AuthExceptions.roleInactive();
     }
 
     if (!user.password || user.mustChangePassword) {
-      throw new ForbiddenException({
-        code: "ACCOUNT_NOT_ACTIVATED",
-        message: "The user account has not been activated.",
-      });
+      throw AuthExceptions.accountNotActivated();
     }
 
     let passwordMatches = false;
@@ -84,10 +66,7 @@ export class AuthService {
     }
 
     if (!passwordMatches) {
-      throw new UnauthorizedException({
-        code: "INVALID_CREDENTIALS",
-        message: "The provided credentials are invalid.",
-      });
+      throw AuthExceptions.invalidCredentials();
     }
 
     await this.prisma.userAccount.update({
@@ -129,21 +108,15 @@ export class AuthService {
       !user.activationTokenExpiresAt ||
       user.activationTokenExpiresAt <= new Date()
     ) {
-      throw new BadRequestException("Invalid or expired activation token");
+      throw AuthExceptions.invalidActivationToken();
     }
 
     if (!user.mustChangePassword || user.password) {
-      throw new ConflictException({
-        code: "ACCOUNT_ALREADY_ACTIVATED",
-        message: "The user account is already activated.",
-      });
+      throw AuthExceptions.accountAlreadyActivated();
     }
 
     if (!user.active) {
-      throw new ForbiddenException({
-        code: "ACCOUNT_INACTIVE",
-        message: "The user account is inactive.",
-      });
+      throw AuthExceptions.accountInactive();
     }
 
     const password = await argon2.hash(activateAccountDto.password);
@@ -182,23 +155,14 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new NotFoundException({
-        code: "USER_NOT_FOUND",
-        message: "User account not found.",
-      });
+      throw AuthExceptions.userNotFound();
     }
 
     if (!user.mustChangePassword || user.password) {
-      throw new ConflictException({
-        code: "ACCOUNT_ALREADY_ACTIVATED",
-        message: "The user account is already activated.",
-      });
+      throw AuthExceptions.accountAlreadyActivated();
     }
     if (!user.active) {
-      throw new ForbiddenException({
-        code: "ACCOUNT_INACTIVE",
-        message: "The user account is inactive.",
-      });
+      throw AuthExceptions.accountInactive();
     }
 
     const rawToken = CryptoUtil.generateRandomToken();

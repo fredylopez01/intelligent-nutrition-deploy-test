@@ -19,6 +19,7 @@ const { PassportModule } = await import("@nestjs/passport");
 const { JwtModule, JwtService } = await import("@nestjs/jwt");
 const { UsersController } = await import("./users.controller.js");
 const { UsersService } = await import("./users.service.js");
+const { PersonsModule } = await import("../persons/persons.module.js");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
 const { EmailService } = await import("../email/email.service.js");
@@ -52,6 +53,7 @@ mockPrisma.$transaction.mockImplementation((operation: any) =>
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PassportModule,
+    PersonsModule,
     JwtModule.register({
       secret: "test-secret",
       signOptions: { expiresIn: "1h" },
@@ -65,6 +67,7 @@ mockPrisma.$transaction.mockImplementation((operation: any) =>
     JwtAuthGuard,
     RolesGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
     {
       provide: PrismaService,
       useValue: mockPrisma,
