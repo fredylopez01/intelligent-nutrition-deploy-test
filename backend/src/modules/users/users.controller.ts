@@ -22,19 +22,19 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles("SUPER ADMIN")
+  @Roles("SUPERADMIN", "DEV")
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
   @Get()
-  @Roles("SUPER ADMIN")
+  @Roles("SUPERADMIN", "DEV")
   findAll(@Query() query: ListUsersQueryDto) {
     return this.usersService.findAll(query);
   }
 
   @Patch("role/:id")
-  @Roles("SUPER ADMIN")
+  @Roles("SUPERADMIN", "DEV")
   changeRole(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() changeUserRoleDto: ChangeUserRoleDto,

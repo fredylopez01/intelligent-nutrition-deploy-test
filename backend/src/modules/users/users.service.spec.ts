@@ -1,290 +1,308 @@
-import {
-  jest,
-  describe,
-  beforeEach,
-  afterEach,
-  it,
-  expect,
-} from "@jest/globals";
+import { jest, describe, beforeEach, it, expect } from "@jest/globals";
 
-import type { UsersService } from "./users.service.js";
-import type { CreateUserDto } from "./dto/create-user.dto.js";
-import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
+const prismaMock: any = {
+  userAccount: {
+    findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    count: jest.fn(),
+    findMany: jest.fn(),
+  },
+  person: { findUnique: jest.fn(), create: jest.fn() },
+  role: { findUnique: jest.fn() },
+  documentType: { findUnique: jest.fn() },
+  branch: { findMany: jest.fn() },
+  $transaction: jest.fn(),
+};
 
 jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
-  PrismaService: jest.fn().mockImplementation(() => ({
-    userAccount: {
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-    },
-    role: {
-      findUnique: jest.fn(),
-    },
-  })),
+  PrismaService: jest.fn().mockImplementation(() => prismaMock),
 }));
 
 const { Test } = await import("@nestjs/testing");
-const { ConflictException, NotFoundException, BadRequestException } =
-  await import("@nestjs/common");
+const {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} = await import("@nestjs/common");
 const { ConfigService } = await import("@nestjs/config");
-const { UsersService: UsersServiceClass } = await import("./users.service.js");
-const { PrismaService } =
-  await import("../../database/prisma/prisma.service.js");
+const { UsersService } = await import("./users.service.js");
+const { PrismaService } = await import(
+  "../../database/prisma/prisma.service.js"
+);
 const { EmailService } = await import("../email/email.service.js");
 
-const mockConfigService = {
-  get: jest.fn<(...args: any[]) => any>().mockReturnValue(4320),
+const configMock = {
+  get: jest.fn((key: string, defaultValue?: unknown) =>
+    key === "FRONTEND_URL" ? "https://frontend.test" : defaultValue,
+  ),
+};
+const emailMock = {
+  sendUserActivationEmail: jest.fn<(...args: any[]) => Promise<void>>(),
 };
 
-const mockEmailService = {
-  sendUserActivationEmail: jest
-    .fn<(...args: any[]) => Promise<any>>()
-    .mockResolvedValue(undefined),
-};
+describe("UsersService contract", () => {
+  let service: InstanceType<typeof UsersService>;
 
-describe("UsersService", () => {
-  let service: UsersService;
-  let prisma: any;
-
-  const mockRole = { id: "role-uuid-1", name: "SUPERADMIN" };
-
-  const mockUser = {
-    id: "user-uuid-1",
-    fullName: "Juan Pérez",
-    email: "juan@test.com",
-    roleId: "role-uuid-1",
+  const role = { id: "role-uuid-1", name: "BRANCH_LEADER", active: true };
+  const userRecord = {
+    personId: "person-uuid-1",
     active: true,
     mustChangePassword: true,
-    createdAt: new Date(),
+    lastLoginAt: null,
+    createdAt: new Date("2026-09-01"),
+    updatedAt: new Date("2026-09-01"),
+    person: {
+      id: "person-uuid-1",
+      firstName: "Juan",
+      lastName: "Perez",
+      email: "juan@example.com",
+    },
+    role,
+    branchAssignments: [],
   };
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+    prismaMock.$transaction.mockImplementation((operation: any) =>
+      Array.isArray(operation)
+        ? Promise.all(operation)
+        : operation(prismaMock),
+    );
+    prismaMock.role.findUnique.mockResolvedValue(role);
+    prismaMock.userAccount.findFirst.mockResolvedValue(null);
+    prismaMock.documentType.findUnique.mockResolvedValue({
+      id: "document-type-uuid",
+      active: true,
+    });
+    prismaMock.branch.findMany.mockResolvedValue([]);
+    prismaMock.person.findUnique.mockResolvedValue(null);
+    prismaMock.person.create.mockResolvedValue({ id: "person-uuid-1" });
+    prismaMock.userAccount.create.mockResolvedValue(userRecord);
+    prismaMock.userAccount.findUnique.mockResolvedValue(userRecord);
+    prismaMock.userAccount.update.mockResolvedValue(userRecord);
+    prismaMock.userAccount.count.mockResolvedValue(1);
+    prismaMock.userAccount.findMany.mockResolvedValue([userRecord]);
+    emailMock.sendUserActivationEmail.mockResolvedValue(undefined);
+
     const module = await Test.createTestingModule({
       providers: [
-        UsersServiceClass,
-        PrismaService,
-        { provide: ConfigService, useValue: mockConfigService },
-        { provide: EmailService, useValue: mockEmailService },
+        UsersService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: ConfigService, useValue: configMock },
+        { provide: EmailService, useValue: emailMock },
       ],
     }).compile();
-
-    service = module.get<UsersService>(UsersServiceClass);
-    prisma = module.get<any>(PrismaService);
+    service = module.get(UsersService);
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it("should be defined", () => {
-    expect(service).toBeDefined();
-  });
-
-  describe("create", () => {
-    const createUserDto = {
-      fullName: "Juan Pérez",
-      email: "juan@test.com",
-      password: "password123",
-      roleId: "role-uuid-1",
-    } as CreateUserDto;
-
-    it("should create a user successfully", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(null);
-      prisma.role.findUnique.mockResolvedValue(mockRole);
-      prisma.userAccount.create.mockResolvedValue(mockUser);
-
-      const result = await service.create(createUserDto);
-
-      expect(result).toEqual(mockUser);
-      expect(result.email).toBe("juan@test.com");
-      expect(result).not.toHaveProperty("passwordHash");
+  it("creates a Person and UserAccount transactionally", async () => {
+    const result = await service.create({
+      person: {
+        firstName: " Juan ",
+        lastName: " Perez ",
+        email: " JUAN@EXAMPLE.COM ",
+        documentTypeId: "document-type-uuid",
+        documentNumber: " 12345 ",
+      },
+      roleId: role.id,
+      branchIds: [],
     });
 
-    it("should throw ConflictException when email already exists", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(mockUser);
-
-      await expect(service.create(createUserDto)).rejects.toThrow(
-        ConflictException,
-      );
+    expect(prismaMock.person.create).toHaveBeenCalledWith({
+      data: {
+        documentTypeId: "document-type-uuid",
+        documentNumber: "12345",
+        firstName: "Juan",
+        lastName: "Perez",
+        email: "juan@example.com",
+        phone: undefined,
+        address: undefined,
+      },
+      select: { id: true },
     });
-
-    it("should throw NotFoundException when role does not exist", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(null);
-      prisma.role.findUnique.mockResolvedValue(null);
-
-      await expect(service.create(createUserDto)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it("should trim and lowercase email", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(null);
-      prisma.role.findUnique.mockResolvedValue(mockRole);
-      prisma.userAccount.create.mockResolvedValue(mockUser);
-
-      await service.create({ ...createUserDto, email: "  JUAN@TEST.COM  " });
-
-      expect(prisma.userAccount.findUnique).toHaveBeenCalledWith({
-        where: { email: "juan@test.com" },
-      });
-    });
-
-    it("should trim fullName", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(null);
-      prisma.role.findUnique.mockResolvedValue(mockRole);
-      prisma.userAccount.create.mockResolvedValue(mockUser);
-
-      await service.create({ ...createUserDto, fullName: "  Juan Pérez  " });
-
-      expect(prisma.userAccount.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ fullName: "Juan Pérez" }),
+    expect(prismaMock.userAccount.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          personId: "person-uuid-1",
+          roleId: role.id,
+          password: null,
+          mustChangePassword: true,
         }),
-      );
+      }),
+    );
+    expect(result).toMatchObject({
+      id: "person-uuid-1",
+      personId: "person-uuid-1",
+      person: { email: "juan@example.com" },
+      status: "PENDING_ACTIVATION",
     });
-
-    it("should send activation email after creating user", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(null);
-      prisma.role.findUnique.mockResolvedValue(mockRole);
-      prisma.userAccount.create.mockResolvedValue(mockUser);
-
-      await service.create(createUserDto);
-
-      expect(mockEmailService.sendUserActivationEmail).toHaveBeenCalledTimes(1);
-      expect(mockEmailService.sendUserActivationEmail).toHaveBeenCalledWith(
-        mockUser.email,
-        mockUser.fullName,
-        expect.any(String),
-      );
-    });
-
-    it("should not return passwordHash in response", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(null);
-      prisma.role.findUnique.mockResolvedValue(mockRole);
-      prisma.userAccount.create.mockResolvedValue(mockUser);
-
-      const result = await service.create(createUserDto);
-
-      expect(result).not.toHaveProperty("passwordHash");
-    });
+    expect(result).not.toHaveProperty("activationToken");
+    expect(emailMock.sendUserActivationEmail).toHaveBeenCalledWith(
+      "juan@example.com",
+      "Juan Perez",
+      expect.stringContaining("token="),
+    );
   });
 
-  describe("changeRole", () => {
-    const currentUser: AuthenticatedUser = {
-      id: "admin-uuid-1",
-      fullName: "Admin",
-      email: "admin@test.com",
-      roleId: "role-admin",
+  it("associates an existing Person without duplicating it", async () => {
+    prismaMock.person.findUnique.mockResolvedValue({
+      id: "person-uuid-1",
       active: true,
-      role: { name: "SUPER ADMIN" },
-    };
+      email: "juan@example.com",
+      userAccount: null,
+    });
 
-    const mockUserWithRole = {
-      id: "user-uuid-1",
-      fullName: "Juan Pérez",
-      email: "juan@test.com",
-      roleId: "role-uuid-1",
+    await service.create({ personId: "person-uuid-1", roleId: role.id });
+
+    expect(prismaMock.person.create).not.toHaveBeenCalled();
+    expect(prismaMock.userAccount.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ personId: "person-uuid-1" }),
+      }),
+    );
+  });
+
+  it("requires exactly one Person source", async () => {
+    await expect(
+      service.create({
+        personId: "person-uuid-1",
+        person: {
+          firstName: "Juan",
+          lastName: "Perez",
+          email: "juan@example.com",
+        },
+        roleId: role.id,
+      }),
+    ).rejects.toThrow(BadRequestException);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects inactive roles", async () => {
+    prismaMock.role.findUnique.mockResolvedValue({ ...role, active: false });
+
+    await expect(
+      service.create({ personId: "person-uuid-1", roleId: role.id }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it("rejects associating a Person that already has an account", async () => {
+    prismaMock.person.findUnique.mockResolvedValue({
+      id: "person-uuid-1",
       active: true,
-      mustChangePassword: true,
-      lastLoginAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      role: { id: "role-uuid-1", name: "SUPERADMIN" },
-    };
-
-    const mockNewRole = { id: "role-uuid-2", name: "LIDER SEDE", active: true };
-
-    const mockUpdatedUser = {
-      ...mockUserWithRole,
-      roleId: "role-uuid-2",
-      role: { id: "role-uuid-2", name: "LIDER SEDE" },
-    };
-
-    it("should change user role successfully", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(mockUserWithRole);
-      prisma.role.findUnique.mockResolvedValue(mockNewRole);
-      prisma.userAccount.update.mockResolvedValue(mockUpdatedUser);
-
-      const result = await service.changeRole(
-        "user-uuid-1",
-        { roleId: "role-uuid-2" },
-        currentUser,
-      );
-
-      expect(result.role.id).toBe("role-uuid-2");
-      expect(result.role.name).toBe("LIDER SEDE");
-      expect(prisma.userAccount.update).toHaveBeenCalledTimes(1);
+      email: "juan@example.com",
+      userAccount: { personId: "person-uuid-1" },
     });
 
-    it("should throw BadRequestException when changing own role", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue({
-        ...mockUserWithRole,
-        id: "admin-uuid-1",
-        role: { id: "role-admin", name: "SUPER ADMIN" },
-      });
+    await expect(
+      service.create({ personId: "person-uuid-1", roleId: role.id }),
+    ).rejects.toThrow(ConflictException);
+  });
 
-      await expect(
-        service.changeRole(
-          "admin-uuid-1",
-          { roleId: "role-uuid-2" },
-          currentUser,
-        ),
-      ).rejects.toThrow(BadRequestException);
+  it("applies active, search, role, and branch filters to the user list", async () => {
+    const result = await service.findAll({
+      page: 1,
+      limit: 20,
+      active: true,
+      search: "Juan",
+      roleId: role.id,
+      branchId: "branch-uuid",
     });
 
-    it("should throw BadRequestException when role is the same", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(mockUserWithRole);
+    expect(prismaMock.userAccount.count).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        active: true,
+        roleId: role.id,
+        branchAssignments: { some: { branchId: "branch-uuid", active: true } },
+      }),
+    });
+    expect(result.data[0]).toMatchObject({
+      id: "person-uuid-1",
+      person: { firstName: "Juan" },
+      role,
+      branches: [],
+    });
+    expect(result.meta).toEqual({ page: 1, limit: 20, total: 1, totalPages: 1 });
+  });
 
-      await expect(
-        service.changeRole(
-          "user-uuid-1",
-          { roleId: "role-uuid-1" },
-          currentUser,
-        ),
-      ).rejects.toThrow(BadRequestException);
+  it("changes role by the UserAccount personId key", async () => {
+    prismaMock.role.findUnique.mockResolvedValueOnce({
+      id: "role-uuid-2",
+      name: "SUPERADMIN",
+      active: true,
+    });
+    prismaMock.userAccount.update.mockResolvedValue({
+      ...userRecord,
+      role: { id: "role-uuid-2", name: "SUPERADMIN" },
     });
 
-    it("should throw NotFoundException when user does not exist", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(null);
+    const result = await service.changeRole(
+      "person-uuid-1",
+      { roleId: "role-uuid-2" },
+      {
+        id: "admin-person-id",
+        fullName: "Admin",
+        email: "admin@example.com",
+        roleId: "admin-role-id",
+        active: true,
+        role: { name: "SUPERADMIN" },
+      },
+    );
 
-      await expect(
-        service.changeRole(
-          "nonexistent-uuid",
-          { roleId: "role-uuid-2" },
-          currentUser,
-        ),
-      ).rejects.toThrow(NotFoundException);
-    });
+    expect(prismaMock.userAccount.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { personId: "person-uuid-1" } }),
+    );
+    expect(result.role.name).toBe("SUPERADMIN");
+  });
 
-    it("should throw NotFoundException when target role does not exist", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(mockUserWithRole);
-      prisma.role.findUnique.mockResolvedValue(null);
+  it("updates account status and Person details on the existing PATCH route", async () => {
+    await service.update(
+      "person-uuid-1",
+      { active: false, person: { firstName: " Juan Carlos " } },
+      {
+        id: "admin-person-id",
+        fullName: "Admin",
+        email: "admin@example.com",
+        roleId: "admin-role-id",
+        active: true,
+        role: { name: "SUPERADMIN" },
+      },
+    );
 
-      await expect(
-        service.changeRole(
-          "user-uuid-1",
-          { roleId: "nonexistent-role" },
-          currentUser,
-        ),
-      ).rejects.toThrow(NotFoundException);
-    });
+    expect(prismaMock.userAccount.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { personId: "person-uuid-1" },
+        data: {
+          active: false,
+          person: { update: { firstName: "Juan Carlos" } },
+        },
+      }),
+    );
+  });
 
-    it("should throw BadRequestException when target role is inactive", async () => {
-      prisma.userAccount.findUnique.mockResolvedValue(mockUserWithRole);
-      prisma.role.findUnique.mockResolvedValue({
-        id: "role-uuid-3",
-        name: "INACTIVE",
-        active: false,
-      });
+  it("prevents self-deactivation", async () => {
+    await expect(
+      service.update(
+        "person-uuid-1",
+        { active: false },
+        {
+          id: "person-uuid-1",
+          fullName: "Juan Perez",
+          email: "juan@example.com",
+          roleId: role.id,
+          active: true,
+          role: { name: "SUPERADMIN" },
+        },
+      ),
+    ).rejects.toThrow(BadRequestException);
+  });
 
-      await expect(
-        service.changeRole(
-          "user-uuid-1",
-          { roleId: "role-uuid-3" },
-          currentUser,
-        ),
-      ).rejects.toThrow(BadRequestException);
-    });
+  it("returns not found for a missing account", async () => {
+    prismaMock.userAccount.findUnique.mockResolvedValue(null);
+
+    await expect(service.findUserById("missing-person-id")).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });
