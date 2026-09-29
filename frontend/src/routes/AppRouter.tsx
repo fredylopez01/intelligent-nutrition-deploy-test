@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ActivateAccountPage } from '../pages/activation/ActivateAccountPage'
+import { BranchesPage } from '../pages/branches/BranchesPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
 import { LandingPage } from '../pages/LandingPage'
 import { LoginPage } from '../pages/LoginPage'
@@ -19,6 +20,15 @@ export function AppRouter() {
       <Route path="/activate-account" element={<ActivateAccountPage />} />
       <Route path="/forget-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+      <Route
+        path="/sedes"
+        element={
+          <ProtectedRoute allowedRoles={['SUPERADMIN']}>
+            <BranchesPage />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/usuarios"
