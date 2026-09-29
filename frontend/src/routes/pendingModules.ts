@@ -41,11 +41,6 @@ export const PENDING_MODULES: PendingModule[] = [
     description: 'Historial de ventas por sede y reversión de tiquetes con motivo.',
   },
   {
-    path: '/proveedores',
-    title: 'Proveedores',
-    description: 'Datos de los proveedores y su historial de compras asociadas.',
-  },
-  {
     path: '/proveedores/compras',
     title: 'Compras y recepción',
     description: 'Registro de compras, recepción parcial y asignación del stock general.',
