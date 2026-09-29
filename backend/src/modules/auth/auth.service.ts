@@ -79,7 +79,6 @@ export class AuthService {
     return {
       accessToken,
       tokenType: "Bearer",
-      expiresIn: this.configService.get<string>("JWT_EXPIRES_IN", "15m"),
       user: {
         id: user.personId,
         personId: user.personId,
@@ -131,7 +130,7 @@ export class AuthService {
       },
     });
 
-    return { message: "User account activated successfully" };
+    return { message: "Account activated successfully." };
   }
 
   async resendActivation(resendActivationDto: ResendActivationDto) {
@@ -192,6 +191,6 @@ export class AuthService {
       activationUrl,
     );
 
-    return { message: "Activation email sent successfully" };
+    return { message: "Activation email sent successfully." };
   }
 }

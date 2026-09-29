@@ -125,7 +125,6 @@ describe("AuthService", () => {
       expect(result).toEqual({
         accessToken: "mock-jwt-token",
         tokenType: "Bearer",
-        expiresIn: expect.any(String),
         user: {
           id: mockUser.personId,
           personId: mockUser.personId,
@@ -252,10 +251,12 @@ describe("AuthService", () => {
       });
       (argon2.hash as any).mockResolvedValue("new-password-hash");
 
-      await service.activateAccount({
+      const result = await service.activateAccount({
         token: "raw-token",
         password: "StrongPassword123!",
       });
+
+      expect(result).toEqual({ message: "Account activated successfully." });
 
       expect(prisma.userAccount.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({

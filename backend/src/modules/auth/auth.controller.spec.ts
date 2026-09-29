@@ -129,7 +129,7 @@ describe("AuthController (e2e)", () => {
         .expect(200);
 
       expect(response.body).toHaveProperty("accessToken");
-      expect(response.body).toHaveProperty("expiresIn");
+      expect(response.body).not.toHaveProperty("expiresIn");
       expect(response.body).toMatchObject({
         tokenType: "Bearer",
         user: {

@@ -30,17 +30,21 @@ export class RolesGuard implements CanActivate {
     const user = request.user;
 
     if (!user || !user.active) {
-      throw new ForbiddenException(
-        "User does not have permission to access this resource",
-      );
+      throw new ForbiddenException({
+        code: "INSUFFICIENT_PERMISSIONS",
+        message: "You do not have permission to perform this operation.",
+        details: {},
+      });
     }
 
     const hasRequiredRole = requiredRoles.includes(user.role.name);
 
     if (!hasRequiredRole) {
-      throw new ForbiddenException(
-        "User does not have permission to access this resource",
-      );
+      throw new ForbiddenException({
+        code: "INSUFFICIENT_PERMISSIONS",
+        message: "You do not have permission to perform this operation.",
+        details: {},
+      });
     }
 
     return true;

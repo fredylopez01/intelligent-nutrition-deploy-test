@@ -52,8 +52,13 @@ describe("AuditController access", () => {
     expect(auditServiceMock.findAll).toHaveBeenCalled();
   });
 
-  it("denies other roles", async () => {
+  it("allows DEV to query audit logs", async () => {
     roleName = "DEV";
+    await request(app.getHttpServer()).get("/audit-logs").expect(200);
+  });
+
+  it("denies operational roles", async () => {
+    roleName = "BRANCH_LEADER";
     await request(app.getHttpServer()).get("/audit-logs").expect(403);
   });
 });
