@@ -5,6 +5,7 @@ import { BranchesPage } from '../pages/branches/BranchesPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
 import { LandingPage } from '../pages/LandingPage'
 import { LoginPage } from '../pages/LoginPage'
+import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
 import { UsersPage } from '../pages/users/UsersPage'
 
 import { PENDING_MODULES } from './pendingModules'
@@ -26,6 +27,15 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={['SUPERADMIN']}>
             <BranchesPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/proveedores"
+        element={
+          <ProtectedRoute allowedRoles={['SUPERADMIN', 'Lider de sede']}>
+            <SuppliersPage />
           </ProtectedRoute>
         }
       />
