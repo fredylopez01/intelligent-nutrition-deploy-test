@@ -168,6 +168,8 @@ describe("UsersController (e2e)", () => {
     prisma.userAccount.findFirst.mockResolvedValue(null);
     prisma.userAccount.create.mockReset();
     prisma.userAccount.update.mockReset();
+    mockAuditService.createAuditLog.mockReset();
+    mockAuditService.createAuditLog.mockResolvedValue({});
     prisma.role.findUnique.mockReset();
     prisma.role.findUnique.mockResolvedValue(mockRole);
     prisma.person.findUnique.mockReset();
@@ -364,6 +366,65 @@ describe("UsersController (e2e)", () => {
         .patch(`/users/${mockUser.personId}`)
         .send({ roleId: mockNewRole.id })
         .expect(401);
+    });
+
+    it("rejects status changes through the general update endpoint", async () => {
+      const response = await request(app.getHttpServer())
+        .patch(`/users/${mockUser.personId}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ active: false })
+        .expect(400);
+
+      expect(response.body.message).toContain(
+        "property active should not exist",
+      );
+    });
+  });
+
+  describe("PATCH /users/:id/status", () => {
+    let token: string;
+
+    beforeAll(() => {
+      token = jwtService.sign({ sub: "admin-uuid-1" });
+    });
+
+    it("updates user status and returns the contract message", async () => {
+      prisma.userAccount.findUnique
+        .mockResolvedValueOnce(mockAdmin)
+        .mockResolvedValueOnce({ ...mockUser, active: true });
+      prisma.userAccount.update.mockResolvedValueOnce({
+        ...mockUser,
+        active: false,
+      });
+
+      const response = await request(app.getHttpServer())
+        .patch(`/users/${mockUser.personId}/status`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ active: false })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        message: "User status updated successfully.",
+      });
+      expect(mockAuditService.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "DEACTIVATE",
+          entityId: mockUser.personId,
+          oldData: { active: true },
+          newData: { active: false },
+        }),
+        mockPrisma,
+      );
+    });
+
+    it("requires a boolean status", async () => {
+      const response = await request(app.getHttpServer())
+        .patch(`/users/${mockUser.personId}/status`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ active: "false" })
+        .expect(400);
+
+      expect(response.body.message).toContain("active must be a boolean value");
     });
   });
 });

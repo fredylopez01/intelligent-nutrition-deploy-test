@@ -295,7 +295,7 @@ describe("UsersService contract", () => {
     expect(result.role.name).toBe("SUPERADMIN");
   });
 
-  it("updates account status and Person details on the existing PATCH route", async () => {
+  it("updates Person details without changing account status", async () => {
     prismaMock.person.findUnique.mockResolvedValueOnce({
       ...userRecord.person,
       phone: "5550000",
@@ -309,7 +309,7 @@ describe("UsersService contract", () => {
 
     await service.update(
       "person-uuid-1",
-      { active: false, person: { firstName: " Juan Carlos " } },
+      { person: { firstName: " Juan Carlos " } },
       {
         id: "admin-person-id",
         fullName: "Admin",
@@ -325,19 +325,7 @@ describe("UsersService contract", () => {
       "person-uuid-1",
       { firstName: " Juan Carlos " },
     );
-    expect(prismaMock.userAccount.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { personId: "person-uuid-1" },
-        data: { active: false },
-      }),
-    );
-    expect(auditMock.createAuditLog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "DEACTIVATE",
-        entityId: "person-uuid-1",
-      }),
-      prismaMock,
-    );
+    expect(prismaMock.userAccount.update).not.toHaveBeenCalled();
     expect(auditMock.createAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "UPDATE",
@@ -353,6 +341,49 @@ describe("UsersService contract", () => {
             address: "Calle 2",
           }),
         },
+      }),
+      prismaMock,
+    );
+  });
+
+  it("deactivates a user and audits the status transition", async () => {
+    await expect(
+      service.updateStatus("person-uuid-1", false, currentAdmin, "127.0.0.1"),
+    ).resolves.toEqual({ message: "User status updated successfully." });
+
+    expect(prismaMock.userAccount.update).toHaveBeenCalledWith({
+      where: { personId: "person-uuid-1" },
+      data: { active: false },
+    });
+    expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "DEACTIVATE",
+        entityId: "person-uuid-1",
+        oldData: { active: true },
+        newData: { active: false },
+        ipAddress: "127.0.0.1",
+      }),
+      prismaMock,
+    );
+  });
+
+  it("activates a user and audits the status transition", async () => {
+    prismaMock.userAccount.findUnique.mockResolvedValueOnce({
+      personId: "person-uuid-1",
+      active: false,
+    });
+
+    await service.updateStatus("person-uuid-1", true, currentAdmin);
+
+    expect(prismaMock.userAccount.update).toHaveBeenCalledWith({
+      where: { personId: "person-uuid-1" },
+      data: { active: true },
+    });
+    expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "ACTIVATE",
+        oldData: { active: false },
+        newData: { active: true },
       }),
       prismaMock,
     );
@@ -420,18 +451,14 @@ describe("UsersService contract", () => {
 
   it("prevents self-deactivation", async () => {
     await expect(
-      service.update(
-        "person-uuid-1",
-        { active: false },
-        {
-          id: "person-uuid-1",
-          fullName: "Juan Perez",
-          email: "juan@example.com",
-          roleId: role.id,
-          active: true,
-          role: { name: "SUPERADMIN" },
-        },
-      ),
+      service.updateStatus("person-uuid-1", false, {
+        id: "person-uuid-1",
+        fullName: "Juan Perez",
+        email: "juan@example.com",
+        roleId: role.id,
+        active: true,
+        role: { name: "SUPERADMIN" },
+      }),
     ).rejects.toThrow(BadRequestException);
   });
 
