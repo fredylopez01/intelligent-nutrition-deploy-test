@@ -2,7 +2,6 @@ import { Type } from "class-transformer";
 import {
   ArrayUnique,
   IsArray,
-  IsBoolean,
   IsOptional,
   IsUUID,
   ValidateNested,
@@ -13,10 +12,6 @@ export class UpdateUserDto {
   @IsOptional()
   @IsUUID()
   roleId?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  active?: boolean;
 
   @IsOptional()
   @ValidateNested()

@@ -16,6 +16,7 @@ import { ListUsersQueryDto } from "./dto/list-users-query.dto.js";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { UpdateUserDto } from "./dto/update-user.dto.js";
+import { UpdateUserStatusDto } from "./dto/update-user-status.dto.js";
 
 @Controller("users")
 export class UsersController {
@@ -35,6 +36,22 @@ export class UsersController {
   @Roles("SUPERADMIN", "DEV")
   findAll(@Query() query: ListUsersQueryDto) {
     return this.usersService.findAll(query);
+  }
+
+  @Patch(":id/status")
+  @Roles("SUPERADMIN", "DEV")
+  updateStatus(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() updateUserStatusDto: UpdateUserStatusDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.usersService.updateStatus(
+      id,
+      updateUserStatusDto.active,
+      currentUser,
+      ipAddress,
+    );
   }
 
   @Patch(":id")

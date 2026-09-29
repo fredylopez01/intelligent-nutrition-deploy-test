@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -349,6 +350,50 @@ export class UsersService {
     return toUserResponse(updatedUser);
   }
 
+  async updateStatus(
+    userId: string,
+    active: boolean,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    if (!["SUPERADMIN", "DEV"].includes(currentUser.role.name)) {
+      throw new ForbiddenException(
+        "Only SUPERADMIN or DEV can update user status",
+      );
+    }
+    if (currentUser.id === userId && !active) {
+      throw new BadRequestException("You cannot deactivate your own account");
+    }
+
+    const existingUser = await this.prisma.userAccount.findUnique({
+      where: { personId: userId },
+      select: { personId: true, active: true },
+    });
+    if (!existingUser) {
+      throw new NotFoundException("User not found");
+    }
+
+    if (existingUser.active === active) {
+      return { message: "User status updated successfully." };
+    }
+
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.userAccount.update({
+        where: { personId: userId },
+        data: { active },
+      });
+      await this.recordUserAudit(transaction, currentUser, ipAddress, {
+        action: active ? "ACTIVATE" : "DEACTIVATE",
+        entityId: userId,
+        oldData: { active: existingUser.active },
+        newData: { active },
+        reason: `${active ? "Activación" : "Desactivación"} de la cuenta del usuario ${userId}`,
+      });
+    });
+
+    return { message: "User status updated successfully." };
+  }
+
   async update(
     userId: string,
     updateUserDto: UpdateUserDto,
@@ -358,7 +403,6 @@ export class UsersService {
     const isPrivileged = ["SUPERADMIN", "DEV"].includes(currentUser.role.name);
     const updatesAccount =
       updateUserDto.roleId !== undefined ||
-      updateUserDto.active !== undefined ||
       updateUserDto.branchIds !== undefined;
     if (currentUser.id !== userId && !isPrivileged) {
       throw new BadRequestException("You can only update your own account");
@@ -368,20 +412,11 @@ export class UsersService {
         "Only SUPERADMIN or DEV can update account access",
       );
     }
-    if (currentUser.id === userId && updateUserDto.active === false) {
-      throw new BadRequestException("You cannot deactivate your own account");
-    }
-
-    const { person, roleId, active, branchIds } = updateUserDto;
+    const { person, roleId, branchIds } = updateUserDto;
     const hasPersonChanges =
       person !== undefined &&
       Object.values(person).some((value) => value !== undefined);
-    if (
-      !hasPersonChanges &&
-      roleId === undefined &&
-      active === undefined &&
-      branchIds === undefined
-    ) {
+    if (!hasPersonChanges && roleId === undefined && branchIds === undefined) {
       throw new BadRequestException("At least one field must be provided");
     }
     const existingUser = await this.findUserById(userId);
@@ -441,14 +476,13 @@ export class UsersService {
       }
 
       let changedUser;
-      if (roleId !== undefined || active !== undefined) {
+      if (roleId !== undefined) {
         changedUser = await transaction.userAccount.update({
           where: { personId: userId },
           data: {
             ...(roleId !== undefined && {
               role: { connect: { id: roleId } },
             }),
-            ...(active !== undefined && { active }),
           },
           select: userSelect,
         });
@@ -489,17 +523,6 @@ export class UsersService {
           oldData: { role: existingUser.role },
           newData: { role: changedUser.role },
           reason: `Cambio de rol del usuario ${userId}`,
-        });
-      }
-
-      if (active !== undefined && active !== existingUser.active) {
-        const action = active ? "ACTIVATE" : "DEACTIVATE";
-        await this.recordUserAudit(transaction, currentUser, ipAddress, {
-          action,
-          entityId: userId,
-          oldData: { active: existingUser.active },
-          newData: { active },
-          reason: `${active ? "Activación" : "Desactivación"} de la cuenta del usuario ${userId}`,
         });
       }
 
