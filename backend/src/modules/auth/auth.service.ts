@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as argon2 from "argon2";
 import { PrismaService } from "../../database/prisma/prisma.service.js";
@@ -9,14 +9,20 @@ import { ConfigService } from "@nestjs/config";
 import { EmailService } from "../../modules/email/email.service.js";
 import { CryptoUtil } from "../../common/utils/crypto.util.js";
 import { AuthExceptions } from "./auth.exceptions.js";
+import { ForgotPasswordDto } from "./dto/forgot-password.dto.js";
+import { ResetPasswordDto } from "./dto/reset-password.dto.js";
+import { AuditService } from "../audit/audit.service.js";
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
+    private readonly auditService: AuditService,
   ) {}
 
   async login(loginDto: LoginDto) {
@@ -131,6 +137,132 @@ export class AuthService {
     });
 
     return { message: "Account activated successfully." };
+  }
+
+  async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
+    const genericResponse = {
+      message:
+        "If an account with that email exists, a password reset link will be sent.",
+    };
+    const email = forgotPasswordDto.email.trim().toLowerCase();
+    const user = await this.prisma.userAccount.findFirst({
+      where: {
+        active: true,
+        mustChangePassword: false,
+        person: { is: { email, active: true } },
+      },
+      select: {
+        personId: true,
+        person: {
+          select: { email: true, firstName: true, lastName: true },
+        },
+      },
+    });
+
+    if (!user) {
+      return genericResponse;
+    }
+
+    const rawToken = CryptoUtil.generateRandomToken();
+    const passwordResetToken = CryptoUtil.hashToken(rawToken);
+    const configuredExpiration = Number(
+      this.configService.get<number>(
+        "PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES",
+        60,
+      ),
+    );
+    const expirationMinutes =
+      Number.isInteger(configuredExpiration) && configuredExpiration > 0
+        ? configuredExpiration
+        : 60;
+    const passwordResetTokenExpiresAt =
+      CryptoUtil.getExpirationDate(expirationMinutes);
+
+    await this.prisma.userAccount.update({
+      where: { personId: user.personId },
+      data: { passwordResetToken, passwordResetTokenExpiresAt },
+    });
+
+    try {
+      const resetUrl = CryptoUtil.buildPasswordResetUrl(
+        this.configService,
+        rawToken,
+      );
+      await this.emailService.sendPasswordResetEmail(
+        user.person.email!,
+        [user.person.firstName, user.person.lastName].filter(Boolean).join(" "),
+        resetUrl,
+        expirationMinutes,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Password reset email could not be sent for account ${user.personId}`,
+        error,
+      );
+    }
+
+    return genericResponse;
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const tokenHash = CryptoUtil.hashToken(resetPasswordDto.token);
+    const now = new Date();
+    const user = await this.prisma.userAccount.findUnique({
+      where: { passwordResetToken: tokenHash },
+      select: {
+        personId: true,
+        active: true,
+        mustChangePassword: true,
+        passwordResetTokenExpiresAt: true,
+      },
+    });
+
+    if (
+      !user ||
+      !user.active ||
+      user.mustChangePassword ||
+      !user.passwordResetTokenExpiresAt ||
+      user.passwordResetTokenExpiresAt <= now
+    ) {
+      throw AuthExceptions.invalidPasswordResetToken();
+    }
+
+    const password = await argon2.hash(resetPasswordDto.password);
+    await this.prisma.$transaction(async (transaction) => {
+      const result = await transaction.userAccount.updateMany({
+        where: {
+          personId: user.personId,
+          passwordResetToken: tokenHash,
+          passwordResetTokenExpiresAt: { gt: now },
+          active: true,
+          mustChangePassword: false,
+        },
+        data: {
+          password,
+          passwordResetToken: null,
+          passwordResetTokenExpiresAt: null,
+        },
+      });
+
+      if (result.count !== 1) {
+        throw AuthExceptions.invalidPasswordResetToken();
+      }
+
+      await this.auditService.createAuditLog(
+        {
+          userId: user.personId,
+          action: "PASSWORD_RESET",
+          entity: "USER",
+          entityId: user.personId,
+          newData: { passwordChanged: true },
+          reason:
+            "Restablecimiento de contraseña mediante enlace de recuperación",
+        },
+        transaction,
+      );
+    });
+
+    return { message: "Password reset successfully." };
   }
 
   async resendActivation(resendActivationDto: ResendActivationDto) {

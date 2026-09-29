@@ -106,9 +106,6 @@ export function LoginPage() {
         <div className="form-field">
           <div className="form-field__label-row">
             <label htmlFor="password">Contraseña</label>
-            <Link to="/olvide-contrasena" className="login-page__forgot">
-              ¿La olvidaste?
-            </Link>
           </div>
           <div className="form-field__password">
             <input
@@ -119,6 +116,9 @@ export function LoginPage() {
               aria-describedby={passwordHasError ? 'password-error' : undefined}
               {...register('password')}
             />
+            <Link to="/forget-password" className="login-page__forgot">
+              ¿La olvidaste?
+            </Link>
             <button
               type="button"
               className="form-field__toggle"

@@ -34,17 +34,17 @@ Backend de Intelligent Nutrition. Expone una API REST que gestiona autenticació
 
 ## Stack tecnológico
 
-| Componente | Versión | Propósito |
-|---|---|---|
-| Node.js | 22 (Alpine) | Runtime |
-| NestJS | ^11.0.1 | Framework HTTP |
-| TypeScript | ^5.7.3 | Lenguaje |
-| Prisma | 7.6.0 | ORM / Migraciones |
-| PostgreSQL | 17 (Docker) | Base de datos |
-| Jest | ^30.0.0 | Testing |
-| Argon2 | ^0.45.1 | Hash de contraseñas |
-| Passport + JWT | ^0.7.0 / ^4.0.1 | Autenticación |
-| Resend | ^6.28.1 | Envío de emails |
+| Componente     | Versión         | Propósito           |
+| -------------- | --------------- | ------------------- |
+| Node.js        | 22 (Alpine)     | Runtime             |
+| NestJS         | ^11.0.1         | Framework HTTP      |
+| TypeScript     | ^5.7.3          | Lenguaje            |
+| Prisma         | 7.6.0           | ORM / Migraciones   |
+| PostgreSQL     | 17 (Docker)     | Base de datos       |
+| Jest           | ^30.0.0         | Testing             |
+| Argon2         | ^0.45.1         | Hash de contraseñas |
+| Passport + JWT | ^0.7.0 / ^4.0.1 | Autenticación       |
+| Resend         | ^6.28.1         | Envío de emails     |
 
 ---
 
@@ -89,24 +89,26 @@ backend/
 
 ### Módulos principales
 
-| Módulo | Responsabilidad |
-|---|---|
-| `AuthModule` | Autenticación JWT, activación de cuentas, login |
-| `UsersModule` | Gestión de usuarios (CRUD) |
-| `RolesModule` | Gestión de roles y permisos |
-| `HealthModule` | Health check con verificación de BD |
-| `PrismaModule` | Conexión global a PostgreSQL |
-| `EmailModule` | Envío de emails transaccionales vía Resend |
+| Módulo         | Responsabilidad                                 |
+| -------------- | ----------------------------------------------- |
+| `AuthModule`   | Autenticación JWT, activación de cuentas, login |
+| `UsersModule`  | Gestión de usuarios (CRUD)                      |
+| `RolesModule`  | CRUD de roles y permisos                        |
+| `HealthModule` | Health check con verificación de BD             |
+| `PrismaModule` | Conexión global a PostgreSQL                    |
+| `EmailModule`  | Envío de emails transaccionales vía Resend      |
 
 ---
 
 ## Requisitos previos
 
 ### Para Docker (recomendado)
+
 - **Docker Desktop** 4.x o superior
 - **Docker Compose** v2 (incluido en Docker Desktop)
 
 ### Para ejecución directa
+
 - **Node.js** 22.x
 - **npm** 10.x
 - **PostgreSQL** 17 (local o remoto)
@@ -154,9 +156,14 @@ BRAND_LOGO_URL="https://tudominio.com/logo.png"
 # Activación de cuentas
 ACTIVATION_TOKEN_EXPIRATION_MINUTES=30
 
+# Recuperación de contraseña
+PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES=60
+
 # Frontend (para enlaces en emails)
 FRONTEND_URL="http://localhost:5173"
 ```
+
+`PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES` controla cuánto tiempo es válido el enlace de recuperación. Su valor predeterminado es 60 minutos.
 
 > **Importante:** El archivo `.env` está en `.gitignore`. Nunca lo subas al repositorio.
 
@@ -253,19 +260,19 @@ DATABASE_URL="postgresql://USUARIO:PASSWORD@dpg-xxxxx.oregon-postgres.render.com
 
 Desde `backend/`:
 
-| Comando | Descripción |
-|---|---|
-| `npm run build` | Compila TypeScript a `dist/` |
-| `npm run start` | Inicia NestJS (sin watch) |
-| `npm run start:dev` | Inicia con watch (desarrollo) |
-| `npm run start:debug` | Inicia con debugger y watch |
-| `npm run start:prod` | Inicia desde `dist/main` (producción) |
-| `npm run format` | Formatea con Prettier |
-| `npm run lint` | Linting con ESLint (con `--fix`) |
-| `npm test` | Tests unitarios (Jest) |
-| `npm run test:watch` | Tests en modo watch |
-| `npm run test:cov` | Tests con cobertura |
-| `npm run test:e2e` | Tests end-to-end |
+| Comando               | Descripción                           |
+| --------------------- | ------------------------------------- |
+| `npm run build`       | Compila TypeScript a `dist/`          |
+| `npm run start`       | Inicia NestJS (sin watch)             |
+| `npm run start:dev`   | Inicia con watch (desarrollo)         |
+| `npm run start:debug` | Inicia con debugger y watch           |
+| `npm run start:prod`  | Inicia desde `dist/main` (producción) |
+| `npm run format`      | Formatea con Prettier                 |
+| `npm run lint`        | Linting con ESLint (con `--fix`)      |
+| `npm test`            | Tests unitarios (Jest)                |
+| `npm run test:watch`  | Tests en modo watch                   |
+| `npm run test:cov`    | Tests con cobertura                   |
+| `npm run test:e2e`    | Tests end-to-end                      |
 
 ---
 
@@ -273,10 +280,10 @@ Desde `backend/`:
 
 ### Modelos principales
 
-| Modelo | Tabla | Descripción |
-|---|---|---|
-| `Role` | `role` | Roles del sistema (admin, user, etc.) |
-| `UserAccount` | `user_account` | Cuentas de usuario con autenticación |
+| Modelo        | Tabla          | Descripción                           |
+| ------------- | -------------- | ------------------------------------- |
+| `Role`        | `role`         | Roles del sistema (admin, user, etc.) |
+| `UserAccount` | `user_account` | Cuentas de usuario con autenticación  |
 
 ### Comandos de Prisma
 
@@ -315,6 +322,7 @@ Render provee **dos URLs** por base de datos:
 - **External URL** — desde cualquier lugar (local, CI, herramientas externas)
 
 Para conectar desde local, usa la **External URL** que encuentras en:
+
 > Render Dashboard → Tu base de datos → **Info** → **Connections** → **External Database URL**
 
 Si la conexión falla, verifica que el **Inbound IP Restrictions** de la base de datos permita tu IP (por defecto `0.0.0.0/0` = todas).
@@ -369,6 +377,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile smoke 
 ```
 
 El smoke test verifica:
+
 1. `GET /health` responde 200 sin token
 2. El body es `{ "status": "ok" }`
 3. El frontend responde 200 (cuando está desplegado)
@@ -438,15 +447,15 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test u
 
 ### Paso 2: Variables de entorno
 
-| Variable | Valor | Dónde obtenerlo |
-|---|---|---|
-| `DATABASE_URL` | **Internal Database URL** | Render Dashboard → DB → Connections |
-| `JWT_SECRET` | Tu secreto de producción | Generar uno seguro |
-| `JWT_EXPIRES_IN` | `15m` (o el valor deseado) | — |
-| `RESEND_API_KEY` | `re_xxxx` | Resend Dashboard |
-| `RESEND_FROM_EMAIL` | `noreply@tudominio.com` | — |
-| `FRONTEND_URL` | URL del frontend en producción | — |
-| `PORT` | `3000` | Render lo asigna internamente |
+| Variable            | Valor                          | Dónde obtenerlo                     |
+| ------------------- | ------------------------------ | ----------------------------------- |
+| `DATABASE_URL`      | **Internal Database URL**      | Render Dashboard → DB → Connections |
+| `JWT_SECRET`        | Tu secreto de producción       | Generar uno seguro                  |
+| `JWT_EXPIRES_IN`    | `15m` (o el valor deseado)     | —                                   |
+| `RESEND_API_KEY`    | `re_xxxx`                      | Resend Dashboard                    |
+| `RESEND_FROM_EMAIL` | `noreply@tudominio.com`        | —                                   |
+| `FRONTEND_URL`      | URL del frontend en producción | —                                   |
+| `PORT`              | `3000`                         | Render lo asigna internamente       |
 
 > **Importante:** En Render, usa la **Internal Database URL** (no la External). Así la comunicación backend↔BD viaja por la red privada de Render, sin latencia adicional.
 
@@ -472,6 +481,7 @@ curl https://tu-backend.onrender.com/health
 ### Error: `P1001: Can't reach database server`
 
 **Causas posibles:**
+
 1. Estás usando la **Internal URL** desde fuera de Render → usa la **External URL**
 2. La base de datos está en una región distinta al backend → Render solo permite Internal URL dentro de la misma región
 3. El Inbound IP Restriction de la BD bloquea tu IP → verifica en Networking que sea `0.0.0.0/0` o incluya tu IP
@@ -525,13 +535,13 @@ Este proyecto sigue las normas definidas en `Contributing.md`:
 
 ## Contacto
 
-| Rol | Responsable |
-|---|---|
-| Backend Architect | Fredy López |
-| QA | Fabian Correa |
+| Rol                | Responsable    |
+| ------------------ | -------------- |
+| Backend Architect  | Fredy López    |
+| QA                 | Fabian Correa  |
 | Frontend Architect | Natalia Bernal |
-| Business Analyst | Karen Castro |
-| Project Manager | Juan Moreno |
+| Business Analyst   | Karen Castro   |
+| Project Manager    | Juan Moreno    |
 
 ---
 

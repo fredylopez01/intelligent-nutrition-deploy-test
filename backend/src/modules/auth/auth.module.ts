@@ -11,6 +11,7 @@ import { RolesGuard } from "../../common/guards/roles.guard.js";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard.js";
 import { APP_GUARD } from "@nestjs/core";
 import { EmailModule } from "../../modules/email/email.module.js";
+import { AuditModule } from "../audit/audit.module.js";
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { EmailModule } from "../../modules/email/email.module.js";
       },
     }),
     EmailModule,
+    AuditModule,
   ],
   controllers: [AuthController],
   providers: [

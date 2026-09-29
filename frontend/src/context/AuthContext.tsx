@@ -15,7 +15,7 @@ const MOCK_USER: SessionUser = {
   email: 'natalia.bernal@intelligent.co',
   roleId: 'mock-role-superadmin',
   active: true,
-  role: { name: 'SUPER ADMIN' },
+  role: { name: 'SUPERADMIN' },
 }
 
 interface StoredSession {

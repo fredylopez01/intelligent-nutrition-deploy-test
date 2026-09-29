@@ -26,4 +26,17 @@ export class CryptoUtil {
 
     return `${frontendUrl}/activate-account?token=${encodeURIComponent(rawToken)}`;
   }
+
+  static buildPasswordResetUrl(
+    configService: ConfigService,
+    rawToken: string,
+  ): string {
+    const frontendUrl = configService.get<string>("FRONTEND_URL");
+
+    if (!frontendUrl) {
+      throw new Error("FRONTEND_URL environment variable is not configured");
+    }
+
+    return `${frontendUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
+  }
 }
