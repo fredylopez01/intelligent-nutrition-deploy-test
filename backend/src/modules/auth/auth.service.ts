@@ -12,6 +12,7 @@ import { AuthExceptions } from "./auth.exceptions.js";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto.js";
 import { ResetPasswordDto } from "./dto/reset-password.dto.js";
 import { AuditService } from "../audit/audit.service.js";
+import { ChangePasswordDto } from "./dto/change-password.dto.js";
 
 @Injectable()
 export class AuthService {
@@ -263,6 +264,51 @@ export class AuthService {
     });
 
     return { message: "Password reset successfully." };
+  }
+
+  async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
+    if (changePasswordDto.currentPassword === changePasswordDto.newPassword) {
+      throw AuthExceptions.passwordsAreEqual();
+    }
+
+    const user = await this.prisma.userAccount.findUnique({
+      where: { personId: userId },
+      select: { password: true, mustChangePassword: true },
+    });
+
+    if (!user) {
+      throw AuthExceptions.userNotFound();
+    }
+
+    if (!user.password || user.mustChangePassword) {
+      throw AuthExceptions.accountNotActivated();
+    }
+
+    let passwordMatches = false;
+    try {
+      passwordMatches = await argon2.verify(
+        user.password,
+        changePasswordDto.currentPassword,
+      );
+    } catch {
+      passwordMatches = false;
+    }
+
+    if (!passwordMatches) {
+      throw AuthExceptions.invalidCredentials();
+    }
+
+    const password = await argon2.hash(changePasswordDto.newPassword);
+    await this.prisma.userAccount.update({
+      where: { personId: userId },
+      data: {
+        password,
+        passwordResetToken: null,
+        passwordResetTokenExpiresAt: null,
+      },
+    });
+
+    return { message: "Password changed successfully." };
   }
 
   async resendActivation(resendActivationDto: ResendActivationDto) {

@@ -16,6 +16,7 @@ import { Roles } from "../../common/decorators/roles.decorator.js";
 import { ResendActivationDto } from "./dto/resend-activation.dto.js";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto.js";
 import { ResetPasswordDto } from "./dto/reset-password.dto.js";
+import { ChangePasswordDto } from "./dto/change-password.dto.js";
 
 @Controller("auth")
 export class AuthController {
@@ -52,6 +53,15 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
+  }
+
+  @Post("change-password")
+  @HttpCode(HttpStatus.OK)
+  changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(user.id, changePasswordDto);
   }
 
   @Post("resend")
