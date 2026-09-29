@@ -1,5 +1,5 @@
 const ROLE_LABELS: Record<string, string> = {
-  'SUPER ADMIN': 'Superadmin',
+  SUPERADMIN: 'Superadmin',
   'LIDER DE SEDE': 'Líder de Sede',
   'AYUDANTE DE SEDE': 'Ayudante de Sede',
 }

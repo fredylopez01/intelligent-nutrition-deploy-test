@@ -1,4 +1,4 @@
-export type RoleName = 'SUPER ADMIN' | 'Lider de sede' | 'Ayudante de sede'
+export type RoleName = 'SUPERADMIN' | 'Lider de sede' | 'Ayudante de sede'
 
 export interface UserRole {
   id?: string

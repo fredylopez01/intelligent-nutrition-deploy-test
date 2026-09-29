@@ -13,4 +13,13 @@ export const authService = {
 
   activate: (payload: ActivateAccountPayload) =>
     http.post<{ message?: string }>('/auth/activate', payload, { skipUnauthorizedHandler: true }),
+  forgotPassword: (payload: { email: string }) =>
+    http.post<{ message: string }>('/auth/forgot-password', payload, {
+      skipUnauthorizedHandler: true,
+    }),
+
+  resetPassword: (payload: { token: string; password: string }) =>
+    http.post<{ message: string }>('/auth/reset-password', payload, {
+      skipUnauthorizedHandler: true,
+    }),
 }

@@ -1,6 +1,6 @@
 import type { RoleName } from '../types/auth'
 export const roleHome: Record<RoleName, string> = {
-  'SUPER ADMIN': '/dashboard',
+  SUPERADMIN: '/dashboard',
   'Lider de sede': '/dashboard',
   'Ayudante de sede': '/pos',
 }

@@ -8,6 +8,8 @@ import { UsersPage } from '../pages/users/UsersPage'
 
 import { PENDING_MODULES } from './pendingModules'
 import { ProtectedRoute } from './ProtectedRoute'
+import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
+import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
 
 export function AppRouter() {
   return (
@@ -15,11 +17,13 @@ export function AppRouter() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/activate-account" element={<ActivateAccountPage />} />
+      <Route path="/forget-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route
         path="/usuarios"
         element={
-          <ProtectedRoute allowedRoles={['SUPER ADMIN']}>
+          <ProtectedRoute allowedRoles={['SUPERADMIN']}>
             <UsersPage />
           </ProtectedRoute>
         }
