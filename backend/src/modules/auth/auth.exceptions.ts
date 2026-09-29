@@ -47,4 +47,9 @@ export const AuthExceptions = {
       code: "USER_NOT_FOUND",
       message: "User account not found.",
     }),
+  passwordsAreEqual: () =>
+    new BadRequestException({
+      code: "PASSWORDS_ARE_EQUAL",
+      message: "The new password must be different from the current password.",
+    }),
 };
