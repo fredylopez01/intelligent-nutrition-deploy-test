@@ -6,6 +6,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { Resend } from "resend";
 import { renderActivationEmailTemplate } from "./templates/activation-email.template.js";
+import { renderPasswordResetEmailTemplate } from "./templates/password-reset-email.template.js";
 
 @Injectable()
 export class EmailService {
@@ -58,6 +59,38 @@ export class EmailService {
     if (error) {
       this.logger.error(`Failed to send activation email to ${email}`, error);
       throw new InternalServerErrorException("Unable to send activation email");
+    }
+  }
+
+  async sendPasswordResetEmail(
+    email: string,
+    fullName: string,
+    resetUrl: string,
+    expirationMinutes: number,
+  ): Promise<void> {
+    const htmlContent = renderPasswordResetEmailTemplate({
+      fullName,
+      resetUrl,
+      expirationMinutes,
+      logoUrl: this.logoUrl,
+    });
+
+    const { error } = await this.resend.emails.send({
+      from: this.fromEmail,
+      to: email,
+      replyTo: this.replyToEmail,
+      subject: "Restablece tu contraseña | Intelligent Nutrition",
+      html: htmlContent,
+    });
+
+    if (error) {
+      this.logger.error(
+        `Failed to send password reset email to ${email}`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        "Unable to send password reset email",
+      );
     }
   }
 }

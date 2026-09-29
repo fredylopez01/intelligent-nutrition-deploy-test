@@ -32,6 +32,11 @@ export const AuthExceptions = {
       code: "INVALID_ACTIVATION_TOKEN",
       message: "The activation token is invalid or has expired.",
     }),
+  invalidPasswordResetToken: () =>
+    new BadRequestException({
+      code: "INVALID_PASSWORD_RESET_TOKEN",
+      message: "The password reset link is invalid or has expired.",
+    }),
   accountAlreadyActivated: () =>
     new ConflictException({
       code: "ACCOUNT_ALREADY_ACTIVATED",

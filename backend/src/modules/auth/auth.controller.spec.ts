@@ -10,6 +10,7 @@ import {
 
 jest.unstable_mockModule("argon2", () => ({
   verify: jest.fn(),
+  hash: jest.fn(),
 }));
 
 const argon2 = await import("argon2");
@@ -33,14 +34,24 @@ const mockPrismaService = {
     findFirst: jest.fn<(...args: any[]) => Promise<any>>(),
     findUnique: jest.fn<(...args: any[]) => Promise<any>>(),
     update: jest.fn<(...args: any[]) => Promise<any>>(),
+    updateMany: jest.fn<(...args: any[]) => Promise<any>>(),
   },
+  $transaction: jest.fn(),
 };
+mockPrismaService.$transaction.mockImplementation((operation: any) =>
+  operation(mockPrismaService),
+);
 
 const { EmailService } = await import("../email/email.service.js");
 const { ConfigService } = await import("@nestjs/config");
+const { AuditService } = await import("../audit/audit.service.js");
 
 const mockEmailService = {
   sendUserActivationEmail: jest.fn<(...args: any[]) => Promise<any>>(),
+  sendPasswordResetEmail: jest.fn<(...args: any[]) => Promise<any>>(),
+};
+const mockAuditService = {
+  createAuditLog: jest.fn<(...args: any[]) => Promise<any>>(),
 };
 
 @NestModule({
@@ -61,6 +72,7 @@ const mockEmailService = {
     AuthService,
     { provide: PrismaService, useValue: mockPrismaService },
     { provide: EmailService, useValue: mockEmailService },
+    { provide: AuditService, useValue: mockAuditService },
     Reflector,
     JwtStrategy,
     JwtAuthGuard,
@@ -97,6 +109,8 @@ describe("AuthController (e2e)", () => {
   beforeAll(async () => {
     process.env.JWT_SECRET = "test-secret-key";
     process.env.JWT_EXPIRES_IN = "15m";
+    process.env.FRONTEND_URL = "https://frontend.test";
+    process.env.PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES = "60";
 
     const moduleFixture = await Test.createTestingModule({
       imports: [TestAuthModule],
@@ -227,6 +241,95 @@ describe("AuthController (e2e)", () => {
       expect(meRes.body.person.firstName).toBe("Juan");
       expect(meRes.body.role.name).toBe("SUPERADMIN");
       expect(meRes.body).not.toHaveProperty("password");
+    });
+  });
+
+  describe("POST /auth/forgot-password", () => {
+    it("returns a generic success message and emails the reset link", async () => {
+      mockPrismaService.userAccount.findFirst.mockResolvedValue({
+        personId: mockUser.personId,
+        person: {
+          email: mockUser.person.email,
+          firstName: "Juan",
+          lastName: "Perez",
+        },
+      });
+      mockEmailService.sendPasswordResetEmail.mockResolvedValue(undefined);
+
+      const response = await request(app.getHttpServer())
+        .post("/auth/forgot-password")
+        .send({ email: "JUAN@test.com" })
+        .expect(200);
+
+      expect(response.body.message).toContain(
+        "If an account with that email exists",
+      );
+      expect(mockEmailService.sendPasswordResetEmail).toHaveBeenCalledWith(
+        mockUser.person.email,
+        "Juan Perez",
+        expect.stringContaining("/reset-password?token="),
+        60,
+      );
+    });
+
+    it("returns the same message when no account exists", async () => {
+      mockPrismaService.userAccount.findFirst.mockResolvedValue(null);
+
+      const response = await request(app.getHttpServer())
+        .post("/auth/forgot-password")
+        .send({ email: "missing@test.com" })
+        .expect(200);
+
+      expect(response.body.message).toContain(
+        "If an account with that email exists",
+      );
+      expect(mockEmailService.sendPasswordResetEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("POST /auth/reset-password", () => {
+    it("resets the password, consumes the token and records the audit event", async () => {
+      mockPrismaService.userAccount.findUnique.mockResolvedValue({
+        personId: mockUser.personId,
+        active: true,
+        mustChangePassword: false,
+        passwordResetTokenExpiresAt: new Date(Date.now() + 60_000),
+      });
+      mockPrismaService.userAccount.updateMany.mockResolvedValue({ count: 1 });
+      (argon2.hash as any).mockResolvedValue("new-password-hash");
+
+      const response = await request(app.getHttpServer())
+        .post("/auth/reset-password")
+        .send({ token: "valid-reset-token", password: "StrongPassword123!" })
+        .expect(200);
+
+      expect(response.body.message).toBe("Password reset successfully.");
+      expect(mockPrismaService.userAccount.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            password: "new-password-hash",
+            passwordResetToken: null,
+            passwordResetTokenExpiresAt: null,
+          }),
+        }),
+      );
+      expect(mockAuditService.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "PASSWORD_RESET" }),
+        mockPrismaService,
+      );
+    });
+
+    it("rejects weak passwords", async () => {
+      const response = await request(app.getHttpServer())
+        .post("/auth/reset-password")
+        .send({ token: "valid-reset-token", password: "weakpass" })
+        .expect(400);
+
+      expect(response.body.message).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining("Password must contain"),
+        ]),
+      );
     });
   });
 });
