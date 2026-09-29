@@ -8,6 +8,7 @@ import { AuthModule } from "./modules/auth/auth.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { ConfigModule } from "@nestjs/config";
 import { DocumentTypesModule } from "./modules/document-types/document-types.module.js";
+import { AuditModule } from "./modules/audit/audit.module.js";
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { DocumentTypesModule } from "./modules/document-types/document-types.mod
     RolesModule,
     DocumentTypesModule,
     UsersModule,
+    AuditModule,
     HealthModule,
   ],
   controllers: [AppController],

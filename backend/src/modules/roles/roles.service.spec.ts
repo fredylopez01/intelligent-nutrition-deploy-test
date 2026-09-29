@@ -7,10 +7,6 @@ jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
       create: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
-      delete: jest.fn(),
-    },
-    userAccount: {
-      count: jest.fn(),
     },
   })),
 }));
@@ -219,50 +215,6 @@ describe("RolesService", () => {
           name: "LIDER SEDE",
           description: "descripcion",
         },
-      });
-    });
-  });
-
-  describe("remove", () => {
-    it("should delete a role successfully", async () => {
-      prisma.role.findUnique.mockResolvedValue(mockRole);
-      prisma.userAccount.count.mockResolvedValue(0);
-      prisma.role.delete.mockResolvedValue(mockRole);
-
-      const result = await service.remove("role-uuid-1");
-
-      expect(result).toEqual({ message: "Role deleted successfully" });
-      expect(prisma.role.delete).toHaveBeenCalledWith({
-        where: { id: "role-uuid-1" },
-      });
-    });
-
-    it("should throw NotFoundException when role does not exist", async () => {
-      prisma.role.findUnique.mockResolvedValue(null);
-
-      await expect(service.remove("non-existent")).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it("should throw ConflictException when role is assigned to users", async () => {
-      prisma.role.findUnique.mockResolvedValue(mockRole);
-      prisma.userAccount.count.mockResolvedValue(3);
-
-      await expect(service.remove("role-uuid-1")).rejects.toThrow(
-        ConflictException,
-      );
-    });
-
-    it("should check user count before deleting", async () => {
-      prisma.role.findUnique.mockResolvedValue(mockRole);
-      prisma.userAccount.count.mockResolvedValue(0);
-      prisma.role.delete.mockResolvedValue(mockRole);
-
-      await service.remove("role-uuid-1");
-
-      expect(prisma.userAccount.count).toHaveBeenCalledWith({
-        where: { roleId: "role-uuid-1" },
       });
     });
   });

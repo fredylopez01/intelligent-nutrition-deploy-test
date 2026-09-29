@@ -1,9 +1,9 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
 } from "@nestjs/common";
@@ -16,7 +16,7 @@ import { Roles } from "../../common/decorators/roles.decorator.js";
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
 
-  @Roles("SUPERADMIN", "DEV")
+  @Roles("DEV")
   @Post()
   create(@Body() createRoleDto: CreateRoleDto) {
     return this.rolesService.create(createRoleDto);
@@ -28,14 +28,12 @@ export class RolesController {
     return this.rolesService.findAll();
   }
 
+  @Roles("DEV")
   @Patch(":id")
-  update(@Param("id") id: string, @Body() updateRoleDto: UpdateRoleDto) {
+  update(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() updateRoleDto: UpdateRoleDto,
+  ) {
     return this.rolesService.update(id, updateRoleDto);
-  }
-
-  @Roles("SUPERADMIN", "DEV")
-  @Delete(":id")
-  remove(@Param("id") id: string) {
-    return this.rolesService.remove(id);
   }
 }

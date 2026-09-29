@@ -17,6 +17,11 @@ import { ChangeUserRoleDto } from "./dto/change-user-role.dto.js";
 import { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { UpdateUserDto } from "./dto/update-user.dto.js";
 import { PersonsService } from "../persons/persons.service.js";
+import {
+  AuditService,
+  type AuditLogTransaction,
+  type CreateAuditLogInput,
+} from "../audit/audit.service.js";
 
 const userSelect = {
   personId: true,
@@ -54,9 +59,31 @@ export class UsersService {
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
     private readonly personsService: PersonsService,
+    private readonly auditService: AuditService,
   ) {}
 
-  async create(createUserDto: CreateUserDto) {
+  private recordUserAudit(
+    transaction: AuditLogTransaction,
+    currentUser: AuthenticatedUser,
+    ipAddress: string | undefined,
+    event: Omit<CreateAuditLogInput, "userId" | "entity" | "ipAddress">,
+  ) {
+    return this.auditService.createAuditLog(
+      {
+        ...event,
+        userId: currentUser.id,
+        entity: "USER",
+        ipAddress,
+      },
+      transaction,
+    );
+  }
+
+  async create(
+    createUserDto: CreateUserDto,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
     const { person, personId, roleId, branchIds = [] } = createUserDto;
     if (Boolean(person) === Boolean(personId)) {
       throw new BadRequestException(
@@ -106,7 +133,7 @@ export class UsersService {
     const user = await this.prisma.$transaction(async (transaction) => {
       const branches = await transaction.branch.findMany({
         where: { id: { in: branchIds }, active: true },
-        select: { id: true },
+        select: { id: true, name: true },
       });
       if (branches.length !== branchIds.length) {
         throw new NotFoundException(
@@ -125,7 +152,7 @@ export class UsersService {
             personId!,
           );
 
-      return transaction.userAccount.create({
+      const createdUser = await transaction.userAccount.create({
         data: {
           personId: resolvedPersonId!,
           roleId,
@@ -143,6 +170,29 @@ export class UsersService {
         },
         select: userSelect,
       });
+
+      await this.recordUserAudit(transaction, currentUser, ipAddress, {
+        action: "CREATE",
+        entityId: resolvedPersonId!,
+        newData: {
+          person: createdUser.person,
+          role: createdUser.role,
+          active: createdUser.active,
+          branches: branches.map(({ id, name }) => ({ id, name })),
+        },
+        reason: `Creación de cuenta para el usuario ${resolvedPersonId}`,
+      });
+
+      for (const branch of branches) {
+        await this.recordUserAudit(transaction, currentUser, ipAddress, {
+          action: "ASSIGN",
+          entityId: resolvedPersonId!,
+          newData: { branchId: branch.id, branchName: branch.name },
+          reason: `Asignación de la sede ${branch.name} al usuario ${resolvedPersonId}`,
+        });
+      }
+
+      return createdUser;
     });
 
     const fullName = [user.person.firstName, user.person.lastName]
@@ -253,6 +303,7 @@ export class UsersService {
     userId: string,
     changeUserRoleDto: ChangeUserRoleDto,
     currentUser: AuthenticatedUser,
+    ipAddress?: string,
   ) {
     const { roleId } = changeUserRoleDto;
 
@@ -279,10 +330,20 @@ export class UsersService {
       throw new BadRequestException("Cannot assign an inactive role");
     }
 
-    const updatedUser = await this.prisma.userAccount.update({
-      where: { personId: userId },
-      data: { roleId },
-      select: userSelect,
+    const updatedUser = await this.prisma.$transaction(async (transaction) => {
+      const changedUser = await transaction.userAccount.update({
+        where: { personId: userId },
+        data: { roleId },
+        select: userSelect,
+      });
+      await this.recordUserAudit(transaction, currentUser, ipAddress, {
+        action: "ROLE_ASSIGNMENT",
+        entityId: userId,
+        oldData: { role: user.role },
+        newData: { role: changedUser.role },
+        reason: `Asignación del rol ${targetRole.name} al usuario ${userId}`,
+      });
+      return changedUser;
     });
 
     return toUserResponse(updatedUser);
@@ -292,10 +353,13 @@ export class UsersService {
     userId: string,
     updateUserDto: UpdateUserDto,
     currentUser: AuthenticatedUser,
+    ipAddress?: string,
   ) {
     const isPrivileged = ["SUPERADMIN", "DEV"].includes(currentUser.role.name);
     const updatesAccount =
-      updateUserDto.roleId !== undefined || updateUserDto.active !== undefined;
+      updateUserDto.roleId !== undefined ||
+      updateUserDto.active !== undefined ||
+      updateUserDto.branchIds !== undefined;
     if (currentUser.id !== userId && !isPrivileged) {
       throw new BadRequestException("You can only update your own account");
     }
@@ -308,11 +372,16 @@ export class UsersService {
       throw new BadRequestException("You cannot deactivate your own account");
     }
 
-    const { person, roleId, active } = updateUserDto;
+    const { person, roleId, active, branchIds } = updateUserDto;
     const hasPersonChanges =
       person !== undefined &&
       Object.values(person).some((value) => value !== undefined);
-    if (!hasPersonChanges && roleId === undefined && active === undefined) {
+    if (
+      !hasPersonChanges &&
+      roleId === undefined &&
+      active === undefined &&
+      branchIds === undefined
+    ) {
       throw new BadRequestException("At least one field must be provided");
     }
     const existingUser = await this.findUserById(userId);
@@ -347,12 +416,33 @@ export class UsersService {
     }
 
     const updatedUser = await this.prisma.$transaction(async (transaction) => {
+      let oldPerson;
+      let updatedPerson;
       if (hasPersonChanges) {
-        await this.personsService.update(transaction, userId, person!);
+        oldPerson = await transaction.person.findUnique({
+          where: { id: userId },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            address: true,
+          },
+        });
+        if (!oldPerson) {
+          throw new NotFoundException("User not found");
+        }
+        updatedPerson = await this.personsService.update(
+          transaction,
+          userId,
+          person!,
+        );
       }
 
+      let changedUser;
       if (roleId !== undefined || active !== undefined) {
-        return transaction.userAccount.update({
+        changedUser = await transaction.userAccount.update({
           where: { personId: userId },
           data: {
             ...(roleId !== undefined && {
@@ -362,12 +452,133 @@ export class UsersService {
           },
           select: userSelect,
         });
+      } else {
+        changedUser = await transaction.userAccount.findUnique({
+          where: { personId: userId },
+          select: userSelect,
+        });
       }
 
-      return transaction.userAccount.findUnique({
-        where: { personId: userId },
-        select: userSelect,
-      });
+      if (!changedUser) {
+        throw new NotFoundException("User not found");
+      }
+
+      if (hasPersonChanges) {
+        await this.recordUserAudit(transaction, currentUser, ipAddress, {
+          action: "UPDATE",
+          entityId: userId,
+          oldData: { person: oldPerson },
+          newData: {
+            person: {
+              id: updatedPerson.id,
+              firstName: updatedPerson.firstName,
+              lastName: updatedPerson.lastName,
+              email: updatedPerson.email,
+              phone: updatedPerson.phone,
+              address: updatedPerson.address,
+            },
+          },
+          reason: `Actualización de datos personales del usuario ${userId}`,
+        });
+      }
+
+      if (roleId !== undefined && roleId !== existingUser.role.id) {
+        await this.recordUserAudit(transaction, currentUser, ipAddress, {
+          action: "ROLE_ASSIGNMENT",
+          entityId: userId,
+          oldData: { role: existingUser.role },
+          newData: { role: changedUser.role },
+          reason: `Cambio de rol del usuario ${userId}`,
+        });
+      }
+
+      if (active !== undefined && active !== existingUser.active) {
+        const action = active ? "ACTIVATE" : "DEACTIVATE";
+        await this.recordUserAudit(transaction, currentUser, ipAddress, {
+          action,
+          entityId: userId,
+          oldData: { active: existingUser.active },
+          newData: { active },
+          reason: `${active ? "Activación" : "Desactivación"} de la cuenta del usuario ${userId}`,
+        });
+      }
+
+      if (branchIds !== undefined) {
+        const requestedBranches = await transaction.branch.findMany({
+          where: { id: { in: branchIds }, active: true },
+          select: { id: true, name: true },
+        });
+        if (requestedBranches.length !== branchIds.length) {
+          throw new NotFoundException(
+            "One or more active branches were not found",
+          );
+        }
+
+        const currentBranches = existingUser.branches;
+        const requestedIds = new Set(branchIds);
+        const currentIds = new Set(currentBranches.map(({ id }) => id));
+        const removedBranches = currentBranches.filter(
+          ({ id }) => !requestedIds.has(id),
+        );
+        const addedBranches = requestedBranches.filter(
+          ({ id }) => !currentIds.has(id),
+        );
+
+        if (removedBranches.length > 0) {
+          await transaction.userBranch.updateMany({
+            where: {
+              userId,
+              branchId: { in: removedBranches.map(({ id }) => id) },
+              active: true,
+            },
+            data: { active: false, endDate: new Date() },
+          });
+        }
+
+        for (const branch of removedBranches) {
+          await this.recordUserAudit(transaction, currentUser, ipAddress, {
+            action: "UNASSIGN",
+            entityId: userId,
+            oldData: { branchId: branch.id, branchName: branch.name },
+            reason: `Desasignación de la sede ${branch.name} del usuario ${userId}`,
+          });
+        }
+
+        for (const branch of addedBranches) {
+          const previousAssignment = await transaction.userBranch.findFirst({
+            where: { userId, branchId: branch.id, active: false },
+            orderBy: { assignmentDate: "desc" },
+          });
+          if (previousAssignment) {
+            await transaction.userBranch.update({
+              where: { id: previousAssignment.id },
+              data: { active: true, endDate: null },
+            });
+          } else {
+            await transaction.userBranch.create({
+              data: {
+                userId,
+                branchId: branch.id,
+                assignmentDate: new Date(),
+              },
+            });
+          }
+          await this.recordUserAudit(transaction, currentUser, ipAddress, {
+            action: "ASSIGN",
+            entityId: userId,
+            newData: { branchId: branch.id, branchName: branch.name },
+            reason: `Asignación de la sede ${branch.name} al usuario ${userId}`,
+          });
+        }
+      }
+
+      if (branchIds !== undefined) {
+        return transaction.userAccount.findUnique({
+          where: { personId: userId },
+          select: userSelect,
+        });
+      }
+      return changedUser;
     });
 
     if (!updatedUser) {

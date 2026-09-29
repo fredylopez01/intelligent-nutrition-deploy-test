@@ -73,34 +73,4 @@ export class RolesService {
       },
     });
   }
-
-  async remove(id: string) {
-    const existingRole = await this.prisma.role.findUnique({
-      where: { id },
-    });
-
-    if (!existingRole) {
-      throw new NotFoundException("Role not found");
-    }
-
-    const usersWithRole = await this.prisma.userAccount.count({
-      where: {
-        roleId: id,
-      },
-    });
-
-    if (usersWithRole > 0) {
-      throw new ConflictException(
-        "Role cannot be deleted because it is assigned to one or more users",
-      );
-    }
-
-    await this.prisma.role.delete({
-      where: { id },
-    });
-
-    return {
-      message: "Role deleted successfully",
-    };
-  }
 }

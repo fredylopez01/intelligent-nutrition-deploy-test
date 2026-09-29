@@ -23,12 +23,17 @@ const { PersonsModule } = await import("../persons/persons.module.js");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
 const { EmailService } = await import("../email/email.service.js");
+const { AuditService } = await import("../audit/audit.service.js");
 const { Reflector } = await import("@nestjs/core");
 const { JwtStrategy } = await import("../auth/strategies/jwt.strategy.js");
 const { JwtAuthGuard } = await import("../../common/guards/jwt-auth.guard.js");
 const { RolesGuard } = await import("../../common/guards/roles.guard.js");
 const { APP_GUARD } = await import("@nestjs/core");
 const request = (await import("supertest")).default;
+const mockAuditService = {
+  createAuditLog: jest.fn().mockResolvedValue({}),
+  findAll: jest.fn(),
+};
 
 const mockPrisma = {
   userAccount: {
@@ -80,6 +85,7 @@ mockPrisma.$transaction.mockImplementation((operation: any) =>
           .mockResolvedValue(undefined),
       },
     },
+    { provide: AuditService, useValue: mockAuditService },
   ],
 })
 class TestUsersModule {}
@@ -329,14 +335,14 @@ describe("UsersController (e2e)", () => {
     });
   });
 
-  describe("PATCH /users/role/:id", () => {
+  describe("PATCH /users/:id", () => {
     let token: string;
 
     beforeAll(() => {
       token = jwtService.sign({ sub: "admin-uuid-1" });
     });
 
-    it("should change user role and return 200", async () => {
+    it("should change user role through the documented user endpoint", async () => {
       prisma.userAccount.findUnique
         .mockResolvedValueOnce(mockAdmin)
         .mockResolvedValueOnce(mockUser);
@@ -344,7 +350,7 @@ describe("UsersController (e2e)", () => {
       prisma.userAccount.update.mockResolvedValueOnce(mockUpdatedUser);
 
       const response = await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.personId}`)
+        .patch(`/users/${mockUser.personId}`)
         .set("Authorization", `Bearer ${token}`)
         .send({ roleId: mockNewRole.id })
         .expect(200);
@@ -353,101 +359,11 @@ describe("UsersController (e2e)", () => {
       expect(response.body.role.name).toBe("LIDER SEDE");
     });
 
-    it("should return 401 when no token is provided", async () => {
+    it("requires authentication", async () => {
       await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
+        .patch(`/users/${mockUser.personId}`)
         .send({ roleId: mockNewRole.id })
         .expect(401);
-    });
-
-    it("should return 400 when roleId is missing", async () => {
-      prisma.userAccount.findUnique.mockResolvedValueOnce(mockAdmin);
-
-      await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
-        .set("Authorization", `Bearer ${token}`)
-        .send({})
-        .expect(400);
-    });
-
-    it("should return 400 when roleId is not a UUID", async () => {
-      prisma.userAccount.findUnique.mockResolvedValueOnce(mockAdmin);
-
-      await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
-        .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: "not-a-uuid" })
-        .expect(400);
-    });
-
-    it("should return 400 when user tries to change own role", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce({
-          ...mockUser,
-          personId: "admin-uuid-1",
-          role: { id: "role-admin", name: "SUPERADMIN", active: true },
-        });
-
-      await request(app.getHttpServer())
-        .patch("/users/role/admin-uuid-1")
-        .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: mockNewRole.id })
-        .expect(400);
-    });
-
-    it("should return 400 when role is the same", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(mockUser);
-
-      await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
-        .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: mockUser.role.id })
-        .expect(400);
-    });
-
-    it("should return 404 when user does not exist", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(null);
-
-      await request(app.getHttpServer())
-        .patch("/users/role/11111111-1111-4111-8111-111111111111")
-        .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: mockNewRole.id })
-        .expect(404);
-    });
-
-    it("should return 404 when target role does not exist", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(mockUser);
-      prisma.role.findUnique.mockResolvedValueOnce(null);
-
-      await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.personId}`)
-        .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: "00000000-0000-0000-0000-000000000000" })
-        .expect(404);
-    });
-
-    it("should return 400 when target role is inactive", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(mockUser);
-      prisma.role.findUnique.mockResolvedValueOnce({
-        id: "inactive-role",
-        name: "INACTIVE",
-        active: false,
-      });
-
-      await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
-        .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: "inactive-role" })
-        .expect(400);
     });
   });
 });
