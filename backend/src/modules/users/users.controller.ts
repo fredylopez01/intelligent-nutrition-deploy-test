@@ -18,6 +18,7 @@ import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUse
 import { UpdateUserDto } from "./dto/update-user.dto.js";
 import { UpdateUserStatusDto } from "./dto/update-user-status.dto.js";
 import { AssignUserBranchDto } from "./dto/assign-user-branch.dto.js";
+import { UpdateUserBranchDto } from "./dto/update-user-branch.dto.js";
 
 @Controller("users")
 export class UsersController {
@@ -56,6 +57,24 @@ export class UsersController {
     return this.usersService.assignBranch(
       id,
       assignUserBranchDto.branchId,
+      currentUser,
+      ipAddress,
+    );
+  }
+
+  @Patch(":id/branches/:branchId")
+  @Roles("SUPERADMIN", "DEV")
+  deactivateBranch(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Param("branchId", new ParseUUIDPipe()) branchId: string,
+    @Body() updateUserBranchDto: UpdateUserBranchDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.usersService.deactivateBranch(
+      id,
+      branchId,
+      updateUserBranchDto.active,
       currentUser,
       ipAddress,
     );

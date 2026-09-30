@@ -211,6 +211,93 @@ export class UsersService {
     }
   }
 
+  async deactivateBranch(
+    userId: string,
+    branchId: string,
+    active: boolean,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    if (active) {
+      throw new BadRequestException(
+        "This endpoint only supports deactivating branch assignments",
+      );
+    }
+
+    return this.prisma.$transaction(async (transaction) => {
+      const assignment = await transaction.userBranch.findFirst({
+        where: { userId, branchId },
+        orderBy: { assignmentDate: "desc" },
+        select: {
+          id: true,
+          userId: true,
+          branchId: true,
+          assignmentDate: true,
+          endDate: true,
+          active: true,
+          branch: { select: { name: true } },
+        },
+      });
+
+      if (!assignment) {
+        throw new NotFoundException("Branch assignment not found");
+      }
+      if (!assignment.active) {
+        throw new BadRequestException("Branch assignment is already inactive");
+      }
+
+      const now = new Date();
+      const endDate = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+      );
+      const updateResult = await transaction.userBranch.updateMany({
+        where: { id: assignment.id, active: true },
+        data: { active: false, endDate },
+      });
+
+      if (updateResult.count === 0) {
+        throw new BadRequestException("Branch assignment has already changed");
+      }
+
+      const updatedAssignment = await transaction.userBranch.findUnique({
+        where: { id: assignment.id },
+        select: {
+          id: true,
+          userId: true,
+          branchId: true,
+          assignmentDate: true,
+          endDate: true,
+          active: true,
+        },
+      });
+
+      if (!updatedAssignment) {
+        throw new NotFoundException("Branch assignment not found");
+      }
+
+      await this.recordUserAudit(transaction, currentUser, ipAddress, {
+        action: "UNASSIGN",
+        entityId: userId,
+        oldData: {
+          branchId,
+          branchName: assignment.branch.name,
+          assignmentDate: assignment.assignmentDate,
+          active: assignment.active,
+        },
+        newData: {
+          branchId,
+          branchName: assignment.branch.name,
+          assignmentDate: updatedAssignment.assignmentDate,
+          endDate: updatedAssignment.endDate,
+          active: updatedAssignment.active,
+        },
+        reason: `Desasignación de la sede ${assignment.branch.name} del usuario ${userId}`,
+      });
+
+      return updatedAssignment;
+    });
+  }
+
   async create(
     createUserDto: CreateUserDto,
     currentUser: AuthenticatedUser,
