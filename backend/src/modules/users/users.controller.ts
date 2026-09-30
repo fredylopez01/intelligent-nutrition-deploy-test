@@ -19,6 +19,7 @@ import { UpdateUserDto } from "./dto/update-user.dto.js";
 import { UpdateUserStatusDto } from "./dto/update-user-status.dto.js";
 import { AssignUserBranchDto } from "./dto/assign-user-branch.dto.js";
 import { UpdateUserBranchDto } from "./dto/update-user-branch.dto.js";
+import { ChangeUserRoleDto } from "./dto/change-user-role.dto.js";
 
 @Controller("users")
 export class UsersController {
@@ -81,6 +82,22 @@ export class UsersController {
       id,
       branchId,
       updateUserBranchDto.active,
+      currentUser,
+      ipAddress,
+    );
+  }
+
+  @Patch(":id/role")
+  @Roles("SUPERADMIN", "DEV")
+  changeRole(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() changeUserRoleDto: ChangeUserRoleDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.usersService.changeRole(
+      id,
+      changeUserRoleDto,
       currentUser,
       ipAddress,
     );
