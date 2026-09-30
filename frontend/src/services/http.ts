@@ -6,6 +6,8 @@ const API_URL = configuredApiUrl.endsWith('/api/v1')
   ? configuredApiUrl
   : `${configuredApiUrl}/api/v1`
 
+export const API_BASE_URL = API_URL
+
 export class ApiError extends Error {
   status: number
   details?: unknown

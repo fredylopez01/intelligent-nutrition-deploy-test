@@ -38,5 +38,6 @@ export interface AuthState {
   status: AuthStatus
   error: string | null
   login: (credentials: LoginCredentials) => Promise<SessionUser>
+  loginWithToken: (accessToken: string) => Promise<SessionUser>
   logout: () => void
 }

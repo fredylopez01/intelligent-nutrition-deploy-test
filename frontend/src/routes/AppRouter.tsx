@@ -2,20 +2,22 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ActivateAccountPage } from '../pages/activation/ActivateAccountPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
+import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
 import { LandingPage } from '../pages/LandingPage'
 import { LoginPage } from '../pages/LoginPage'
+import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
+import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
 import { UsersPage } from '../pages/users/UsersPage'
 
 import { PENDING_MODULES } from './pendingModules'
 import { ProtectedRoute } from './ProtectedRoute'
-import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
-import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
 
 export function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/google/callback" element={<GoogleAuthCallbackPage />} />
       <Route path="/activate-account" element={<ActivateAccountPage />} />
       <Route path="/forget-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
