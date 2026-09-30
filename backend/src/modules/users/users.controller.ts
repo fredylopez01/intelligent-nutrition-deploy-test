@@ -17,6 +17,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { UpdateUserDto } from "./dto/update-user.dto.js";
 import { UpdateUserStatusDto } from "./dto/update-user-status.dto.js";
+import { AssignUserBranchDto } from "./dto/assign-user-branch.dto.js";
 
 @Controller("users")
 export class UsersController {
@@ -36,6 +37,22 @@ export class UsersController {
   @Roles("SUPERADMIN", "DEV")
   findAll(@Query() query: ListUsersQueryDto) {
     return this.usersService.findAll(query);
+  }
+
+  @Post(":id/branches")
+  @Roles("SUPERADMIN", "DEV")
+  assignBranch(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() assignUserBranchDto: AssignUserBranchDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.usersService.assignBranch(
+      id,
+      assignUserBranchDto.branchId,
+      currentUser,
+      ipAddress,
+    );
   }
 
   @Patch(":id/status")

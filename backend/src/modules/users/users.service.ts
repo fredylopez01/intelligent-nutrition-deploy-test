@@ -80,6 +80,106 @@ export class UsersService {
     );
   }
 
+  async assignBranch(
+    userId: string,
+    branchId: string,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        const user = await transaction.userAccount.findUnique({
+          where: { personId: userId },
+          select: { personId: true },
+        });
+        if (!user) {
+          throw new NotFoundException("User not found");
+        }
+
+        const branch = await transaction.branch.findUnique({
+          where: { id: branchId },
+          select: { id: true, name: true, active: true },
+        });
+        if (!branch) {
+          throw new NotFoundException("Branch not found");
+        }
+        if (!branch.active) {
+          throw new BadRequestException("Cannot assign an inactive branch");
+        }
+
+        const activeAssignment = await transaction.userBranch.findFirst({
+          where: { userId, branchId, active: true },
+          select: { id: true },
+        });
+        if (activeAssignment) {
+          throw new ConflictException(
+            "User is already assigned to this branch",
+          );
+        }
+
+        const now = new Date();
+        const assignmentDate = new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+        );
+        const sameDayInactiveAssignment =
+          await transaction.userBranch.findFirst({
+            where: { userId, branchId, assignmentDate, active: false },
+            select: { id: true },
+          });
+
+        const assignment = sameDayInactiveAssignment
+          ? await transaction.userBranch.update({
+              where: { id: sameDayInactiveAssignment.id },
+              data: { active: true, endDate: null },
+              select: {
+                id: true,
+                userId: true,
+                branchId: true,
+                assignmentDate: true,
+                endDate: true,
+                active: true,
+              },
+            })
+          : await transaction.userBranch.create({
+              data: { userId, branchId, assignmentDate, active: true },
+              select: {
+                id: true,
+                userId: true,
+                branchId: true,
+                assignmentDate: true,
+                endDate: true,
+                active: true,
+              },
+            });
+
+        await this.recordUserAudit(transaction, currentUser, ipAddress, {
+          action: "ASSIGN",
+          entityId: userId,
+          newData: {
+            branchId: branch.id,
+            branchName: branch.name,
+            assignmentId: assignment.id,
+            assignmentDate: assignment.assignmentDate,
+          },
+          reason: `Asignación de la sede ${branch.name} al usuario ${userId}`,
+        });
+
+        return assignment;
+      });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2002"
+      ) {
+        throw new ConflictException("User is already assigned to this branch");
+      }
+
+      throw error;
+    }
+  }
+
   async create(
     createUserDto: CreateUserDto,
     currentUser: AuthenticatedUser,
