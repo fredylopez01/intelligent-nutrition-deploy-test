@@ -155,6 +155,70 @@ export class BranchesService {
     }
   }
 
+  async updateStatus(
+    id: string,
+    active: boolean,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const existingBranch = await transaction.branch.findUnique({
+        where: { id },
+        select: { id: true, name: true, active: true },
+      });
+
+      if (!existingBranch) {
+        throw new NotFoundException("Branch not found");
+      }
+
+      if (existingBranch.active === active) {
+        throw new BadRequestException(
+          `Branch is already ${active ? "active" : "inactive"}`,
+        );
+      }
+
+      const updateResult = await transaction.branch.updateMany({
+        where: { id, active: existingBranch.active },
+        data: { active },
+      });
+
+      if (updateResult.count === 0) {
+        throw new BadRequestException("Branch status has already changed");
+      }
+
+      const updatedBranch = await transaction.branch.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          phone: true,
+          active: true,
+        },
+      });
+
+      if (!updatedBranch) {
+        throw new NotFoundException("Branch not found");
+      }
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: active ? "ACTIVATE" : "DEACTIVATE",
+          entity: "BRANCH",
+          entityId: id,
+          oldData: { active: existingBranch.active },
+          newData: { active },
+          reason: `${active ? "Activación" : "Desactivación"} de la sede ${existingBranch.name}`,
+          ipAddress,
+        },
+        transaction,
+      );
+
+      return updatedBranch;
+    });
+  }
+
   async create(
     createBranchDto: CreateBranchDto,
     currentUser: AuthenticatedUser,
