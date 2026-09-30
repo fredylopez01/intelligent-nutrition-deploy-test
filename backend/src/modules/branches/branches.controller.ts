@@ -15,6 +15,7 @@ import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUse
 import { CreateBranchDto } from "./dto/create-branch.dto.js";
 import { ListBranchesQueryDto } from "./dto/list-branches-query.dto.js";
 import { UpdateBranchDto } from "./dto/update-branch.dto.js";
+import { UpdateBranchStatusDto } from "./dto/update-branch-status.dto.js";
 import { BranchesService } from "./branches.service.js";
 import { Public } from "../../common/decorators/public.decorator.js";
 
@@ -55,6 +56,22 @@ export class BranchesController {
     return this.branchesService.update(
       id,
       updateBranchDto,
+      currentUser,
+      ipAddress,
+    );
+  }
+
+  @Patch(":id/status")
+  @Roles("SUPERADMIN", "DEV")
+  updateStatus(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() updateBranchStatusDto: UpdateBranchStatusDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.branchesService.updateStatus(
+      id,
+      updateBranchStatusDto.active,
       currentUser,
       ipAddress,
     );
