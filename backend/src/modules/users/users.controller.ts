@@ -40,6 +40,12 @@ export class UsersController {
     return this.usersService.findAll(query);
   }
 
+  @Get(":id")
+  @Roles("SUPERADMIN", "DEV")
+  findOne(@Param("id", new ParseUUIDPipe()) id: string) {
+    return this.usersService.findUserById(id);
+  }
+
   @Get(":id/branches")
   @Roles("SUPERADMIN", "DEV")
   getBranches(@Param("id", new ParseUUIDPipe()) id: string) {
