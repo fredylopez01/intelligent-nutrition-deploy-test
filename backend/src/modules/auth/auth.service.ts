@@ -26,6 +26,39 @@ export class AuthService {
     private readonly auditService: AuditService,
   ) {}
 
+  async loginWithGoogle(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.prisma.userAccount.findFirst({
+      where: { person: { is: { email: normalizedEmail } } },
+      select: {
+        personId: true,
+        active: true,
+        person: { select: { active: true } },
+        role: { select: { id: true, name: true, active: true } },
+      },
+    });
+
+    if (!user) {
+      throw AuthExceptions.googleEmailNotRegistered();
+    }
+
+    if (!user.active || !user.person.active) {
+      throw AuthExceptions.googleAccountInactive();
+    }
+
+    if (!user.role.active) {
+      throw AuthExceptions.roleInactive();
+    }
+
+    await this.prisma.userAccount.update({
+      where: { personId: user.personId },
+      data: { lastLoginAt: new Date() },
+    });
+
+    const accessToken = await this.jwtService.signAsync({ sub: user.personId });
+    return { accessToken, tokenType: "Bearer" };
+  }
+
   async login(loginDto: LoginDto) {
     const email = loginDto.email.trim().toLowerCase();
 
