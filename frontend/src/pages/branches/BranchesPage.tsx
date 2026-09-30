@@ -1,9 +1,9 @@
 import { useState } from 'react'
 
+import { CreateBranchForm } from '../../components/branches/CreateBranchForm'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
-import { CreateBranchForm } from '../../components/branches/CreateBranchForm'
 import { AppLayout } from '../../layouts/AppLayout'
 
 import './BranchesPage.css'
@@ -32,15 +32,8 @@ export function BranchesPage() {
           <Alert tone="success">{createdMessage}</Alert>
         </div>
       )}
-      <Modal
-        open={isCreateOpen}
-        title="Registrar sede"
-        onClose={() => setIsCreateOpen(false)}
-      >
-        <CreateBranchForm
-          onCreated={handleBranchCreated}
-          onCancel={() => setIsCreateOpen(false)}
-        />
+      <Modal open={isCreateOpen} title="Registrar sede" onClose={() => setIsCreateOpen(false)}>
+        <CreateBranchForm onCreated={handleBranchCreated} onCancel={() => setIsCreateOpen(false)} />
       </Modal>
     </AppLayout>
   )
