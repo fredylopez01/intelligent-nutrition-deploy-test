@@ -5,9 +5,10 @@ import type {
   SessionUser,
 } from '../types/auth'
 
-import { http } from './http'
+import { API_BASE_URL, http } from './http'
 
 export const authService = {
+  googleLoginUrl: () => `${API_BASE_URL}/auth/google`,
   login: (credentials: LoginCredentials) => http.post<LoginResponse>('/auth/login', credentials),
   me: (token: string) => http.get<SessionUser>('/auth/me', { token }),
 

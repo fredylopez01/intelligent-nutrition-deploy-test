@@ -52,4 +52,14 @@ export const AuthExceptions = {
       code: "PASSWORDS_ARE_EQUAL",
       message: "The new password must be different from the current password.",
     }),
+  googleEmailNotRegistered: () =>
+    new NotFoundException({
+      code: "GOOGLE_EMAIL_NOT_REGISTERED",
+      message: "No account is registered with this Google email.",
+    }),
+  googleAccountInactive: () =>
+    new ForbiddenException({
+      code: "GOOGLE_ACCOUNT_INACTIVE",
+      message: "The account associated with this Google email is inactive.",
+    }),
 };

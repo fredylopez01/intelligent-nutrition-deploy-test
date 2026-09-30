@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { ActivateAccountPage } from '../pages/activation/ActivateAccountPage'
 import { BranchesPage } from '../pages/branches/BranchesPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
+import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
 import { LandingPage } from '../pages/LandingPage'
 import { LoginPage } from '../pages/LoginPage'
 import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
@@ -18,6 +19,7 @@ export function AppRouter() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/google/callback" element={<GoogleAuthCallbackPage />} />
       <Route path="/activate-account" element={<ActivateAccountPage />} />
       <Route path="/forget-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -34,7 +36,7 @@ export function AppRouter() {
       <Route
         path="/proveedores"
         element={
-          <ProtectedRoute allowedRoles={['SUPERADMIN', 'Lider de sede']}>
+          <ProtectedRoute allowedRoles={['SUPERADMIN', 'BRANCH_LEADER']}>
             <SuppliersPage />
           </ProtectedRoute>
         }
@@ -43,7 +45,7 @@ export function AppRouter() {
       <Route
         path="/usuarios"
         element={
-          <ProtectedRoute allowedRoles={['SUPERADMIN']}>
+          <ProtectedRoute allowedRoles={['SUPERADMIN', 'DEV']}>
             <UsersPage />
           </ProtectedRoute>
         }

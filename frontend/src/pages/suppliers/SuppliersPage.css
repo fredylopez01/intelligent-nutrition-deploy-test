@@ -86,8 +86,12 @@
 }
 
 @keyframes suppliers-skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .suppliers-page__footer {

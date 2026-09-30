@@ -44,7 +44,11 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Compras y recepción', to: '/proveedores/compras' },
     ],
   },
-  { label: 'Usuarios', to: '/usuarios', allowedRoles: ['SUPER ADMIN'] },
+  {
+    label: 'Usuarios',
+    to: '/usuarios',
+    allowedRoles: ['SUPERADMIN', 'DEV'],
+  },
   {
     label: 'Reportes',
     to: '/reportes',

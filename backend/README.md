@@ -161,6 +161,11 @@ PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES=60
 
 # Frontend (para enlaces en emails)
 FRONTEND_URL="http://localhost:5173"
+
+# Google OAuth (opcional; completar desde Google Cloud Console)
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+GOOGLE_CALLBACK_URL="http://localhost:3000/api/v1/auth/google/callback"
 ```
 
 `PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES` controla cuánto tiempo es válido el enlace de recuperación. Su valor predeterminado es 60 minutos.

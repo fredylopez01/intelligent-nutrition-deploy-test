@@ -13,6 +13,7 @@ import { getUserStatus } from '../../utils/users'
 import { Alert } from '../ui/Alert'
 import { Avatar } from '../ui/Avatar'
 import { Button } from '../ui/Button'
+import { Modal } from '../ui/Modal'
 import { TextField } from '../ui/TextField'
 
 import './UserDetailPanel.css'
@@ -55,6 +56,8 @@ export function UserDetailPanel({ user, onUpdated }: UserDetailPanelProps) {
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const [isResending, setIsResending] = useState(false)
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false)
+  const [isDeactivating, setIsDeactivating] = useState(false)
   const {
     register,
     handleSubmit,
@@ -116,6 +119,27 @@ export function UserDetailPanel({ user, onUpdated }: UserDetailPanelProps) {
       setIsResending(false)
     }
   }
+
+  const handleConfirmDeactivate = async () => {
+    setIsDeactivating(true)
+    try {
+      await usersService.updateStatus(user.id, { active: false }, token)
+      setFeedback({ tone: 'success', text: 'El usuario fue desactivado correctamente.' })
+      setIsDeactivateModalOpen(false)
+      onUpdated()
+    } catch (error) {
+      setFeedback({ tone: 'error', text: resolveErrorMessage(error) })
+      setIsDeactivateModalOpen(false)
+    } finally {
+      setIsDeactivating(false)
+    }
+  }
+
+  const deactivateDisabledReason = isCurrentUser
+    ? 'No puedes desactivar tu propia cuenta.'
+    : !user.active
+      ? 'Este usuario ya está inactivo.'
+      : null
 
   return (
     <div className="user-detail">
@@ -199,18 +223,54 @@ export function UserDetailPanel({ user, onUpdated }: UserDetailPanelProps) {
             >
               {isResending ? 'Reenviando...' : 'Reenviar correo de activación'}
             </Button>
-            <Button variant="danger" fullWidth disabled aria-describedby="deactivate-hint">
+            <Button
+              variant="danger"
+              fullWidth
+              onClick={() => setIsDeactivateModalOpen(true)}
+              disabled={!!deactivateDisabledReason}
+              aria-describedby={deactivateDisabledReason ? 'deactivate-hint' : undefined}
+            >
               Desactivar usuario
             </Button>
-            <p className="user-detail__note" id="deactivate-hint">
-              Desactivar cuentas llega cuando el backend exponga ese endpoint.
-            </p>
+            {deactivateDisabledReason && (
+              <p className="user-detail__note" id="deactivate-hint">
+                {deactivateDisabledReason}
+              </p>
+            )}
           </div>
         </form>
       </div>
       <footer className="user-detail__footer">
         <p>Los permisos no se configuran aquí: los define el rol según la matriz del ADR-002.</p>
       </footer>
+
+      <Modal
+        open={isDeactivateModalOpen}
+        title="¿Desactivar esta cuenta?"
+        description={`${user.fullName} no podrá iniciar sesión hasta que se reactive su cuenta.`}
+        onClose={() => {
+          if (!isDeactivating) setIsDeactivateModalOpen(false)
+        }}
+      >
+        <div className="user-detail__modal-actions">
+          <Button
+            variant="outline"
+            fullWidth
+            onClick={() => setIsDeactivateModalOpen(false)}
+            disabled={isDeactivating}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            fullWidth
+            onClick={handleConfirmDeactivate}
+            disabled={isDeactivating}
+          >
+            {isDeactivating ? 'Desactivando...' : 'Sí, desactivar'}
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }
