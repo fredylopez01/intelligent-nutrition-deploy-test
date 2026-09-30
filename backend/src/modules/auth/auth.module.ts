@@ -12,6 +12,8 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard.js";
 import { APP_GUARD } from "@nestjs/core";
 import { EmailModule } from "../../modules/email/email.module.js";
 import { AuditModule } from "../audit/audit.module.js";
+import { GoogleStrategy } from "./strategies/google.strategy.js";
+import { GoogleAuthGuard } from "./guards/google-auth.guard.js";
 
 @Module({
   imports: [
@@ -46,6 +48,8 @@ import { AuditModule } from "../audit/audit.module.js";
   providers: [
     AuthService,
     JwtStrategy,
+    GoogleStrategy,
+    GoogleAuthGuard,
     JwtAuthGuard,
     {
       provide: APP_GUARD,
