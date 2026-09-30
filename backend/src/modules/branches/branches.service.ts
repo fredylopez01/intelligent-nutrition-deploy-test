@@ -123,19 +123,21 @@ export class BranchesService {
           },
         });
 
-        await this.auditService.createAuditLog(
-          {
-            userId: currentUser.id,
-            action: "UPDATE",
-            entity: "BRANCH",
-            entityId: id,
-            oldData: existingBranch,
-            newData: updatedBranch,
-            reason: `Actualización de la sede ${updatedBranch.name}`,
-            ipAddress,
-          },
-          transaction,
-        );
+        if (existingBranch !== updatedBranch) {
+          await this.auditService.createAuditLog(
+            {
+              userId: currentUser.id,
+              action: "UPDATE",
+              entity: "BRANCH",
+              entityId: id,
+              oldData: existingBranch,
+              newData: updatedBranch,
+              reason: `Actualización de la sede ${updatedBranch.name}`,
+              ipAddress,
+            },
+            transaction,
+          );
+        }
 
         return updatedBranch;
       });
