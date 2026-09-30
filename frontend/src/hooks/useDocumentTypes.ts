@@ -5,52 +5,37 @@ import type { DocumentType } from '../types/supplier'
 
 import { useAuth } from './useAuth'
 
-interface DocumentTypesResult {
-  key: string
-  documentTypes: DocumentType[]
-  error: string | null
-}
+type RequestStatus = 'loading' | 'success' | 'error'
 
 export function useDocumentTypes() {
   const { token } = useAuth()
-  const [result, setResult] = useState<DocumentTypesResult | null>(null)
+  const [documentTypes, setDocumentTypes] = useState<DocumentType[]>([])
+  const [status, setStatus] = useState<RequestStatus>('loading')
   const [reloadToken, setReloadToken] = useState(0)
-  const requestKey = `${token ?? ''}|${reloadToken}`
 
   useEffect(() => {
     let cancelled = false
-
+    setStatus('loading')
     documentTypesService
       .list(token)
-      .then((documentTypes) => {
-        if (cancelled) return
-        setResult({ key: requestKey, documentTypes, error: null })
+      .then((data) => {
+        if (!cancelled) {
+          setDocumentTypes(data)
+          setStatus('success')
+        }
       })
-      .catch((err: unknown) => {
-        if (cancelled) return
-        setResult({
-          key: requestKey,
-          documentTypes: [],
-          error:
-            err instanceof Error ? err.message : 'No fue posible cargar los tipos de documento.',
-        })
+      .catch(() => {
+        if (!cancelled) setStatus('error')
       })
-
     return () => {
       cancelled = true
     }
-  }, [requestKey, token])
-
-  const refetch = useCallback(() => {
-    setReloadToken((value) => value + 1)
-  }, [])
-
-  const isCurrent = result?.key === requestKey
+  }, [token, reloadToken])
 
   return {
-    documentTypes: isCurrent ? result.documentTypes : [],
-    isLoading: !isCurrent,
-    error: isCurrent ? result.error : null,
-    refetch,
+    documentTypes,
+    isLoading: status === 'loading',
+    error: status === 'error',
+    refetch: useCallback(() => setReloadToken((v) => v + 1), []),
   }
 }

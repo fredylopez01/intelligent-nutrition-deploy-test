@@ -63,7 +63,6 @@ function resolveErrorMessage(error: unknown): string {
     if (error.status === 403) return 'No tienes permiso para registrar proveedores.'
     return error.message
   }
-
   return 'No fue posible registrar el proveedor. Intenta de nuevo.'
 }
 
