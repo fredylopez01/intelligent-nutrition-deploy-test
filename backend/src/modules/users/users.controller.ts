@@ -39,6 +39,12 @@ export class UsersController {
     return this.usersService.findAll(query);
   }
 
+  @Get(":id/branches")
+  @Roles("SUPERADMIN", "DEV")
+  getBranches(@Param("id", new ParseUUIDPipe()) id: string) {
+    return this.usersService.getBranches(id);
+  }
+
   @Post(":id/branches")
   @Roles("SUPERADMIN", "DEV")
   assignBranch(

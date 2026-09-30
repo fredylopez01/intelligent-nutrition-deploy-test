@@ -80,6 +80,37 @@ export class UsersService {
     );
   }
 
+  async getBranches(userId: string) {
+    const user = await this.prisma.userAccount.findUnique({
+      where: { personId: userId },
+      select: {
+        branchAssignments: {
+          orderBy: [{ assignmentDate: "desc" }, { id: "asc" }],
+          select: {
+            assignmentDate: true,
+            endDate: true,
+            active: true,
+            branch: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    return user.branchAssignments.map(
+      ({ branch, assignmentDate, endDate, active }) => ({
+        id: branch.id,
+        name: branch.name,
+        assignmentDate: assignmentDate.toISOString().slice(0, 10),
+        endDate: endDate?.toISOString().slice(0, 10) ?? null,
+        active,
+      }),
+    );
+  }
+
   async assignBranch(
     userId: string,
     branchId: string,
