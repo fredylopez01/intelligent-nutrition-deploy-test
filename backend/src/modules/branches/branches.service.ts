@@ -1,9 +1,15 @@
-import { ConflictException, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { AuditService } from "../audit/audit.service.js";
 import { CreateBranchDto } from "./dto/create-branch.dto.js";
 import { ListBranchesQueryDto } from "./dto/list-branches-query.dto.js";
+import { UpdateBranchDto } from "./dto/update-branch.dto.js";
 
 @Injectable()
 export class BranchesService {
@@ -48,6 +54,103 @@ export class BranchesService {
         totalPages: total === 0 ? 0 : Math.ceil(total / limit),
       },
     };
+  }
+
+  async findOne(id: string) {
+    const branch = await this.prisma.branch.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        phone: true,
+        active: true,
+      },
+    });
+
+    if (!branch) {
+      throw new NotFoundException("Branch not found");
+    }
+
+    return branch;
+  }
+
+  async update(
+    id: string,
+    updateBranchDto: UpdateBranchDto,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    if (Object.values(updateBranchDto).every((value) => value === undefined)) {
+      throw new BadRequestException("At least one field must be provided");
+    }
+
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        const existingBranch = await transaction.branch.findUnique({
+          where: { id },
+        });
+
+        if (!existingBranch) {
+          throw new NotFoundException("Branch not found");
+        }
+
+        const { name, address, phone } = updateBranchDto;
+        if (name !== undefined && name !== existingBranch.name) {
+          const branchWithSameName = await transaction.branch.findUnique({
+            where: { name },
+            select: { id: true },
+          });
+
+          if (branchWithSameName) {
+            throw new ConflictException("Branch name already exists");
+          }
+        }
+
+        const updatedBranch = await transaction.branch.update({
+          where: { id },
+          data: {
+            ...(name === undefined ? {} : { name }),
+            ...(address === undefined ? {} : { address }),
+            ...(phone === undefined ? {} : { phone }),
+          },
+          select: {
+            id: true,
+            name: true,
+            address: true,
+            phone: true,
+            active: true,
+          },
+        });
+
+        await this.auditService.createAuditLog(
+          {
+            userId: currentUser.id,
+            action: "UPDATE",
+            entity: "BRANCH",
+            entityId: id,
+            oldData: existingBranch,
+            newData: updatedBranch,
+            reason: `Actualización de la sede ${updatedBranch.name}`,
+            ipAddress,
+          },
+          transaction,
+        );
+
+        return updatedBranch;
+      });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2002"
+      ) {
+        throw new ConflictException("Branch name already exists");
+      }
+
+      throw error;
+    }
   }
 
   async create(
