@@ -6,10 +6,8 @@ import { ComingSoonPage } from '../pages/ComingSoonPage'
 import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
 import { LandingPage } from '../pages/LandingPage'
 import { LoginPage } from '../pages/LoginPage'
-
 import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
 import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
-
 import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
 import { UsersPage } from '../pages/users/UsersPage'
 
@@ -38,7 +36,7 @@ export function AppRouter() {
       <Route
         path="/proveedores"
         element={
-          <ProtectedRoute allowedRoles={['SUPERADMIN', 'Lider de sede']}>
+          <ProtectedRoute allowedRoles={['SUPERADMIN', 'BRANCH_LEADER']}>
             <SuppliersPage />
           </ProtectedRoute>
         }
@@ -47,7 +45,7 @@ export function AppRouter() {
       <Route
         path="/usuarios"
         element={
-          <ProtectedRoute allowedRoles={['SUPERADMIN']}>
+          <ProtectedRoute allowedRoles={['SUPERADMIN', 'DEV']}>
             <UsersPage />
           </ProtectedRoute>
         }

@@ -38,6 +38,10 @@ export interface UpdateUserRolePayload {
   roleId: string
 }
 
+export interface UpdateUserStatusPayload {
+  active: boolean
+}
+
 export interface PaginationMeta {
   page: number
   limit: number

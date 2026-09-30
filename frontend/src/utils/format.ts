@@ -1,7 +1,7 @@
 const ROLE_LABELS: Record<string, string> = {
   SUPERADMIN: 'Superadmin',
-  'LIDER DE SEDE': 'Líder de Sede',
-  'AYUDANTE DE SEDE': 'Ayudante de Sede',
+  BRANCH_LEADER: 'Líder de Sede',
+  BRANCH_ASSISTANT: 'Ayudante de Sede',
 }
 
 export function getRoleLabel(roleName: string): string {

@@ -32,9 +32,7 @@ export function useDocumentTypes() {
           key: requestKey,
           documentTypes: [],
           error:
-            err instanceof Error
-              ? err.message
-              : 'No fue posible cargar los tipos de documento.',
+            err instanceof Error ? err.message : 'No fue posible cargar los tipos de documento.',
         })
       })
 

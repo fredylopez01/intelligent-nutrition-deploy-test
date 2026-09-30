@@ -2,6 +2,7 @@ import type {
   CreateUserPayload,
   UpdateUserPayload,
   UpdateUserRolePayload,
+  UpdateUserStatusPayload,
   User,
   UsersListParams,
   UsersListResponse,
@@ -24,6 +25,7 @@ function buildUsersQuery({ page, limit, active }: UsersListParams): string {
   const query = params.toString()
   return query ? `?${query}` : ''
 }
+
 async function listMock(params: UsersListParams): Promise<UsersListResponse> {
   await delay()
   const page = params.page ?? 1
@@ -42,10 +44,62 @@ async function listMock(params: UsersListParams): Promise<UsersListResponse> {
   }
 }
 
+interface ApiUserPerson {
+  id: string
+  firstName: string | null
+  lastName: string | null
+  email: string | null
+}
+
+interface ApiUser {
+  id: string
+  personId?: string
+  person?: ApiUserPerson
+  // Fallback defensivo: por si algún endpoint todavía responde plano.
+  fullName?: string
+  email?: string
+  active: boolean
+  mustChangePassword: boolean
+  lastLoginAt: string | null
+  createdAt: string
+  updatedAt: string
+  role: { id: string; name: string }
+  branches?: { id: string; name: string }[]
+}
+
+// El backend anida nombre y correo bajo `person`. Ver bug reportado sobre
+// fullName undefined: la lectura Y el envío del payload tenían que ajustarse.
+function normalizeUser(apiUser: ApiUser): User {
+  const fullName =
+    apiUser.fullName ??
+    [apiUser.person?.firstName, apiUser.person?.lastName].filter(Boolean).join(' ')
+  return {
+    id: apiUser.id,
+    fullName,
+    email: apiUser.email ?? apiUser.person?.email ?? '',
+    active: apiUser.active,
+    mustChangePassword: apiUser.mustChangePassword,
+    lastLoginAt: apiUser.lastLoginAt,
+    createdAt: apiUser.createdAt,
+    updatedAt: apiUser.updatedAt,
+    role: apiUser.role,
+  }
+}
+
+function splitFullName(fullName: string): { firstName: string; lastName: string } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean)
+  const firstName = parts[0] ?? ''
+  const lastName = parts.length > 1 ? parts.slice(1).join(' ') : firstName
+  return { firstName, lastName }
+}
+
 export const usersService = {
-  list: (params: UsersListParams, token: string | null): Promise<UsersListResponse> => {
+  list: async (params: UsersListParams, token: string | null): Promise<UsersListResponse> => {
     if (USE_MOCKS) return listMock(params)
-    return http.get<UsersListResponse>(`/users${buildUsersQuery(params)}`, { token })
+    const response = await http.get<UsersListResponse>(`/users${buildUsersQuery(params)}`, {
+      token,
+    })
+    return { ...response, data: response.data.map(normalizeUser) }
   },
 
   create: async (payload: CreateUserPayload, token: string | null): Promise<User> => {
@@ -64,7 +118,19 @@ export const usersService = {
       }
     }
 
-    return http.post<User>('/users', payload, { token })
+    // El backend espera nombre y correo anidados bajo `person`, no planos.
+    const created = await http.post<ApiUser>(
+      '/users',
+      {
+        person: {
+          ...splitFullName(payload.fullName),
+          email: payload.email,
+        },
+        roleId: payload.roleId,
+      },
+      { token },
+    )
+    return normalizeUser(created)
   },
 
   update: async (id: string, payload: UpdateUserPayload, token: string | null): Promise<User> => {
@@ -75,7 +141,17 @@ export const usersService = {
       return { ...current, ...payload, updatedAt: new Date().toISOString() }
     }
 
-    return http.patch<User>(`/users/${id}`, payload, { token })
+    const personPayload: Record<string, string> = {}
+    if (payload.fullName !== undefined)
+      Object.assign(personPayload, splitFullName(payload.fullName))
+    if (payload.email !== undefined) personPayload.email = payload.email
+
+    const updated = await http.patch<ApiUser>(
+      `/users/${id}`,
+      Object.keys(personPayload).length > 0 ? { person: personPayload } : {},
+      { token },
+    )
+    return normalizeUser(updated)
   },
 
   updateRole: async (
@@ -90,7 +166,25 @@ export const usersService = {
       return { ...current, role: { id: payload.roleId, name: 'Rol simulado' } }
     }
 
-    return http.patch<User>(`/users/role/${id}`, payload, { token })
+    const updated = await http.patch<ApiUser>(`/users/role/${id}`, payload, { token })
+    return normalizeUser(updated)
+  },
+
+  // PATCH /users/{id}/status — bug #342: conecta el botón "Desactivar usuario".
+  updateStatus: async (
+    id: string,
+    payload: UpdateUserStatusPayload,
+    token: string | null,
+  ): Promise<User> => {
+    if (USE_MOCKS) {
+      await delay()
+      const current = MOCK_USERS.find((u) => u.id === id)
+      if (!current) throw new Error('User not found')
+      return { ...current, active: payload.active, updatedAt: new Date().toISOString() }
+    }
+
+    const updated = await http.patch<ApiUser>(`/users/${id}/status`, payload, { token })
+    return normalizeUser(updated)
   },
 
   resendActivation: async (email: string, token: string | null): Promise<{ message: string }> => {

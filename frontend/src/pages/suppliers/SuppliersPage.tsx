@@ -1,9 +1,9 @@
 import { useState } from 'react'
 
+import { CreateSupplierForm } from '../../components/suppliers/CreateSupplierForm'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
-import { CreateSupplierForm } from '../../components/suppliers/CreateSupplierForm'
 import { AppLayout } from '../../layouts/AppLayout'
 
 import './SuppliersPage.css'
@@ -32,11 +32,7 @@ export function SuppliersPage() {
           <Alert tone="success">{createdMessage}</Alert>
         </div>
       )}
-      <Modal
-        open={isCreateOpen}
-        title="Registrar proveedor"
-        onClose={() => setIsCreateOpen(false)}
-      >
+      <Modal open={isCreateOpen} title="Registrar proveedor" onClose={() => setIsCreateOpen(false)}>
         <CreateSupplierForm
           onCreated={handleSupplierCreated}
           onCancel={() => setIsCreateOpen(false)}

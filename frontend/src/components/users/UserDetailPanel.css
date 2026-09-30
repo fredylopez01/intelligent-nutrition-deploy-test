@@ -174,3 +174,8 @@
   line-height: 1.55;
   color: var(--color-text-faint);
 }
+
+.user-detail__modal-actions {
+  display: flex;
+  gap: 0.625rem;
+}

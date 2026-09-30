@@ -11,9 +11,7 @@ const DEFAULT_TAGLINE =
 
 interface AuthLayoutProps {
   children: ReactNode
-  /** Enlace opcional en la esquina superior izquierda del panel del formulario. */
   back?: { to: string; label: string }
-  /** Frase del panel de marca. Por defecto, el claim general del producto. */
   tagline?: string
 }
 

@@ -1,8 +1,9 @@
 import type { RoleName } from '../types/auth'
 export const roleHome: Record<RoleName, string> = {
   SUPERADMIN: '/dashboard',
-  'Lider de sede': '/dashboard',
-  'Ayudante de sede': '/pos',
+  BRANCH_LEADER: '/dashboard',
+  BRANCH_ASSISTANT: '/pos',
+  DEV: '/dashboard',
 }
 
 export function getRoleHome(role: RoleName): string {

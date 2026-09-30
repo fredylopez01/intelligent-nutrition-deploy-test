@@ -22,11 +22,6 @@ export class ApiError extends Error {
 
 interface RequestOptions extends RequestInit {
   token?: string | null
-  /**
-   * Para endpoints públicos (activación de cuenta, etc.): un 401 aquí NO significa
-   * "sesión expirada", así que no se dispara el handler global y se conserva el
-   * mensaje del backend.
-   */
   skipUnauthorizedHandler?: boolean
 }
 
@@ -63,7 +58,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiError(message, response.status, error?.details ?? error ?? body)
   }
 
-  return (body?.data ?? body) as T
+  const hasMeta = !!body && typeof body === 'object' && 'meta' in body
+  return (hasMeta ? body : (body?.data ?? body)) as T
 }
 
 export const http = {

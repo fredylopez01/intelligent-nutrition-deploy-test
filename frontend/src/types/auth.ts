@@ -1,4 +1,4 @@
-export type RoleName = 'SUPERADMIN' | 'Lider de sede' | 'Ayudante de sede'
+export type RoleName = 'SUPERADMIN' | 'BRANCH_LEADER' | 'BRANCH_ASSISTANT' | 'DEV'
 
 export interface UserRole {
   id?: string
@@ -24,7 +24,6 @@ export interface LoginResponse {
   expiresIn: string
 }
 
-/** POST /auth/activate: el usuario define su contraseña inicial con el token del correo. */
 export interface ActivateAccountPayload {
   token: string
   password: string
