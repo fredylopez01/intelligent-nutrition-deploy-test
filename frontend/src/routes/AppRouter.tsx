@@ -1,12 +1,16 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ActivateAccountPage } from '../pages/activation/ActivateAccountPage'
+import { BranchesPage } from '../pages/branches/BranchesPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
 import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
 import { LandingPage } from '../pages/LandingPage'
 import { LoginPage } from '../pages/LoginPage'
+
 import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
 import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
+
+import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
 import { UsersPage } from '../pages/users/UsersPage'
 
 import { PENDING_MODULES } from './pendingModules'
@@ -21,6 +25,24 @@ export function AppRouter() {
       <Route path="/activate-account" element={<ActivateAccountPage />} />
       <Route path="/forget-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+      <Route
+        path="/sedes"
+        element={
+          <ProtectedRoute allowedRoles={['SUPERADMIN']}>
+            <BranchesPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/proveedores"
+        element={
+          <ProtectedRoute allowedRoles={['SUPERADMIN', 'Lider de sede']}>
+            <SuppliersPage />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/usuarios"

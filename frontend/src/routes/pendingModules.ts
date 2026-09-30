@@ -11,11 +11,6 @@ export const PENDING_MODULES: PendingModule[] = [
     description: 'Ventas del día, stock por sede y alertas de inventario en una sola vista.',
   },
   {
-    path: '/sedes',
-    title: 'Sedes',
-    description: 'Registro y administración de las tres sedes con su inventario asociado.',
-  },
-  {
     path: '/inventario',
     title: 'Inventario',
     description: 'Existencias por sede, con estado de stock óptimo o bajo.',
@@ -44,11 +39,6 @@ export const PENDING_MODULES: PendingModule[] = [
     path: '/pos/ventas',
     title: 'Ventas',
     description: 'Historial de ventas por sede y reversión de tiquetes con motivo.',
-  },
-  {
-    path: '/proveedores',
-    title: 'Proveedores',
-    description: 'Datos de los proveedores y su historial de compras asociadas.',
   },
   {
     path: '/proveedores/compras',
