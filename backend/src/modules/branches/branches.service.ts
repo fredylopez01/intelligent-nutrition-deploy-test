@@ -3,6 +3,7 @@ import { PrismaService } from "../../database/prisma/prisma.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { AuditService } from "../audit/audit.service.js";
 import { CreateBranchDto } from "./dto/create-branch.dto.js";
+import { ListBranchesQueryDto } from "./dto/list-branches-query.dto.js";
 
 @Injectable()
 export class BranchesService {
@@ -10,6 +11,44 @@ export class BranchesService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
   ) {}
+
+  async findAll(query: ListBranchesQueryDto) {
+    const { page, limit, search, active } = query;
+    const skip = (page - 1) * limit;
+    const where = {
+      ...(active === undefined ? {} : { active }),
+      ...(search
+        ? { name: { contains: search, mode: "insensitive" as const } }
+        : {}),
+    };
+
+    const [total, branches] = await this.prisma.$transaction([
+      this.prisma.branch.count({ where }),
+      this.prisma.branch.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          address: true,
+          phone: true,
+          active: true,
+        },
+      }),
+    ]);
+
+    return {
+      data: branches,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
+  }
 
   async create(
     createBranchDto: CreateBranchDto,
