@@ -19,6 +19,10 @@ pnpm-debug.log*
 
 # Testing
 coverage/
+test-results/
+playwright-report/
+blob-report/
+**/trace.zip
 
 # IDE
 .vscode/
