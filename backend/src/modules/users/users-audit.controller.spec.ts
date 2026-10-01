@@ -433,7 +433,7 @@ describe("Users audit log generation (e2e)", () => {
     });
   });
 
-  describe("PATCH /users/:id — ROLE_ASSIGNMENT", () => {
+  describe("PATCH /users/:id/role — ROLE_ASSIGNMENT", () => {
     it("records a ROLE_ASSIGNMENT audit log with before and after role", async () => {
       const updatedUser = {
         ...mockUser,
@@ -447,7 +447,7 @@ describe("Users audit log generation (e2e)", () => {
       prisma.userAccount.update.mockResolvedValueOnce(updatedUser);
 
       await request(app.getHttpServer())
-        .patch(`/users/${userId}`)
+        .patch(`/users/${userId}/role`)
         .set("Authorization", `Bearer ${token}`)
         .send({ roleId: newRoleId })
         .expect(200);
@@ -459,7 +459,7 @@ describe("Users audit log generation (e2e)", () => {
           entity: "USER",
           entityId: userId,
           userId: adminId,
-          reason: expect.stringContaining("Cambio de rol"),
+          reason: expect.stringContaining("Asignación del rol"),
           oldData: { role: { id: roleId, name: "SUPERADMIN" } },
           newData: { role: { id: newRoleId, name: "LIDER SEDE" } },
         }),
@@ -470,35 +470,41 @@ describe("Users audit log generation (e2e)", () => {
       expect(input.reason.trim().length).toBeGreaterThan(0);
     });
 
-    it("does not write an audit log when the role is unchanged", async () => {
+    it("rejects the request with 400 and no audit log when the role is unchanged", async () => {
       prisma.userAccount.findUnique
         .mockResolvedValueOnce(mockAdmin)
         .mockResolvedValueOnce(mockUser);
 
       await request(app.getHttpServer())
-        .patch(`/users/${userId}`)
+        .patch(`/users/${userId}/role`)
         .set("Authorization", `Bearer ${token}`)
         .send({ roleId })
-        .expect(200);
+        .expect(400);
 
       expect(mockAuditService.createAuditLog).not.toHaveBeenCalled();
     });
   });
 
-  describe("PATCH /users/:id — branch assignment (HS-049 + HS-054)", () => {
+  describe("branch endpoints — ASSIGN and UNASSIGN (HS-049 + HS-054)", () => {
     it("records exactly one ASSIGN audit log with a non-empty reason", async () => {
       prisma.userAccount.findUnique
         .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(mockUser)
-        .mockResolvedValueOnce(mockUser)
         .mockResolvedValueOnce(mockUser);
-      prisma.branch.findMany.mockResolvedValueOnce([mockBranch]);
+      prisma.branch.findUnique.mockResolvedValueOnce(mockBranch);
+      prisma.userBranch.create.mockResolvedValueOnce({
+        id: "assignment-uuid-1",
+        userId,
+        branchId,
+        assignmentDate: new Date(),
+        endDate: null,
+        active: true,
+      });
 
       await request(app.getHttpServer())
-        .patch(`/users/${userId}`)
+        .post(`/users/${userId}/branches`)
         .set("Authorization", `Bearer ${token}`)
-        .send({ branchIds: [branchId] })
-        .expect(200);
+        .send({ branchId })
+        .expect(201);
 
       expect(mockAuditService.createAuditLog).toHaveBeenCalledTimes(1);
 
@@ -516,22 +522,29 @@ describe("Users audit log generation (e2e)", () => {
     });
 
     it("records exactly one UNASSIGN audit log when a branch is removed", async () => {
-      const userWithBranch = {
-        ...mockUser,
-        branchAssignments: [{ branch: mockBranch }],
+      const assignment = {
+        id: "assignment-uuid-1",
+        userId,
+        branchId,
+        assignmentDate: new Date("2026-09-14"),
+        endDate: null,
+        active: true,
+        branch: { name: "Sede Centro" },
       };
 
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(userWithBranch)
-        .mockResolvedValueOnce(userWithBranch)
-        .mockResolvedValueOnce(userWithBranch);
-      prisma.branch.findMany.mockResolvedValueOnce([]);
+      prisma.userAccount.findUnique.mockResolvedValueOnce(mockAdmin);
+      prisma.userBranch.findFirst.mockResolvedValueOnce(assignment);
+      prisma.userBranch.updateMany.mockResolvedValueOnce({ count: 1 });
+      prisma.userBranch.findUnique.mockResolvedValueOnce({
+        ...assignment,
+        active: false,
+        endDate: new Date(),
+      });
 
       await request(app.getHttpServer())
-        .patch(`/users/${userId}`)
+        .patch(`/users/${userId}/branches/${branchId}`)
         .set("Authorization", `Bearer ${token}`)
-        .send({ branchIds: [] })
+        .send({ active: false })
         .expect(200);
 
       expect(mockAuditService.createAuditLog).toHaveBeenCalledTimes(1);
@@ -547,7 +560,7 @@ describe("Users audit log generation (e2e)", () => {
       expect(input.reason.trim().length).toBeGreaterThan(0);
       expect(prisma.userBranch.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId, branchId: { in: [branchId] }, active: true },
+          where: { id: assignment.id, active: true },
           data: expect.objectContaining({ active: false }),
         }),
       );
@@ -557,12 +570,11 @@ describe("Users audit log generation (e2e)", () => {
       prisma.userAccount.findUnique
         .mockResolvedValueOnce(mockAdmin)
         .mockResolvedValueOnce(mockUser);
-      prisma.branch.findMany.mockResolvedValueOnce([]);
 
       await request(app.getHttpServer())
-        .patch(`/users/${userId}`)
+        .post(`/users/${userId}/branches`)
         .set("Authorization", `Bearer ${token}`)
-        .send({ branchIds: [branchId] })
+        .send({ branchId })
         .expect(404);
 
       expect(mockAuditService.createAuditLog).not.toHaveBeenCalled();

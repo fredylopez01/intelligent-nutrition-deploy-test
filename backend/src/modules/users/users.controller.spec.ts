@@ -352,7 +352,7 @@ describe("UsersController (e2e)", () => {
       prisma.userAccount.update.mockResolvedValueOnce(mockUpdatedUser);
 
       const response = await request(app.getHttpServer())
-        .patch(`/users/${mockUser.personId}`)
+        .patch(`/users/${mockUser.personId}/role`)
         .set("Authorization", `Bearer ${token}`)
         .send({ roleId: mockNewRole.id })
         .expect(200);
