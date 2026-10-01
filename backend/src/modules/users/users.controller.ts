@@ -120,7 +120,6 @@ export class UsersController {
   }
 
   @Patch(":id")
-  @Roles("SUPERADMIN", "DEV")
   update(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() updateUserDto: UpdateUserDto,
