@@ -392,61 +392,79 @@ describe("UsersService contract", () => {
     );
   });
 
-  it("audits branch assignment and unassignment through the user PATCH", async () => {
-    const branch = { id: "branch-uuid", name: "Sede Norte" };
-    prismaMock.branch.findMany.mockResolvedValueOnce([branch]);
-    prismaMock.userAccount.findUnique
-      .mockResolvedValueOnce(userRecord)
-      .mockResolvedValueOnce({
-        ...userRecord,
-        branchAssignments: [{ branch }],
-      });
-
-    await service.update(
-      "person-uuid-1",
-      { branchIds: [branch.id] },
-      currentAdmin,
-    );
-
-    expect(prismaMock.userBranch.create).toHaveBeenCalledWith({
-      data: {
-        userId: "person-uuid-1",
-        branchId: branch.id,
-        assignmentDate: expect.any(Date),
-      },
+  it("audits branch assignment and unassignment through the dedicated endpoints", async () => {
+    const branch = { id: "branch-uuid", name: "Sede Norte", active: true };
+    prismaMock.branch.findUnique.mockResolvedValueOnce(branch);
+    prismaMock.userBranch.create.mockResolvedValueOnce({
+      id: "assignment-uuid-1",
+      userId: "person-uuid-1",
+      branchId: branch.id,
+      assignmentDate: new Date(),
+      endDate: null,
+      active: true,
     });
+
+    await service.assignBranch("person-uuid-1", branch.id, currentAdmin);
+
+    expect(prismaMock.userBranch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: "person-uuid-1",
+          branchId: branch.id,
+          assignmentDate: expect.any(Date),
+        }),
+      }),
+    );
     expect(auditMock.createAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "ASSIGN",
         entityId: "person-uuid-1",
-        newData: { branchId: branch.id, branchName: branch.name },
+        newData: {
+          branchId: branch.id,
+          branchName: branch.name,
+          assignmentId: "assignment-uuid-1",
+          assignmentDate: expect.any(Date),
+        },
       }),
       prismaMock,
     );
 
     auditMock.createAuditLog.mockClear();
-    prismaMock.userAccount.findUnique
-      .mockResolvedValueOnce({
-        ...userRecord,
-        branchAssignments: [{ branch }],
-      })
-      .mockResolvedValueOnce(userRecord);
+    const assignment = {
+      id: "assignment-uuid-1",
+      userId: "person-uuid-1",
+      branchId: branch.id,
+      assignmentDate: new Date("2026-09-14"),
+      endDate: null,
+      active: true,
+      branch: { name: branch.name },
+    };
+    prismaMock.userBranch.findFirst.mockResolvedValueOnce(assignment);
+    prismaMock.userBranch.findUnique.mockResolvedValueOnce({
+      ...assignment,
+      active: false,
+      endDate: new Date(),
+    });
 
-    await service.update("person-uuid-1", { branchIds: [] }, currentAdmin);
+    await service.deactivateBranch(
+      "person-uuid-1",
+      branch.id,
+      false,
+      currentAdmin,
+    );
 
     expect(prismaMock.userBranch.updateMany).toHaveBeenCalledWith({
-      where: {
-        userId: "person-uuid-1",
-        branchId: { in: [branch.id] },
-        active: true,
-      },
+      where: { id: assignment.id, active: true },
       data: { active: false, endDate: expect.any(Date) },
     });
     expect(auditMock.createAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "UNASSIGN",
         entityId: "person-uuid-1",
-        oldData: { branchId: branch.id, branchName: branch.name },
+        oldData: expect.objectContaining({
+          branchId: branch.id,
+          branchName: branch.name,
+        }),
       }),
       prismaMock,
     );
