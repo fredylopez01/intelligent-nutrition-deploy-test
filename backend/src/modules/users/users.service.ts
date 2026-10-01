@@ -80,6 +80,224 @@ export class UsersService {
     );
   }
 
+  async getBranches(userId: string) {
+    const user = await this.prisma.userAccount.findUnique({
+      where: { personId: userId },
+      select: {
+        branchAssignments: {
+          orderBy: [{ assignmentDate: "desc" }, { id: "asc" }],
+          select: {
+            assignmentDate: true,
+            endDate: true,
+            active: true,
+            branch: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    return user.branchAssignments.map(
+      ({ branch, assignmentDate, endDate, active }) => ({
+        id: branch.id,
+        name: branch.name,
+        assignmentDate: assignmentDate.toISOString().slice(0, 10),
+        endDate: endDate?.toISOString().slice(0, 10) ?? null,
+        active,
+      }),
+    );
+  }
+
+  async assignBranch(
+    userId: string,
+    branchId: string,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        const user = await transaction.userAccount.findUnique({
+          where: { personId: userId },
+          select: { personId: true },
+        });
+        if (!user) {
+          throw new NotFoundException("User not found");
+        }
+
+        const branch = await transaction.branch.findUnique({
+          where: { id: branchId },
+          select: { id: true, name: true, active: true },
+        });
+        if (!branch) {
+          throw new NotFoundException("Branch not found");
+        }
+        if (!branch.active) {
+          throw new BadRequestException("Cannot assign an inactive branch");
+        }
+
+        const activeAssignment = await transaction.userBranch.findFirst({
+          where: { userId, branchId, active: true },
+          select: { id: true },
+        });
+        if (activeAssignment) {
+          throw new ConflictException(
+            "User is already assigned to this branch",
+          );
+        }
+
+        const now = new Date();
+        const assignmentDate = new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+        );
+        const sameDayInactiveAssignment =
+          await transaction.userBranch.findFirst({
+            where: { userId, branchId, assignmentDate, active: false },
+            select: { id: true },
+          });
+
+        const assignment = sameDayInactiveAssignment
+          ? await transaction.userBranch.update({
+              where: { id: sameDayInactiveAssignment.id },
+              data: { active: true, endDate: null },
+              select: {
+                id: true,
+                userId: true,
+                branchId: true,
+                assignmentDate: true,
+                endDate: true,
+                active: true,
+              },
+            })
+          : await transaction.userBranch.create({
+              data: { userId, branchId, assignmentDate, active: true },
+              select: {
+                id: true,
+                userId: true,
+                branchId: true,
+                assignmentDate: true,
+                endDate: true,
+                active: true,
+              },
+            });
+
+        await this.recordUserAudit(transaction, currentUser, ipAddress, {
+          action: "ASSIGN",
+          entityId: userId,
+          newData: {
+            branchId: branch.id,
+            branchName: branch.name,
+            assignmentId: assignment.id,
+            assignmentDate: assignment.assignmentDate,
+          },
+          reason: `Asignación de la sede ${branch.name} al usuario ${userId}`,
+        });
+
+        return assignment;
+      });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2002"
+      ) {
+        throw new ConflictException("User is already assigned to this branch");
+      }
+
+      throw error;
+    }
+  }
+
+  async deactivateBranch(
+    userId: string,
+    branchId: string,
+    active: boolean,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    if (active) {
+      throw new BadRequestException(
+        "This endpoint only supports deactivating branch assignments",
+      );
+    }
+
+    return this.prisma.$transaction(async (transaction) => {
+      const assignment = await transaction.userBranch.findFirst({
+        where: { userId, branchId },
+        orderBy: { assignmentDate: "desc" },
+        select: {
+          id: true,
+          userId: true,
+          branchId: true,
+          assignmentDate: true,
+          endDate: true,
+          active: true,
+          branch: { select: { name: true } },
+        },
+      });
+
+      if (!assignment) {
+        throw new NotFoundException("Branch assignment not found");
+      }
+      if (!assignment.active) {
+        throw new BadRequestException("Branch assignment is already inactive");
+      }
+
+      const now = new Date();
+      const endDate = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+      );
+      const updateResult = await transaction.userBranch.updateMany({
+        where: { id: assignment.id, active: true },
+        data: { active: false, endDate },
+      });
+
+      if (updateResult.count === 0) {
+        throw new BadRequestException("Branch assignment has already changed");
+      }
+
+      const updatedAssignment = await transaction.userBranch.findUnique({
+        where: { id: assignment.id },
+        select: {
+          id: true,
+          userId: true,
+          branchId: true,
+          assignmentDate: true,
+          endDate: true,
+          active: true,
+        },
+      });
+
+      if (!updatedAssignment) {
+        throw new NotFoundException("Branch assignment not found");
+      }
+
+      await this.recordUserAudit(transaction, currentUser, ipAddress, {
+        action: "UNASSIGN",
+        entityId: userId,
+        oldData: {
+          branchId,
+          branchName: assignment.branch.name,
+          assignmentDate: assignment.assignmentDate,
+          active: assignment.active,
+        },
+        newData: {
+          branchId,
+          branchName: assignment.branch.name,
+          assignmentDate: updatedAssignment.assignmentDate,
+          endDate: updatedAssignment.endDate,
+          active: updatedAssignment.active,
+        },
+        reason: `Desasignación de la sede ${assignment.branch.name} del usuario ${userId}`,
+      });
+
+      return updatedAssignment;
+    });
+  }
+
   async create(
     createUserDto: CreateUserDto,
     currentUser: AuthenticatedUser,
@@ -401,38 +619,17 @@ export class UsersService {
     ipAddress?: string,
   ) {
     const isPrivileged = ["SUPERADMIN", "DEV"].includes(currentUser.role.name);
-    const updatesAccount =
-      updateUserDto.roleId !== undefined ||
-      updateUserDto.branchIds !== undefined;
     if (currentUser.id !== userId && !isPrivileged) {
       throw new BadRequestException("You can only update your own account");
     }
-    if (updatesAccount && !isPrivileged) {
-      throw new BadRequestException(
-        "Only SUPERADMIN or DEV can update account access",
-      );
-    }
-    const { person, roleId, branchIds } = updateUserDto;
+    const { person } = updateUserDto;
     const hasPersonChanges =
       person !== undefined &&
       Object.values(person).some((value) => value !== undefined);
-    if (!hasPersonChanges && roleId === undefined && branchIds === undefined) {
+    if (!hasPersonChanges) {
       throw new BadRequestException("At least one field must be provided");
     }
     const existingUser = await this.findUserById(userId);
-
-    if (roleId !== undefined && roleId !== existingUser.role.id) {
-      const targetRole = await this.prisma.role.findUnique({
-        where: { id: roleId },
-        select: { id: true, active: true },
-      });
-      if (!targetRole) {
-        throw new NotFoundException("Role not found");
-      }
-      if (!targetRole.active) {
-        throw new BadRequestException("Cannot assign an inactive role");
-      }
-    }
 
     const email = person?.email?.trim().toLowerCase();
     if (email && email !== existingUser.person.email) {
@@ -451,156 +648,52 @@ export class UsersService {
     }
 
     const updatedUser = await this.prisma.$transaction(async (transaction) => {
-      let oldPerson;
-      let updatedPerson;
-      if (hasPersonChanges) {
-        oldPerson = await transaction.person.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            address: true,
-          },
-        });
-        if (!oldPerson) {
-          throw new NotFoundException("User not found");
-        }
-        updatedPerson = await this.personsService.update(
-          transaction,
-          userId,
-          person!,
-        );
+      const oldPerson = await transaction.person.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          address: true,
+        },
+      });
+      if (!oldPerson) {
+        throw new NotFoundException("User not found");
       }
 
-      let changedUser;
-      if (roleId !== undefined) {
-        changedUser = await transaction.userAccount.update({
-          where: { personId: userId },
-          data: {
-            ...(roleId !== undefined && {
-              role: { connect: { id: roleId } },
-            }),
-          },
-          select: userSelect,
-        });
-      } else {
-        changedUser = await transaction.userAccount.findUnique({
-          where: { personId: userId },
-          select: userSelect,
-        });
-      }
+      const updatedPerson = await this.personsService.update(
+        transaction,
+        userId,
+        person!,
+      );
 
+      const changedUser = await transaction.userAccount.findUnique({
+        where: { personId: userId },
+        select: userSelect,
+      });
       if (!changedUser) {
         throw new NotFoundException("User not found");
       }
 
-      if (hasPersonChanges) {
-        await this.recordUserAudit(transaction, currentUser, ipAddress, {
-          action: "UPDATE",
-          entityId: userId,
-          oldData: { person: oldPerson },
-          newData: {
-            person: {
-              id: updatedPerson.id,
-              firstName: updatedPerson.firstName,
-              lastName: updatedPerson.lastName,
-              email: updatedPerson.email,
-              phone: updatedPerson.phone,
-              address: updatedPerson.address,
-            },
+      await this.recordUserAudit(transaction, currentUser, ipAddress, {
+        action: "UPDATE",
+        entityId: userId,
+        oldData: { person: oldPerson },
+        newData: {
+          person: {
+            id: updatedPerson.id,
+            firstName: updatedPerson.firstName,
+            lastName: updatedPerson.lastName,
+            email: updatedPerson.email,
+            phone: updatedPerson.phone,
+            address: updatedPerson.address,
           },
-          reason: `Actualización de datos personales del usuario ${userId}`,
-        });
-      }
+        },
+        reason: `Actualización de datos personales del usuario ${userId}`,
+      });
 
-      if (roleId !== undefined && roleId !== existingUser.role.id) {
-        await this.recordUserAudit(transaction, currentUser, ipAddress, {
-          action: "ROLE_ASSIGNMENT",
-          entityId: userId,
-          oldData: { role: existingUser.role },
-          newData: { role: changedUser.role },
-          reason: `Cambio de rol del usuario ${userId}`,
-        });
-      }
-
-      if (branchIds !== undefined) {
-        const requestedBranches = await transaction.branch.findMany({
-          where: { id: { in: branchIds }, active: true },
-          select: { id: true, name: true },
-        });
-        if (requestedBranches.length !== branchIds.length) {
-          throw new NotFoundException(
-            "One or more active branches were not found",
-          );
-        }
-
-        const currentBranches = existingUser.branches;
-        const requestedIds = new Set(branchIds);
-        const currentIds = new Set(currentBranches.map(({ id }) => id));
-        const removedBranches = currentBranches.filter(
-          ({ id }) => !requestedIds.has(id),
-        );
-        const addedBranches = requestedBranches.filter(
-          ({ id }) => !currentIds.has(id),
-        );
-
-        if (removedBranches.length > 0) {
-          await transaction.userBranch.updateMany({
-            where: {
-              userId,
-              branchId: { in: removedBranches.map(({ id }) => id) },
-              active: true,
-            },
-            data: { active: false, endDate: new Date() },
-          });
-        }
-
-        for (const branch of removedBranches) {
-          await this.recordUserAudit(transaction, currentUser, ipAddress, {
-            action: "UNASSIGN",
-            entityId: userId,
-            oldData: { branchId: branch.id, branchName: branch.name },
-            reason: `Desasignación de la sede ${branch.name} del usuario ${userId}`,
-          });
-        }
-
-        for (const branch of addedBranches) {
-          const previousAssignment = await transaction.userBranch.findFirst({
-            where: { userId, branchId: branch.id, active: false },
-            orderBy: { assignmentDate: "desc" },
-          });
-          if (previousAssignment) {
-            await transaction.userBranch.update({
-              where: { id: previousAssignment.id },
-              data: { active: true, endDate: null },
-            });
-          } else {
-            await transaction.userBranch.create({
-              data: {
-                userId,
-                branchId: branch.id,
-                assignmentDate: new Date(),
-              },
-            });
-          }
-          await this.recordUserAudit(transaction, currentUser, ipAddress, {
-            action: "ASSIGN",
-            entityId: userId,
-            newData: { branchId: branch.id, branchName: branch.name },
-            reason: `Asignación de la sede ${branch.name} al usuario ${userId}`,
-          });
-        }
-      }
-
-      if (branchIds !== undefined) {
-        return transaction.userAccount.findUnique({
-          where: { personId: userId },
-          select: userSelect,
-        });
-      }
       return changedUser;
     });
 

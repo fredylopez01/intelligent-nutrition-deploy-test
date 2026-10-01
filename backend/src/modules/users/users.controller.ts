@@ -17,6 +17,9 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { UpdateUserDto } from "./dto/update-user.dto.js";
 import { UpdateUserStatusDto } from "./dto/update-user-status.dto.js";
+import { AssignUserBranchDto } from "./dto/assign-user-branch.dto.js";
+import { UpdateUserBranchDto } from "./dto/update-user-branch.dto.js";
+import { ChangeUserRoleDto } from "./dto/change-user-role.dto.js";
 
 @Controller("users")
 export class UsersController {
@@ -38,6 +41,68 @@ export class UsersController {
     return this.usersService.findAll(query);
   }
 
+  @Get(":id")
+  @Roles("SUPERADMIN", "DEV")
+  findOne(@Param("id", new ParseUUIDPipe()) id: string) {
+    return this.usersService.findUserById(id);
+  }
+
+  @Get(":id/branches")
+  @Roles("SUPERADMIN", "DEV")
+  getBranches(@Param("id", new ParseUUIDPipe()) id: string) {
+    return this.usersService.getBranches(id);
+  }
+
+  @Post(":id/branches")
+  @Roles("SUPERADMIN", "DEV")
+  assignBranch(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() assignUserBranchDto: AssignUserBranchDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.usersService.assignBranch(
+      id,
+      assignUserBranchDto.branchId,
+      currentUser,
+      ipAddress,
+    );
+  }
+
+  @Patch(":id/branches/:branchId")
+  @Roles("SUPERADMIN", "DEV")
+  deactivateBranch(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Param("branchId", new ParseUUIDPipe()) branchId: string,
+    @Body() updateUserBranchDto: UpdateUserBranchDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.usersService.deactivateBranch(
+      id,
+      branchId,
+      updateUserBranchDto.active,
+      currentUser,
+      ipAddress,
+    );
+  }
+
+  @Patch(":id/role")
+  @Roles("SUPERADMIN", "DEV")
+  changeRole(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() changeUserRoleDto: ChangeUserRoleDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.usersService.changeRole(
+      id,
+      changeUserRoleDto,
+      currentUser,
+      ipAddress,
+    );
+  }
+
   @Patch(":id/status")
   @Roles("SUPERADMIN", "DEV")
   updateStatus(
@@ -55,7 +120,6 @@ export class UsersController {
   }
 
   @Patch(":id")
-  @Roles("SUPERADMIN", "DEV")
   update(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() updateUserDto: UpdateUserDto,
