@@ -5,6 +5,7 @@ import {
   Ip,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from "@nestjs/common";
@@ -13,6 +14,7 @@ import { Roles } from "../../common/decorators/roles.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CreateSupplierDto } from "./dto/create-supplier.dto.js";
 import { ListSuppliersQueryDto } from "./dto/list-suppliers-query.dto.js";
+import { UpdateSupplierDto } from "./dto/update-supplier.dto.js";
 import { SuppliersService } from "./suppliers.service.js";
 
 @Controller("suppliers")
@@ -27,6 +29,21 @@ export class SuppliersController {
   @Get(":supplierId")
   findOne(@Param("supplierId", new ParseUUIDPipe()) supplierId: string) {
     return this.suppliersService.findOne(supplierId);
+  }
+
+  @Patch(":supplierId")
+  update(
+    @Param("supplierId", new ParseUUIDPipe()) supplierId: string,
+    @Body() updateSupplierDto: UpdateSupplierDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.suppliersService.update(
+      supplierId,
+      updateSupplierDto,
+      currentUser,
+      ipAddress,
+    );
   }
 
   @Post()

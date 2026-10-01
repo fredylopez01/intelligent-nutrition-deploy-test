@@ -9,6 +9,7 @@ import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUse
 import { AuditService } from "../audit/audit.service.js";
 import { CreateSupplierDto } from "./dto/create-supplier.dto.js";
 import { ListSuppliersQueryDto } from "./dto/list-suppliers-query.dto.js";
+import { UpdateSupplierDto } from "./dto/update-supplier.dto.js";
 
 const supplierSelect = {
   personId: true,
@@ -138,6 +139,86 @@ export class SuppliersService {
       person: supplier.person,
       commercialName: supplier.commercialName,
     };
+  }
+
+  async update(
+    supplierId: string,
+    updateSupplierDto: UpdateSupplierDto,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    const { commercialName, phone, address } = updateSupplierDto;
+    if (
+      commercialName === undefined &&
+      phone === undefined &&
+      address === undefined
+    ) {
+      throw new BadRequestException("At least one field must be provided");
+    }
+
+    return this.prisma.$transaction(async (transaction) => {
+      const existingSupplier = await transaction.supplier.findUnique({
+        where: { personId: supplierId },
+        select: supplierSelect,
+      });
+
+      if (!existingSupplier) {
+        throw new NotFoundException("Supplier not found");
+      }
+
+      const updatedSupplier =
+        commercialName === undefined
+          ? existingSupplier
+          : await transaction.supplier.update({
+              where: { personId: supplierId },
+              data: { commercialName },
+              select: supplierSelect,
+            });
+
+      const updatedPerson =
+        phone === undefined && address === undefined
+          ? updatedSupplier.person
+          : await transaction.person.update({
+              where: { id: supplierId },
+              data: {
+                ...(phone === undefined ? {} : { phone }),
+                ...(address === undefined ? {} : { address }),
+              },
+              select: supplierSelect.person.select,
+            });
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: "UPDATE",
+          entity: "SUPPLIER",
+          entityId: supplierId,
+          oldData: {
+            commercialName: existingSupplier.commercialName,
+            person: {
+              phone: existingSupplier.person.phone,
+              address: existingSupplier.person.address,
+            },
+          },
+          newData: {
+            commercialName: updatedSupplier.commercialName,
+            person: {
+              phone: updatedPerson.phone,
+              address: updatedPerson.address,
+            },
+          },
+          reason: `Actualización del proveedor ${updatedSupplier.commercialName ?? supplierId}`,
+          ipAddress,
+        },
+        transaction,
+      );
+
+      return {
+        id: updatedSupplier.personId,
+        person: updatedPerson,
+        commercialName: updatedSupplier.commercialName,
+      };
+    });
   }
 
   async create(
