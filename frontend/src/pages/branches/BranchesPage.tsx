@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { BranchesTable } from '../../components/branches/BranchesTable'
 import { BranchesTableSkeleton } from '../../components/branches/BranchesTableSkeleton'
 import { CreateBranchForm } from '../../components/branches/CreateBranchForm'
+import { EditBranchForm } from '../../components/branches/EditBranchForm'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
 import { useBranches } from '../../hooks/useBranches'
 import { AppLayout } from '../../layouts/AppLayout'
+import type { Branch } from '../../types/branch'
 
 import './BranchesPage.css'
 
@@ -27,7 +29,8 @@ export function BranchesPage() {
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('todos')
   const [search, setSearch] = useState('')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [createdMessage, setCreatedMessage] = useState<string | null>(null)
+  const [editingBranch, setEditingBranch] = useState<Branch | null>(null)
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, branches, meta, emptyMessage, error, refetch } = useBranches({
     page,
@@ -39,31 +42,25 @@ export function BranchesPage() {
   const totalPages = meta?.totalPages ?? 0
   const hasFilters = search.trim() !== '' || activeFilter !== 'todos'
 
-  useEffect(() => {
-    if (!createdMessage) return
-
-    const hideTimer = window.setTimeout(() => {
-      setCreatedMessage(null)
-    }, 4000)
-
-    return () => {
-      window.clearTimeout(hideTimer)
-    }
-  }, [createdMessage])
-
   const handleOpenCreate = () => {
-    setCreatedMessage(null)
+    setFeedbackMessage(null)
     setIsCreateOpen(true)
   }
 
   const handleBranchCreated = () => {
     setIsCreateOpen(false)
-    setCreatedMessage('Sede creada exitosamente.')
+    setFeedbackMessage('Sede creada exitosamente.')
     if (page === 1) {
       void refetch()
     } else {
       setPage(1)
     }
+  }
+
+  const handleBranchUpdated = () => {
+    setEditingBranch(null)
+    setFeedbackMessage('Los cambios se guardaron correctamente.')
+    void refetch()
   }
 
   const renderList = () => {
@@ -93,11 +90,21 @@ export function BranchesPage() {
               ? 'Revisa el nombre o cambia el filtro de estado.'
               : (emptyMessage ?? 'Registra la primera sede para empezar a operar.')
           }
-        />
+        >
+          {!hasFilters && <Button onClick={handleOpenCreate}>Registrar sede</Button>}
+        </EmptyState>
       )
     }
 
-    return <BranchesTable branches={branches} />
+    return (
+      <BranchesTable
+        branches={branches}
+        onEdit={(branch) => {
+          setFeedbackMessage(null)
+          setEditingBranch(branch)
+        }}
+      />
+    )
   }
 
   return (
@@ -136,9 +143,9 @@ export function BranchesPage() {
         <Button onClick={handleOpenCreate}>Registrar sede</Button>
       </div>
 
-      {createdMessage && (
+      {feedbackMessage && (
         <div className="branches-page__feedback">
-          <Alert tone="success">{createdMessage}</Alert>
+          <Alert tone="success">{feedbackMessage}</Alert>
         </div>
       )}
 
@@ -166,6 +173,20 @@ export function BranchesPage() {
 
       <Modal open={isCreateOpen} title="Registrar sede" onClose={() => setIsCreateOpen(false)}>
         <CreateBranchForm onCreated={handleBranchCreated} onCancel={() => setIsCreateOpen(false)} />
+      </Modal>
+
+      <Modal
+        open={editingBranch !== null}
+        title="Editar sede"
+        onClose={() => setEditingBranch(null)}
+      >
+        {editingBranch && (
+          <EditBranchForm
+            branch={editingBranch}
+            onUpdated={handleBranchUpdated}
+            onCancel={() => setEditingBranch(null)}
+          />
+        )}
       </Modal>
     </AppLayout>
   )

@@ -1,13 +1,16 @@
 import type { Branch } from '../../types/branch'
 import { StatusBadge } from '../users/StatusBadge'
 
+import { BranchRowActions } from './BranchRowActions'
+
 import './BranchesTable.css'
 
 interface BranchesTableProps {
   branches: Branch[]
+  onEdit: (branch: Branch) => void
 }
 
-export function BranchesTable({ branches }: BranchesTableProps) {
+export function BranchesTable({ branches, onEdit }: BranchesTableProps) {
   return (
     <table className="branches-table">
       <caption className="sr-only">Sedes registradas en Intelligent Nutrition</caption>
@@ -19,6 +22,9 @@ export function BranchesTable({ branches }: BranchesTableProps) {
           <th scope="col" className="branches-table__col-status">
             Estado
           </th>
+          <th scope="col" className="branches-table__col-actions">
+            <span className="sr-only">Acciones</span>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -28,9 +34,10 @@ export function BranchesTable({ branches }: BranchesTableProps) {
             <td className="branches-table__cell-muted">{branch.address}</td>
             <td className="branches-table__cell-muted">{branch.phone}</td>
             <td className="branches-table__col-status">
-              {/* StatusBadge solo distingue 'activo' | 'inactivo' | 'pendiente';
-                  para sedes solo se usan los dos primeros. */}
               <StatusBadge status={branch.active ? 'activo' : 'inactivo'} />
+            </td>
+            <td className="branches-table__col-actions">
+              <BranchRowActions branchName={branch.name} onEdit={() => onEdit(branch)} />
             </td>
           </tr>
         ))}

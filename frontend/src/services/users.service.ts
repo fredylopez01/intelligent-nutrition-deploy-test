@@ -55,7 +55,6 @@ interface ApiUser {
   id: string
   personId?: string
   person?: ApiUserPerson
-  // Fallback defensivo: por si algún endpoint todavía responde plano.
   fullName?: string
   email?: string
   active: boolean
@@ -67,8 +66,6 @@ interface ApiUser {
   branches?: { id: string; name: string }[]
 }
 
-// El backend anida nombre y correo bajo `person`. Ver bug reportado sobre
-// fullName undefined: la lectura Y el envío del payload tenían que ajustarse.
 function normalizeUser(apiUser: ApiUser): User {
   const fullName =
     apiUser.fullName ??
@@ -118,7 +115,6 @@ export const usersService = {
       }
     }
 
-    // El backend espera nombre y correo anidados bajo `person`, no planos.
     const created = await http.post<ApiUser>(
       '/users',
       {
@@ -170,7 +166,6 @@ export const usersService = {
     return normalizeUser(updated)
   },
 
-  // PATCH /users/{id}/status — bug #342: conecta el botón "Desactivar usuario".
   updateStatus: async (
     id: string,
     payload: UpdateUserStatusPayload,

@@ -22,9 +22,19 @@
   width: 26%;
 }
 
-.branches-table__col-status {
-  width: 8rem;
-  text-align: right;
+.branches-table th.branches-table__col-status,
+.branches-table td.branches-table__col-status {
+  width: 8.5rem;
+  padding-right: 1rem;
+  text-align: left;
+}
+
+.branches-table th.branches-table__col-actions,
+.branches-table td.branches-table__col-actions {
+  width: 4rem;
+  padding-left: 0.5rem;
+  padding-right: 1rem;
+  text-align: center;
 }
 
 .branches-table td {

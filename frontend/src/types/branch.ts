@@ -12,6 +12,12 @@ export interface CreateBranchPayload {
   phone: string
 }
 
+export interface UpdateBranchPayload {
+  name?: string
+  address?: string
+  phone?: string
+}
+
 export interface BranchesPaginationMeta {
   page: number
   limit: number
