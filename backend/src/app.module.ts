@@ -10,6 +10,7 @@ import { ConfigModule } from "@nestjs/config";
 import { DocumentTypesModule } from "./modules/document-types/document-types.module.js";
 import { AuditModule } from "./modules/audit/audit.module.js";
 import { BranchesModule } from "./modules/branches/branches.module.js";
+import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { BranchesModule } from "./modules/branches/branches.module.js";
     DocumentTypesModule,
     UsersModule,
     BranchesModule,
+    SuppliersModule,
     AuditModule,
     HealthModule,
   ],
