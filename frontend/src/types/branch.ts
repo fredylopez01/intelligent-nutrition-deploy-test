@@ -11,3 +11,23 @@ export interface CreateBranchPayload {
   address: string
   phone: string
 }
+
+export interface BranchesPaginationMeta {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
+export interface BranchesListParams {
+  page?: number
+  limit?: number
+  search?: string
+  active?: boolean
+}
+
+export interface BranchesListResponse {
+  data: Branch[]
+  meta: BranchesPaginationMeta
+  message?: string
+}

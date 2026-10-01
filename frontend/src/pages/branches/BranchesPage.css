@@ -1,9 +1,33 @@
 .branches-page__toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.625rem;
   margin-bottom: 1.25rem;
+}
+
+.branches-page__toolbar > button:last-child {
+  margin-left: auto;
+}
+
+.branches-page__search {
+  min-width: 220px;
+  flex: 1 1 220px;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface-field);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 8px;
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.branches-page__filter {
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface-field);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 8px;
+  color: var(--color-text);
+  font-size: 0.85rem;
 }
 
 .branches-page__feedback {
@@ -21,8 +45,34 @@
   overflow: hidden;
 }
 
+.branches-page__footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.branches-page__pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.branches-page__page-info {
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+}
+
 @media (max-width: 767px) {
   .branches-page__toolbar {
     flex-wrap: wrap;
+  }
+
+  .branches-page__toolbar > button:last-child {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .branches-page__search {
+    flex: 1 1 100%;
   }
 }
