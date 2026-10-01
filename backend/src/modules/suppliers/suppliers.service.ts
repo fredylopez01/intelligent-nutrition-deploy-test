@@ -8,6 +8,7 @@ import { PrismaService } from "../../database/prisma/prisma.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { AuditService } from "../audit/audit.service.js";
 import { CreateSupplierDto } from "./dto/create-supplier.dto.js";
+import { ListSuppliersQueryDto } from "./dto/list-suppliers-query.dto.js";
 
 const supplierSelect = {
   personId: true,
@@ -23,6 +24,22 @@ const supplierSelect = {
       email: true,
       phone: true,
       address: true,
+    },
+  },
+};
+
+const supplierListSelect = {
+  personId: true,
+  commercialName: true,
+  person: {
+    select: {
+      id: true,
+      businessName: true,
+      documentNumber: true,
+      email: true,
+      phone: true,
+      address: true,
+      active: true,
     },
   },
 };
@@ -50,6 +67,78 @@ export class SuppliersService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
   ) {}
+
+  async findAll(query: ListSuppliersQueryDto) {
+    const { page, limit, search, active } = query;
+    const skip = (page - 1) * limit;
+    const where = {
+      ...(active === undefined ? {} : { person: { is: { active } } }),
+      ...(search
+        ? {
+            OR: [
+              {
+                person: {
+                  is: {
+                    businessName: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                },
+              },
+              {
+                commercialName: {
+                  contains: search,
+                  mode: "insensitive" as const,
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [total, suppliers] = await this.prisma.$transaction([
+      this.prisma.supplier.count({ where }),
+      this.prisma.supplier.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ commercialName: "asc" }, { personId: "asc" }],
+        select: supplierListSelect,
+      }),
+    ]);
+
+    return {
+      data: suppliers.map(({ personId, person, commercialName }) => ({
+        id: personId,
+        person,
+        commercialName,
+      })),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findOne(supplierId: string) {
+    const supplier = await this.prisma.supplier.findUnique({
+      where: { personId: supplierId },
+      select: supplierListSelect,
+    });
+
+    if (!supplier) {
+      throw new NotFoundException("Supplier not found");
+    }
+
+    return {
+      id: supplier.personId,
+      person: supplier.person,
+      commercialName: supplier.commercialName,
+    };
+  }
 
   async create(
     createSupplierDto: CreateSupplierDto,
