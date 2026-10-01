@@ -55,4 +55,14 @@ export const PENDING_MODULES: PendingModule[] = [
     title: 'Reposición sugerida',
     description: 'Sugerencia informativa de reposición a partir del histórico de ventas.',
   },
+  {
+    path: '/perfil',
+    title: 'Mi perfil',
+    description: 'Consulta y actualiza tus datos personales y de contacto.',
+  },
+  {
+    path: '/configuracion',
+    title: 'Configuración',
+    description: 'Preferencias de tu cuenta, seguridad y cambio de contraseña.',
+  },
 ]

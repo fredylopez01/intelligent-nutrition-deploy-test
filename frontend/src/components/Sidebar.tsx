@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import { getRoleLabel } from '../utils/format'
 
 import { Avatar } from './ui/Avatar'
+import { UserMenu } from './UserMenu'
 
 import './Sidebar.css'
 
@@ -66,13 +67,13 @@ export function Sidebar() {
     <aside className="sidebar">
       <img className="sidebar__logo" src={logo} alt="Intelligent Nutrition" />
       {user && (
-        <div className="sidebar__user">
+        <UserMenu triggerClassName="sidebar__user">
           <Avatar name={user.fullName} size="md" highlighted />
           <div className="sidebar__user-info">
             <p className="sidebar__user-name">{user.fullName}</p>
             <p className="sidebar__user-role">{getRoleLabel(roleName)}</p>
           </div>
-        </div>
+        </UserMenu>
       )}
       <nav className="sidebar__nav" aria-label="Navegación principal">
         {NAV_ITEMS.map((item) => {
