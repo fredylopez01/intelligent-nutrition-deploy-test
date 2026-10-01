@@ -49,9 +49,10 @@ const mockPrisma = {
   },
   person: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
   role: { findUnique: jest.fn() },
-  branch: { findMany: jest.fn() },
+  branch: { findMany: jest.fn(), findUnique: jest.fn() },
   userBranch: {
     findFirst: jest.fn(),
+    findUnique: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     updateMany: jest.fn(),
@@ -128,7 +129,7 @@ describe("Users audit log generation (e2e)", () => {
 
   const mockRole = { id: roleId, name: "SUPERADMIN", active: true };
   const mockNewRole = { id: newRoleId, name: "LIDER SEDE", active: true };
-  const mockBranch = { id: branchId, name: "Sede Centro" };
+  const mockBranch = { id: branchId, name: "Sede Centro", active: true };
 
   const mockUser = {
     personId: userId,
@@ -185,8 +186,12 @@ describe("Users audit log generation (e2e)", () => {
     prisma.role.findUnique.mockResolvedValue(mockRole);
     prisma.branch.findMany.mockReset();
     prisma.branch.findMany.mockResolvedValue([]);
+    prisma.branch.findUnique.mockReset();
+    prisma.branch.findUnique.mockResolvedValue(null);
     prisma.userBranch.findFirst.mockReset();
     prisma.userBranch.findFirst.mockResolvedValue(null);
+    prisma.userBranch.findUnique.mockReset();
+    prisma.userBranch.findUnique.mockResolvedValue(null);
     prisma.userBranch.create.mockReset();
     prisma.userBranch.create.mockResolvedValue({});
     prisma.userBranch.update.mockReset();

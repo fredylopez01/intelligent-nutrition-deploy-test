@@ -12,9 +12,10 @@ const prismaMock: any = {
   person: { findUnique: jest.fn(), create: jest.fn() },
   role: { findUnique: jest.fn() },
   documentType: { findUnique: jest.fn() },
-  branch: { findMany: jest.fn() },
+  branch: { findMany: jest.fn(), findUnique: jest.fn() },
   userBranch: {
     findFirst: jest.fn(),
+    findUnique: jest.fn(),
     update: jest.fn(),
     create: jest.fn(),
     updateMany: jest.fn(),
@@ -88,7 +89,9 @@ describe("UsersService contract", () => {
     prismaMock.role.findUnique.mockResolvedValue(role);
     prismaMock.userAccount.findFirst.mockResolvedValue(null);
     prismaMock.branch.findMany.mockResolvedValue([]);
+    prismaMock.branch.findUnique.mockResolvedValue(null);
     prismaMock.userBranch.findFirst.mockResolvedValue(null);
+    prismaMock.userBranch.findUnique.mockResolvedValue(null);
     prismaMock.userBranch.create.mockResolvedValue({});
     prismaMock.userBranch.update.mockResolvedValue({});
     prismaMock.userBranch.updateMany.mockResolvedValue({ count: 1 });
