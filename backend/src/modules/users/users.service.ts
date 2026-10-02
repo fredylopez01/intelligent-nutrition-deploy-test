@@ -32,7 +32,14 @@ const userSelect = {
   createdAt: true,
   updatedAt: true,
   person: {
-    select: { id: true, firstName: true, lastName: true, email: true },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      address: true,
+    },
   },
   role: { select: { id: true, name: true } },
   branchAssignments: {

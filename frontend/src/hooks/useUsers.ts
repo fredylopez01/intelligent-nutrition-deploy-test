@@ -16,15 +16,25 @@ interface UsersResult {
   error: string | null
 }
 
-export function useUsers({ page, limit, active }: UsersListParams) {
+export function useUsers({ page, limit, active, search, roleId, branchId }: UsersListParams) {
   const { token } = useAuth()
   const [result, setResult] = useState<UsersResult | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
-  const requestKey = `${page ?? 1}|${limit ?? 10}|${active ?? 'todos'}|${token ?? ''}|${reloadToken}`
+  const requestKey = [
+    page ?? 1,
+    limit ?? 10,
+    active ?? 'todos',
+    search ?? '',
+    roleId ?? '',
+    branchId ?? '',
+    token ?? '',
+    reloadToken,
+  ].join('|')
+
   useEffect(() => {
     let cancelled = false
     usersService
-      .list({ page, limit, active }, token)
+      .list({ page, limit, active, search, roleId, branchId }, token)
       .then((response) => {
         if (cancelled) return
         setResult({
@@ -53,11 +63,14 @@ export function useUsers({ page, limit, active }: UsersListParams) {
     return () => {
       cancelled = true
     }
-  }, [requestKey, page, limit, active, token])
+  }, [requestKey, page, limit, active, search, roleId, branchId, token])
+
   const refetch = useCallback(() => {
     setReloadToken((value) => value + 1)
   }, [])
+
   const isCurrent = result?.key === requestKey
+
   return {
     status: isCurrent ? result.status : ('loading' as RequestStatus),
     users: isCurrent ? result.users : [],
