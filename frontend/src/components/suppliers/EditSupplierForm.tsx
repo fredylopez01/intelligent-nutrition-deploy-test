@@ -80,8 +80,6 @@ export function EditSupplierForm({ supplier, onUpdated, onCancel }: EditSupplier
       const value = values[field].trim()
       if (value === current[field]) continue
 
-      // El backend no acepta valores vacíos, así que un campo que ya tenía
-      // valor no se puede dejar en blanco.
       if (value === '') {
         setError(field, { type: 'manual', message: EMPTY_MESSAGES[field] })
         hasEmptyChange = true

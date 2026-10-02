@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { CreateSupplierForm } from '../../components/suppliers/CreateSupplierForm'
 import { EditSupplierForm } from '../../components/suppliers/EditSupplierForm'
+import { SupplierDetail } from '../../components/suppliers/SupplierDetail'
 import { SuppliersTable } from '../../components/suppliers/SuppliersTable'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
@@ -28,6 +29,7 @@ export function SuppliersPage() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('todos')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [viewingSupplier, setViewingSupplier] = useState<Supplier | null>(null)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
@@ -53,6 +55,11 @@ export function SuppliersPage() {
   const handleOpenCreate = () => {
     setFeedbackMessage(null)
     setIsCreateOpen(true)
+  }
+
+  const handleOpenView = (supplier: Supplier) => {
+    setFeedbackMessage(null)
+    setViewingSupplier(supplier)
   }
 
   const handleOpenEdit = (supplier: Supplier) => {
@@ -115,7 +122,7 @@ export function SuppliersPage() {
       )
     }
 
-    return <SuppliersTable suppliers={suppliers} onEdit={handleOpenEdit} />
+    return <SuppliersTable suppliers={suppliers} onView={handleOpenView} onEdit={handleOpenEdit} />
   }
 
   return (
@@ -181,6 +188,14 @@ export function SuppliersPage() {
           onCreated={handleSupplierCreated}
           onCancel={() => setIsCreateOpen(false)}
         />
+      </Modal>
+
+      <Modal
+        open={viewingSupplier !== null}
+        title="Detalle del proveedor"
+        onClose={() => setViewingSupplier(null)}
+      >
+        {viewingSupplier && <SupplierDetail supplier={viewingSupplier} />}
       </Modal>
 
       <Modal

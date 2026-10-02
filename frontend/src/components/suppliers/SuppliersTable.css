@@ -32,6 +32,7 @@
   border-bottom: none;
 }
 
+/* Anchos: proveedor, nombre comercial y correo se reparten el espacio sobrante */
 .suppliers-table th.suppliers-table__col-document {
   width: 9.5rem;
 }
@@ -52,10 +53,16 @@
 
 .suppliers-table th.suppliers-table__col-actions,
 .suppliers-table td.suppliers-table__col-actions {
-  width: 3.5rem;
+  width: 5.5rem;
   padding-left: 0.5rem;
-  padding-right: 0.5rem;
+  padding-right: 0.75rem;
   text-align: center;
+}
+
+.suppliers-table__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .suppliers-table__name {
@@ -83,7 +90,7 @@
   font-size: 0.78rem;
 }
 
-.suppliers-table__edit {
+.suppliers-table__action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -96,7 +103,7 @@
   cursor: pointer;
 }
 
-.suppliers-table__edit:hover {
+.suppliers-table__action:hover {
   background: var(--color-surface-elevated);
   border-color: var(--color-border-soft);
   color: var(--color-text);
@@ -119,6 +126,7 @@
     display: none;
   }
 
+  /* En móvil el teléfono comparte el espacio con el nombre */
   .suppliers-table th.suppliers-table__col-phone {
     width: auto;
   }
