@@ -5,7 +5,7 @@
 }
 
 .suppliers-table th {
-  padding: 0.75rem 1.125rem;
+  padding: 0.75rem 1rem;
   background: var(--color-surface-elevated);
   border-bottom: 1px solid var(--color-border-soft);
   font-family: var(--font-mono);
@@ -16,19 +16,12 @@
   text-align: left;
   color: var(--color-text-faint);
   white-space: nowrap;
-}
-
-.suppliers-table__col-status {
-  text-align: right;
-  width: 7rem;
-}
-
-.suppliers-table__col-address {
-  width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .suppliers-table td {
-  padding: 0.625rem 1.125rem;
+  padding: 0.625rem 1rem;
   border-bottom: 1px solid var(--color-border);
   font-size: 0.815rem;
   color: var(--color-text);
@@ -37,6 +30,32 @@
 
 .suppliers-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+.suppliers-table th.suppliers-table__col-document {
+  width: 9.5rem;
+}
+
+.suppliers-table th.suppliers-table__col-phone {
+  width: 8.5rem;
+}
+
+.suppliers-table th.suppliers-table__col-address {
+  width: 12rem;
+}
+
+.suppliers-table th.suppliers-table__col-status,
+.suppliers-table td.suppliers-table__col-status {
+  width: 7rem;
+  text-align: left;
+}
+
+.suppliers-table th.suppliers-table__col-actions,
+.suppliers-table td.suppliers-table__col-actions {
+  width: 3.5rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  text-align: center;
 }
 
 .suppliers-table__name {
@@ -64,6 +83,25 @@
   font-size: 0.78rem;
 }
 
+.suppliers-table__edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.suppliers-table__edit:hover {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border-soft);
+  color: var(--color-text);
+}
+
 @media (max-width: 1024px) {
   .suppliers-table th:nth-child(6),
   .suppliers-table td:nth-child(6) {
@@ -79,5 +117,9 @@
   .suppliers-table th:nth-child(5),
   .suppliers-table td:nth-child(5) {
     display: none;
+  }
+
+  .suppliers-table th.suppliers-table__col-phone {
+    width: auto;
   }
 }

@@ -51,3 +51,9 @@ export interface SuppliersListResponse {
   data: Supplier[]
   meta: PaginationMeta
 }
+
+export interface UpdateSupplierPayload {
+  commercialName?: string
+  phone?: string
+  address?: string
+}

@@ -3,6 +3,7 @@ import type {
   Supplier,
   SuppliersListParams,
   SuppliersListResponse,
+  UpdateSupplierPayload,
 } from '../types/supplier'
 
 import { http } from './http'
@@ -77,5 +78,22 @@ export const suppliersService = {
       }
     }
     return http.post<Supplier>('/suppliers', payload, { token })
+  },
+
+  update: async (
+    id: string,
+    payload: UpdateSupplierPayload,
+    token: string | null,
+  ): Promise<Supplier> => {
+    if (USE_MOCKS) {
+      await delay()
+      const target = MOCK_SUPPLIERS.find((s) => s.id === id)
+      if (!target) throw new Error('Proveedor no encontrado')
+      if (payload.commercialName !== undefined) target.commercialName = payload.commercialName
+      if (payload.phone !== undefined) target.person.phone = payload.phone
+      if (payload.address !== undefined) target.person.address = payload.address
+      return target
+    }
+    return http.patch<Supplier>(`/suppliers/${id}`, payload, { token })
   },
 }

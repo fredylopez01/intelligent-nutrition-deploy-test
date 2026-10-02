@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { CreateSupplierForm } from '../../components/suppliers/CreateSupplierForm'
+import { EditSupplierForm } from '../../components/suppliers/EditSupplierForm'
 import { SuppliersTable } from '../../components/suppliers/SuppliersTable'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
@@ -8,6 +9,7 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
 import { useSuppliers } from '../../hooks/useSuppliers'
 import { AppLayout } from '../../layouts/AppLayout'
+import type { Supplier } from '../../types/supplier'
 
 import './SuppliersPage.css'
 
@@ -26,7 +28,8 @@ export function SuppliersPage() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('todos')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [createdMessage, setCreatedMessage] = useState<string | null>(null)
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, suppliers, meta, error, refetch } = useSuppliers({
     page,
@@ -48,18 +51,29 @@ export function SuppliersPage() {
   }
 
   const handleOpenCreate = () => {
-    setCreatedMessage(null)
+    setFeedbackMessage(null)
     setIsCreateOpen(true)
+  }
+
+  const handleOpenEdit = (supplier: Supplier) => {
+    setFeedbackMessage(null)
+    setEditingSupplier(supplier)
   }
 
   const handleSupplierCreated = () => {
     setIsCreateOpen(false)
-    setCreatedMessage('Proveedor creado exitosamente.')
+    setFeedbackMessage('Proveedor creado exitosamente.')
     if (page === 1) {
       void refetch()
     } else {
       setPage(1)
     }
+  }
+
+  const handleSupplierUpdated = () => {
+    setEditingSupplier(null)
+    setFeedbackMessage('Los cambios se guardaron correctamente.')
+    void refetch()
   }
 
   const renderList = () => {
@@ -101,7 +115,7 @@ export function SuppliersPage() {
       )
     }
 
-    return <SuppliersTable suppliers={suppliers} />
+    return <SuppliersTable suppliers={suppliers} onEdit={handleOpenEdit} />
   }
 
   return (
@@ -134,9 +148,9 @@ export function SuppliersPage() {
         <Button onClick={handleOpenCreate}>Registrar proveedor</Button>
       </div>
 
-      {createdMessage && (
+      {feedbackMessage && (
         <div className="suppliers-page__alert">
-          <Alert tone="success">{createdMessage}</Alert>
+          <Alert tone="success">{feedbackMessage}</Alert>
         </div>
       )}
 
@@ -167,6 +181,20 @@ export function SuppliersPage() {
           onCreated={handleSupplierCreated}
           onCancel={() => setIsCreateOpen(false)}
         />
+      </Modal>
+
+      <Modal
+        open={editingSupplier !== null}
+        title="Editar proveedor"
+        onClose={() => setEditingSupplier(null)}
+      >
+        {editingSupplier && (
+          <EditSupplierForm
+            supplier={editingSupplier}
+            onUpdated={handleSupplierUpdated}
+            onCancel={() => setEditingSupplier(null)}
+          />
+        )}
       </Modal>
     </AppLayout>
   )
