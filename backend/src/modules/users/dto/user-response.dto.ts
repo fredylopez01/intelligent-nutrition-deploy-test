@@ -6,6 +6,8 @@ export class UserResponseDto {
     firstName: string | null;
     lastName: string | null;
     email: string | null;
+    phone: string | null;
+    address: string | null;
   };
   role!: {
     id: string;

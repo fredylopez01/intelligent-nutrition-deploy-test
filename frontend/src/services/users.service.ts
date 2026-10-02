@@ -1,9 +1,11 @@
 import type {
+  AssignUserBranchPayload,
   CreateUserPayload,
   UpdateUserPayload,
   UpdateUserRolePayload,
   UpdateUserStatusPayload,
   User,
+  UserBranchAssignment,
   UsersListParams,
   UsersListResponse,
 } from '../types/user'
@@ -13,15 +15,26 @@ import { MOCK_USERS } from './mocks/users.mock'
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true'
 const MOCK_DELAY_MS = 500
+
 function delay(ms = MOCK_DELAY_MS) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function buildUsersQuery({ page, limit, active }: UsersListParams): string {
+function buildUsersQuery({
+  page,
+  limit,
+  active,
+  search,
+  roleId,
+  branchId,
+}: UsersListParams): string {
   const params = new URLSearchParams()
   if (page !== undefined) params.set('page', String(page))
   if (limit !== undefined) params.set('limit', String(limit))
   if (active !== undefined) params.set('active', String(active))
+  if (search) params.set('search', search)
+  if (roleId) params.set('roleId', roleId)
+  if (branchId) params.set('branchId', branchId)
   const query = params.toString()
   return query ? `?${query}` : ''
 }
@@ -30,8 +43,16 @@ async function listMock(params: UsersListParams): Promise<UsersListResponse> {
   await delay()
   const page = params.page ?? 1
   const limit = params.limit ?? 10
-  const filtered =
-    params.active === undefined ? MOCK_USERS : MOCK_USERS.filter((u) => u.active === params.active)
+  const term = params.search?.trim().toLowerCase() ?? ''
+  const filtered = MOCK_USERS.filter((user) => {
+    const matchesActive = params.active === undefined || user.active === params.active
+    const matchesRole = !params.roleId || user.role.id === params.roleId
+    const matchesTerm =
+      term === '' ||
+      `${user.person.firstName ?? ''} ${user.person.lastName ?? ''}`.toLowerCase().includes(term) ||
+      (user.person.email ?? '').toLowerCase().includes(term)
+    return matchesActive && matchesRole && matchesTerm
+  })
   const start = (page - 1) * limit
   return {
     data: filtered.slice(start, start + limit),
@@ -44,59 +65,24 @@ async function listMock(params: UsersListParams): Promise<UsersListResponse> {
   }
 }
 
-interface ApiUserPerson {
-  id: string
-  firstName: string | null
-  lastName: string | null
-  email: string | null
-}
-
-interface ApiUser {
-  id: string
-  personId?: string
-  person?: ApiUserPerson
-  fullName?: string
-  email?: string
-  active: boolean
-  mustChangePassword: boolean
-  lastLoginAt: string | null
-  createdAt: string
-  updatedAt: string
-  role: { id: string; name: string }
-  branches?: { id: string; name: string }[]
-}
-
-function normalizeUser(apiUser: ApiUser): User {
-  const fullName =
-    apiUser.fullName ??
-    [apiUser.person?.firstName, apiUser.person?.lastName].filter(Boolean).join(' ')
-  return {
-    id: apiUser.id,
-    fullName,
-    email: apiUser.email ?? apiUser.person?.email ?? '',
-    active: apiUser.active,
-    mustChangePassword: apiUser.mustChangePassword,
-    lastLoginAt: apiUser.lastLoginAt,
-    createdAt: apiUser.createdAt,
-    updatedAt: apiUser.updatedAt,
-    role: apiUser.role,
-  }
-}
-
-function splitFullName(fullName: string): { firstName: string; lastName: string } {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean)
-  const firstName = parts[0] ?? ''
-  const lastName = parts.length > 1 ? parts.slice(1).join(' ') : firstName
-  return { firstName, lastName }
+function mockUser(id: string): User {
+  const found = MOCK_USERS.find((user) => user.id === id)
+  if (!found) throw new Error('User not found')
+  return found
 }
 
 export const usersService = {
-  list: async (params: UsersListParams, token: string | null): Promise<UsersListResponse> => {
+  list: (params: UsersListParams, token: string | null): Promise<UsersListResponse> => {
     if (USE_MOCKS) return listMock(params)
-    const response = await http.get<UsersListResponse>(`/users${buildUsersQuery(params)}`, {
-      token,
-    })
-    return { ...response, data: response.data.map(normalizeUser) }
+    return http.get<UsersListResponse>(`/users${buildUsersQuery(params)}`, { token })
+  },
+
+  getById: async (id: string, token: string | null): Promise<User> => {
+    if (USE_MOCKS) {
+      await delay()
+      return mockUser(id)
+    }
+    return http.get<User>(`/users/${id}`, { token })
   },
 
   create: async (payload: CreateUserPayload, token: string | null): Promise<User> => {
@@ -104,50 +90,38 @@ export const usersService = {
       await delay()
       return {
         id: `mock-${Date.now()}`,
-        fullName: payload.fullName,
-        email: payload.email,
+        personId: `mock-person-${Date.now()}`,
+        person: {
+          id: `mock-person-${Date.now()}`,
+          firstName: payload.person.firstName,
+          lastName: payload.person.lastName,
+          email: payload.person.email,
+          phone: payload.person.phone ?? null,
+          address: payload.person.address ?? null,
+        },
+        role: { id: payload.roleId, name: 'Rol simulado' },
+        branches: [],
         active: true,
         mustChangePassword: true,
         lastLoginAt: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        role: { id: payload.roleId, name: 'Rol simulado' },
       }
     }
-
-    const created = await http.post<ApiUser>(
-      '/users',
-      {
-        person: {
-          ...splitFullName(payload.fullName),
-          email: payload.email,
-        },
-        roleId: payload.roleId,
-      },
-      { token },
-    )
-    return normalizeUser(created)
+    return http.post<User>('/users', payload, { token })
   },
 
   update: async (id: string, payload: UpdateUserPayload, token: string | null): Promise<User> => {
     if (USE_MOCKS) {
       await delay()
-      const current = MOCK_USERS.find((u) => u.id === id)
-      if (!current) throw new Error('User not found')
-      return { ...current, ...payload, updatedAt: new Date().toISOString() }
+      const current = mockUser(id)
+      return {
+        ...current,
+        person: { ...current.person, ...payload.person },
+        updatedAt: new Date().toISOString(),
+      }
     }
-
-    const personPayload: Record<string, string> = {}
-    if (payload.fullName !== undefined)
-      Object.assign(personPayload, splitFullName(payload.fullName))
-    if (payload.email !== undefined) personPayload.email = payload.email
-
-    const updated = await http.patch<ApiUser>(
-      `/users/${id}`,
-      Object.keys(personPayload).length > 0 ? { person: personPayload } : {},
-      { token },
-    )
-    return normalizeUser(updated)
+    return http.patch<User>(`/users/${id}`, payload, { token })
   },
 
   updateRole: async (
@@ -157,37 +131,56 @@ export const usersService = {
   ): Promise<User> => {
     if (USE_MOCKS) {
       await delay()
-      const current = MOCK_USERS.find((u) => u.id === id)
-      if (!current) throw new Error('User not found')
-      return { ...current, role: { id: payload.roleId, name: 'Rol simulado' } }
+      return { ...mockUser(id), role: { id: payload.roleId, name: 'Rol simulado' } }
     }
-
-    const updated = await http.patch<ApiUser>(`/users/role/${id}`, payload, { token })
-    return normalizeUser(updated)
+    return http.patch<User>(`/users/${id}/role`, payload, { token })
   },
 
   updateStatus: async (
     id: string,
     payload: UpdateUserStatusPayload,
     token: string | null,
-  ): Promise<User> => {
+  ): Promise<{ message: string }> => {
     if (USE_MOCKS) {
       await delay()
-      const current = MOCK_USERS.find((u) => u.id === id)
-      if (!current) throw new Error('User not found')
-      return { ...current, active: payload.active, updatedAt: new Date().toISOString() }
+      return { message: 'User status updated successfully.' }
     }
-
-    const updated = await http.patch<ApiUser>(`/users/${id}/status`, payload, { token })
-    return normalizeUser(updated)
+    return http.patch<{ message: string }>(`/users/${id}/status`, payload, { token })
   },
 
-  resendActivation: async (email: string, token: string | null): Promise<{ message: string }> => {
+  listBranches: async (id: string, token: string | null): Promise<UserBranchAssignment[]> => {
+    if (USE_MOCKS) {
+      await delay()
+      return []
+    }
+    return http.get<UserBranchAssignment[]>(`/users/${id}/branches`, { token })
+  },
+
+  assignBranch: async (
+    id: string,
+    payload: AssignUserBranchPayload,
+    token: string | null,
+  ): Promise<void> => {
+    if (USE_MOCKS) {
+      await delay()
+      return
+    }
+    await http.post(`/users/${id}/branches`, payload, { token })
+  },
+
+  deactivateBranch: async (id: string, branchId: string, token: string | null): Promise<void> => {
+    if (USE_MOCKS) {
+      await delay()
+      return
+    }
+    await http.patch(`/users/${id}/branches/${branchId}`, { active: false }, { token })
+  },
+
+  resendInvitation: async (email: string, token: string | null): Promise<{ message: string }> => {
     if (USE_MOCKS) {
       await delay()
       return { message: 'Activation email sent successfully' }
     }
-
-    return http.post<{ message: string }>('/auth/activation/resend', { email }, { token })
+    return http.post<{ message: string }>('/auth/resend', { email }, { token })
   },
 }
