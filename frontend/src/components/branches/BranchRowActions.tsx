@@ -5,7 +5,9 @@ import './BranchRowActions.css'
 
 interface BranchRowActionsProps {
   branchName: string
+  active: boolean
   onEdit: () => void
+  onToggleStatus: () => void
 }
 
 interface MenuPosition {
@@ -13,7 +15,12 @@ interface MenuPosition {
   left: number
 }
 
-export function BranchRowActions({ branchName, onEdit }: BranchRowActionsProps) {
+export function BranchRowActions({
+  branchName,
+  active,
+  onEdit,
+  onToggleStatus,
+}: BranchRowActionsProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [position, setPosition] = useState<MenuPosition | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -91,15 +98,14 @@ export function BranchRowActions({ branchName, onEdit }: BranchRowActionsProps) 
             <button
               type="button"
               role="menuitem"
-              className="branch-row-actions__item"
-              disabled
-              aria-describedby="branch-row-actions-deactivate-hint"
+              className={`branch-row-actions__item${active ? ' branch-row-actions__item--danger' : ''}`}
+              onClick={() => {
+                setIsOpen(false)
+                onToggleStatus()
+              }}
             >
-              Desactivar
+              {active ? 'Desactivar' : 'Activar'}
             </button>
-            <p className="branch-row-actions__hint" id="branch-row-actions-deactivate-hint">
-              Próximamente
-            </p>
           </div>,
           document.body,
         )}

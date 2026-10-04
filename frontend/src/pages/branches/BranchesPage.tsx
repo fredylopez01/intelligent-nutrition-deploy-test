@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { BranchesTable } from '../../components/branches/BranchesTable'
 import { BranchesTableSkeleton } from '../../components/branches/BranchesTableSkeleton'
+import { BranchStatusConfirmation } from '../../components/branches/BranchStatusConfirmation'
 import { CreateBranchForm } from '../../components/branches/CreateBranchForm'
 import { EditBranchForm } from '../../components/branches/EditBranchForm'
 import { Alert } from '../../components/ui/Alert'
@@ -30,6 +31,7 @@ export function BranchesPage() {
   const [search, setSearch] = useState('')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null)
+  const [statusBranch, setStatusBranch] = useState<Branch | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, branches, meta, emptyMessage, error, refetch } = useBranches({
@@ -60,6 +62,14 @@ export function BranchesPage() {
   const handleBranchUpdated = () => {
     setEditingBranch(null)
     setFeedbackMessage('Los cambios se guardaron correctamente.')
+    void refetch()
+  }
+
+  const handleBranchStatusChanged = (updatedBranch: Branch) => {
+    setStatusBranch(null)
+    setFeedbackMessage(
+      `La sede ${updatedBranch.name} ahora está ${updatedBranch.active ? 'activa' : 'inactiva'}.`,
+    )
     void refetch()
   }
 
@@ -102,6 +112,10 @@ export function BranchesPage() {
         onEdit={(branch) => {
           setFeedbackMessage(null)
           setEditingBranch(branch)
+        }}
+        onToggleStatus={(branch) => {
+          setFeedbackMessage(null)
+          setStatusBranch(branch)
         }}
       />
     )
@@ -185,6 +199,25 @@ export function BranchesPage() {
             branch={editingBranch}
             onUpdated={handleBranchUpdated}
             onCancel={() => setEditingBranch(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={statusBranch !== null}
+        title={statusBranch?.active ? '¿Desactivar esta sede?' : '¿Activar esta sede?'}
+        description={
+          statusBranch?.active
+            ? `${statusBranch.name} quedará inactiva y no estará disponible para la operación.`
+            : `${statusBranch?.name} volverá a estar disponible para la operación.`
+        }
+        onClose={() => setStatusBranch(null)}
+      >
+        {statusBranch && (
+          <BranchStatusConfirmation
+            branch={statusBranch}
+            onChanged={handleBranchStatusChanged}
+            onCancel={() => setStatusBranch(null)}
           />
         )}
       </Modal>

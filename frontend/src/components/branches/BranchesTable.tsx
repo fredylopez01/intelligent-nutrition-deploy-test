@@ -8,9 +8,10 @@ import './BranchesTable.css'
 interface BranchesTableProps {
   branches: Branch[]
   onEdit: (branch: Branch) => void
+  onToggleStatus: (branch: Branch) => void
 }
 
-export function BranchesTable({ branches, onEdit }: BranchesTableProps) {
+export function BranchesTable({ branches, onEdit, onToggleStatus }: BranchesTableProps) {
   return (
     <table className="branches-table">
       <caption className="sr-only">Sedes registradas en Intelligent Nutrition</caption>
@@ -37,7 +38,12 @@ export function BranchesTable({ branches, onEdit }: BranchesTableProps) {
               <StatusBadge status={branch.active ? 'activo' : 'inactivo'} />
             </td>
             <td className="branches-table__col-actions">
-              <BranchRowActions branchName={branch.name} onEdit={() => onEdit(branch)} />
+              <BranchRowActions
+                branchName={branch.name}
+                active={branch.active}
+                onEdit={() => onEdit(branch)}
+                onToggleStatus={() => onToggleStatus(branch)}
+              />
             </td>
           </tr>
         ))}

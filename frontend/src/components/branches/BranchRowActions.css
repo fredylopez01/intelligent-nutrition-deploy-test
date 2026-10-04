@@ -58,8 +58,6 @@
   cursor: not-allowed;
 }
 
-.branch-row-actions__hint {
-  margin: 0.125rem 0.625rem 0.25rem;
-  font-size: 0.68rem;
-  color: var(--color-text-faint);
+.branch-row-actions__item--danger {
+  color: var(--color-danger);
 }
