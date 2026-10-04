@@ -9,6 +9,7 @@ import { LoginPage } from '../pages/LoginPage'
 import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
 import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
 import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
+import { UserDetailPage } from '../pages/users/UserDetailPage'
 import { UsersPage } from '../pages/users/UsersPage'
 
 import { PENDING_MODULES } from './pendingModules'
@@ -47,6 +48,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={['SUPERADMIN', 'DEV']}>
             <UsersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/usuarios/:userId"
+        element={
+          <ProtectedRoute allowedRoles={['SUPERADMIN', 'DEV']}>
+            <UserDetailPage />
           </ProtectedRoute>
         }
       />
