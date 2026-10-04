@@ -1,9 +1,10 @@
 import { NavLink, useLocation } from 'react-router-dom'
 
-import logo from '../assets/logo-intelligent-nutrition.png'
 import { useAuth } from '../hooks/useAuth'
+import { useBrandAssets } from '../hooks/useBrandAssets'
 import { getRoleLabel } from '../utils/format'
 
+import { ThemeMenu } from './ThemeMenu'
 import { Avatar } from './ui/Avatar'
 import { UserMenu } from './UserMenu'
 
@@ -62,10 +63,14 @@ const NAV_ITEMS: NavItem[] = [
 export function Sidebar() {
   const { user } = useAuth()
   const { pathname } = useLocation()
+  const { logo } = useBrandAssets()
   const roleName = user?.role.name ?? ''
   return (
     <aside className="sidebar">
-      <img className="sidebar__logo" src={logo} alt="Intelligent Nutrition" />
+      <div className="sidebar__brand">
+        <img className="sidebar__logo" src={logo} alt="Intelligent Nutrition" />
+        <ThemeMenu />
+      </div>
       {user && (
         <UserMenu triggerClassName="sidebar__user">
           <Avatar name={user.fullName} size="md" highlighted />

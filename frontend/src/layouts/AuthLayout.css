@@ -23,7 +23,7 @@
   justify-content: space-between;
   gap: 3rem;
   padding: 2.5rem;
-  background: linear-gradient(180deg, var(--color-panel) 0%, #0a0708 100%);
+  background: linear-gradient(180deg, var(--color-panel) 0%, var(--color-panel-deep) 100%);
   border-right: 1px solid var(--color-border);
   overflow: hidden;
 }
@@ -31,7 +31,7 @@
 .auth-layout__brand-glow {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 24% 22%, rgba(214, 26, 26, 0.3), transparent 55%);
+  background: radial-gradient(circle at 24% 22%, var(--color-glow), transparent 55%);
   pointer-events: none;
 }
 
@@ -41,6 +41,14 @@
   opacity: 0.08;
   pointer-events: none;
   user-select: none;
+}
+
+:root[data-theme='light'] .auth-layout__mark {
+  opacity: 0.05;
+}
+
+:root[data-theme='light'] .auth-layout__mark--top {
+  opacity: 0.03;
 }
 
 .auth-layout__mark--top {

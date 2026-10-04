@@ -30,7 +30,7 @@
 
 .ui-button--primary {
   background: var(--color-primary-strong);
-  color: #ffffff;
+  color: var(--color-on-primary);
 }
 
 .ui-button--primary:hover:not(:disabled) {
@@ -51,14 +51,14 @@
 
 .ui-button--danger {
   background: transparent;
-  border-color: rgba(232, 99, 95, 0.35);
+  border-color: var(--color-danger-border);
   color: var(--color-danger);
   font-weight: 500;
 }
 
 .ui-button--danger:hover:not(:disabled) {
   border-color: var(--color-danger);
-  background: rgba(232, 99, 95, 0.08);
+  background: var(--color-danger-soft);
 }
 
 .ui-button--ghost {

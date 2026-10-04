@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom'
 
-import isotipo from '../assets/isotipo-watermark.png'
-import logo from '../assets/logo-intelligent-nutrition.png'
 import { MediaPlaceholder } from '../components/ui/MediaPlaceholder'
+import { useBrandAssets } from '../hooks/useBrandAssets'
 
 import './LandingPage.css'
 
@@ -49,6 +48,7 @@ const STORES = [
   { city: 'Sogamoso', name: 'Sede Sogamoso' },
 ]
 export function LandingPage() {
+  const { logo, isotipo } = useBrandAssets()
   return (
     <div className="landing">
       <header className="landing__header">

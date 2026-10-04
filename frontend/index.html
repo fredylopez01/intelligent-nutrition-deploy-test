@@ -5,6 +5,18 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Intelligent Nutrition</title>
+    <script>
+      ;(function () {
+        var preference = 'system'
+        try {
+          var stored = localStorage.getItem('intelligent-nutrition:theme')
+          if (stored === 'light' || stored === 'dark') preference = stored
+        } catch (error) {}
+        var prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches
+        var theme = preference === 'system' ? (prefersLight ? 'light' : 'dark') : preference
+        document.documentElement.dataset.theme = theme
+      })()
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
