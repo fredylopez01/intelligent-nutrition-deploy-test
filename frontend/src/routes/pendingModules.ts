@@ -60,9 +60,4 @@ export const PENDING_MODULES: PendingModule[] = [
     title: 'Mi perfil',
     description: 'Consulta y actualiza tus datos personales y de contacto.',
   },
-  {
-    path: '/configuracion',
-    title: 'Configuración',
-    description: 'Preferencias de tu cuenta, seguridad y cambio de contraseña.',
-  },
 ]

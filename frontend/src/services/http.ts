@@ -11,12 +11,14 @@ export const API_BASE_URL = API_URL
 export class ApiError extends Error {
   status: number
   details?: unknown
+  code?: string
 
-  constructor(message: string, status: number, details?: unknown) {
+  constructor(message: string, status: number, details?: unknown, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.details = details
+    this.code = code
   }
 }
 
@@ -55,7 +57,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     const error = body?.error
     const message =
       error?.message ?? body?.message ?? 'Ocurrió un error inesperado. Intenta de nuevo.'
-    throw new ApiError(message, response.status, error?.details ?? error ?? body)
+    throw new ApiError(message, response.status, error?.details ?? error ?? body, error?.code)
   }
 
   const hasMeta = !!body && typeof body === 'object' && 'meta' in body
