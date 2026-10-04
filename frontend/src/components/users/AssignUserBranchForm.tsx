@@ -15,8 +15,9 @@ import './AssignUserBranchForm.css'
 
 interface AssignUserBranchFormProps {
   initialUserId?: string | null
+  fixedUserId?: string
   onAssigned: () => void
-  onClose: () => void
+  onClose?: () => void
 }
 
 function resolveErrorMessage(error: unknown): string {
@@ -33,13 +34,15 @@ function resolveErrorMessage(error: unknown): string {
 
 export function AssignUserBranchForm({
   initialUserId = null,
+  fixedUserId,
   onAssigned,
   onClose,
 }: AssignUserBranchFormProps) {
   const { token } = useAuth()
   const [userSearch, setUserSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [selectedUserId, setSelectedUserId] = useState<string>(initialUserId ?? '')
+  const [pickedUserId, setSelectedUserId] = useState<string>(initialUserId ?? '')
+  const selectedUserId = fixedUserId ?? pickedUserId
   const [selectedBranchId, setSelectedBranchId] = useState('')
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -114,40 +117,44 @@ export function AssignUserBranchForm({
   }
 
   return (
-    <div className="assign-branch">
+    <div className={`assign-branch${fixedUserId ? ' assign-branch--embedded' : ''}`}>
       {feedback && <Alert tone={feedback.tone}>{feedback.text}</Alert>}
 
-      <div className="assign-branch__field">
-        <label className="assign-branch__label" htmlFor="assign-user-search">
-          Buscar usuario
-        </label>
-        <input
-          id="assign-user-search"
-          type="search"
-          className="assign-branch__search"
-          placeholder="Nombre o correo"
-          value={userSearch}
-          onChange={(event) => setUserSearch(event.target.value)}
-        />
-      </div>
+      {!fixedUserId && (
+        <>
+          <div className="assign-branch__field">
+            <label className="assign-branch__label" htmlFor="assign-user-search">
+              Buscar usuario
+            </label>
+            <input
+              id="assign-user-search"
+              type="search"
+              className="assign-branch__search"
+              placeholder="Nombre o correo"
+              value={userSearch}
+              onChange={(event) => setUserSearch(event.target.value)}
+            />
+          </div>
 
-      <SelectField
-        id="assign-user-id"
-        label="Usuario"
-        placeholder={usersStatus === 'loading' ? 'Buscando...' : 'Selecciona un usuario'}
-        options={userOptions}
-        value={selectedUserId}
-        onChange={(event) => {
-          setSelectedUserId(event.target.value)
-          setSelectedBranchId('')
-          setFeedback(null)
-        }}
-        hint={
-          usersStatus === 'success' && userOptions.length === 0
-            ? 'Ningún usuario activo coincide con la búsqueda.'
-            : undefined
-        }
-      />
+          <SelectField
+            id="assign-user-id"
+            label="Usuario"
+            placeholder={usersStatus === 'loading' ? 'Buscando...' : 'Selecciona un usuario'}
+            options={userOptions}
+            value={selectedUserId}
+            onChange={(event) => {
+              setSelectedUserId(event.target.value)
+              setSelectedBranchId('')
+              setFeedback(null)
+            }}
+            hint={
+              usersStatus === 'success' && userOptions.length === 0
+                ? 'Ningún usuario activo coincide con la búsqueda.'
+                : undefined
+            }
+          />
+        </>
+      )}
 
       {selectedUserId && (
         <div className="assign-branch__assignments">
@@ -193,9 +200,11 @@ export function AssignUserBranchForm({
       />
 
       <div className="assign-branch__actions">
-        <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
-          Cerrar
-        </Button>
+        {onClose && (
+          <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
+            Cerrar
+          </Button>
+        )}
         <Button
           onClick={() => void handleAssign()}
           disabled={!selectedUserId || !selectedBranchId || isSubmitting}
