@@ -18,6 +18,10 @@ export interface UpdateBranchPayload {
   phone?: string
 }
 
+export interface UpdateBranchStatusPayload {
+  active: boolean
+}
+
 export interface BranchesPaginationMeta {
   page: number
   limit: number
