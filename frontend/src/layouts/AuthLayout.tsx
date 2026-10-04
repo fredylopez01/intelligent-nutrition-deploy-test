@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-import isotipo from '../assets/isotipo-watermark.png'
-import logo from '../assets/logo-intelligent-nutrition.png'
+import { useBrandAssets } from '../hooks/useBrandAssets'
 
 import './AuthLayout.css'
 
@@ -16,6 +15,7 @@ interface AuthLayoutProps {
 }
 
 export function AuthLayout({ children, back, tagline = DEFAULT_TAGLINE }: AuthLayoutProps) {
+  const { logo, isotipo } = useBrandAssets()
   return (
     <div className="auth-layout">
       <aside className="auth-layout__brand">
