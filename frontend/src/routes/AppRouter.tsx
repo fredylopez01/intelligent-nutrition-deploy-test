@@ -8,6 +8,7 @@ import { LandingPage } from '../pages/LandingPage'
 import { LoginPage } from '../pages/LoginPage'
 import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
 import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
+import { SettingsPage } from '../pages/settings/SettingsPage'
 import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
 import { UsersPage } from '../pages/users/UsersPage'
 
@@ -47,6 +48,15 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={['SUPERADMIN', 'DEV']}>
             <UsersPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/configuracion"
+        element={
+          <ProtectedRoute>
+            <SettingsPage />
           </ProtectedRoute>
         }
       />

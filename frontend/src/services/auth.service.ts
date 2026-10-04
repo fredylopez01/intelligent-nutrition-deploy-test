@@ -1,5 +1,6 @@
 import type {
   ActivateAccountPayload,
+  ChangePasswordPayload,
   LoginCredentials,
   LoginResponse,
   SessionUser,
@@ -21,6 +22,13 @@ export const authService = {
 
   resetPassword: (payload: { token: string; password: string }) =>
     http.post<{ message: string }>('/auth/reset-password', payload, {
+      skipUnauthorizedHandler: true,
+    }),
+
+  // A wrong current password answers 401, so the global logout handler must not run here.
+  changePassword: (payload: ChangePasswordPayload, token: string | null) =>
+    http.post<{ message: string }>('/auth/change-password', payload, {
+      token,
       skipUnauthorizedHandler: true,
     }),
 }
