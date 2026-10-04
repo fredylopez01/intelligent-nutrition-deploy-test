@@ -35,7 +35,7 @@
 .assign-branch__search:focus {
   outline: none;
   border-color: var(--color-primary-strong);
-  box-shadow: 0 0 0 3px rgba(214, 26, 26, 0.18);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 
 .assign-branch__assignments {
@@ -109,4 +109,18 @@
   .assign-branch__actions .ui-button {
     width: 100%;
   }
+}
+
+.assign-branch--embedded .assign-branch__assignments {
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.assign-branch--embedded .assign-branch__assignment {
+  padding: 0.75rem 0;
+}
+
+.assign-branch--embedded .assign-branch__actions {
+  justify-content: flex-start;
 }

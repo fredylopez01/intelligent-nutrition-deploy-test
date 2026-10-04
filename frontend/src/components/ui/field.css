@@ -32,7 +32,7 @@
 .ui-field__control:focus {
   outline: none;
   border-color: var(--color-primary-strong);
-  box-shadow: 0 0 0 3px rgba(214, 26, 26, 0.18);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 
 .ui-field__control:disabled {
@@ -45,7 +45,7 @@
 }
 
 .ui-field__control--invalid:focus {
-  box-shadow: 0 0 0 3px rgba(232, 99, 95, 0.18);
+  box-shadow: 0 0 0 3px var(--color-danger-ring);
 }
 
 .ui-field__control--select {

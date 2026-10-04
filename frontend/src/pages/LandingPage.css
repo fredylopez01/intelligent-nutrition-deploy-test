@@ -69,9 +69,9 @@
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(142, 20, 24, 0.5) 0%,
-    rgba(142, 20, 24, 0.12) 42%,
-    rgba(18, 14, 15, 0) 70%
+    var(--color-glow-strong) 0%,
+    var(--color-glow-soft) 42%,
+    transparent 70%
   );
   pointer-events: none;
 }
@@ -122,7 +122,7 @@
   background: var(--color-primary-strong);
   border: 1px solid transparent;
   border-radius: 10px;
-  color: #ffffff;
+  color: var(--color-on-primary);
   font-size: 0.9375rem;
   font-weight: 600;
   transition: background-color 0.15s ease;
@@ -130,7 +130,7 @@
 
 .landing__cta:hover {
   background: var(--color-hover);
-  color: #ffffff;
+  color: var(--color-on-primary);
 }
 
 .landing__cta--ghost {

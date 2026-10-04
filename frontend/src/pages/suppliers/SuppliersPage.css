@@ -24,7 +24,7 @@
 .suppliers-page__search:focus {
   outline: none;
   border-color: var(--color-primary-strong);
-  box-shadow: 0 0 0 3px rgba(214, 26, 26, 0.18);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 
 .suppliers-page__filter {
