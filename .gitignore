@@ -23,6 +23,7 @@ test-results/
 playwright-report/
 blob-report/
 **/trace.zip
+**/*.spec.ts-snapshots/
 
 # IDE
 .vscode/
