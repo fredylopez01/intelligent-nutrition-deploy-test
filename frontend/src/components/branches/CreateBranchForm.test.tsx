@@ -36,6 +36,7 @@ async function fillForm(
 
 describe('CreateBranchForm', () => {
   beforeEach(() => {
+    vi.resetAllMocks()
     createBranch.mockResolvedValue({
       id: 'branch-1',
       name: 'Sede Centro',
