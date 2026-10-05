@@ -78,7 +78,10 @@ backend/
 │       ├── roles/             # CRUD de roles
 │       └── users/             # CRUD de usuarios
 ├── test/
-│   └── jest-e2e.json
+│   ├── jest-e2e.json
+│   ├── global-setup.ts        # Aplica migraciones a la base de pruebas
+│   ├── setup-env.ts           # Apunta Prisma a DATABASE_URL_TEST
+│   └── *.e2e-spec.ts          # Pruebas de integración con Supertest
 ├── Dockerfile                 # Build de producción
 ├── Dockerfile.test            # Runner de tests (Jest ESM)
 ├── package.json
@@ -140,6 +143,9 @@ Edita `backend/.env` con los valores reales:
 # Para Docker Compose local: usar el hostname "postgres"
 # Para conexión a Render: usar la EXTERNAL URL de Render
 DATABASE_URL="postgresql://intelligent_nutrition:change_me@localhost:5432/intelligent_nutrition?schema=public"
+
+# Base de datos exclusiva para los tests E2E (debe ser distinta de DATABASE_URL)
+DATABASE_URL_TEST="postgresql://intelligent_nutrition:change_me@localhost:5432/intelligent_nutrition_test?schema=public"
 
 # JWT
 JWT_SECRET="tu_secreto_largo_y_seguro"
@@ -359,9 +365,24 @@ node --experimental-vm-modules node_modules/jest/bin/jest.js --config package.js
 
 ### Tests E2E
 
+Levantan la aplicación completa y la prueban con **Supertest** contra una base de datos
+exclusiva para pruebas, definida en `DATABASE_URL_TEST`. Nunca usan la base de `DATABASE_URL`:
+si las dos URL coinciden, los tests se detienen antes de empezar.
+
+Crea la base de pruebas una sola vez (con el contenedor de Postgres local):
+
+```bash
+docker exec intelligent-nutrition-db psql -U intelligent_nutrition -d intelligent_nutrition -c "CREATE DATABASE intelligent_nutrition_test"
+```
+
+Luego ejecuta:
+
 ```bash
 npm run test:e2e
 ```
+
+Antes de correr, el script aplica las migraciones pendientes a la base de pruebas. Cada suite
+crea sus propios usuarios y datos, y los elimina al terminar.
 
 ### Tests de Bootstrap (Docker)
 
