@@ -59,6 +59,11 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Reposición sugerida', to: '/reportes/reposicion' },
     ],
   },
+  {
+    label: 'Auditoría',
+    to: '/auditoria',
+    allowedRoles: ['SUPERADMIN', 'DEV'],
+  },
 ]
 export function Sidebar() {
   const { user } = useAuth()

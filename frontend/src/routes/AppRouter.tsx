@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ActivateAccountPage } from '../pages/activation/ActivateAccountPage'
+import { AuditLogsPage } from '../pages/audit-logs/AuditLogsPage'
 import { BranchesPage } from '../pages/branches/BranchesPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
 import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
@@ -57,6 +58,15 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={['SUPERADMIN', 'DEV']}>
             <UserDetailPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/auditoria"
+        element={
+          <ProtectedRoute allowedRoles={['SUPERADMIN', 'DEV']}>
+            <AuditLogsPage />
           </ProtectedRoute>
         }
       />
