@@ -20,6 +20,41 @@ function delay(ms = MOCK_DELAY_MS) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+const MOCK_BRANCH_NAMES: Record<string, string> = {
+  'branch-control': 'Sede Centro Control',
+  'branch-makro': 'Sede Makro',
+  'branch-viva': 'Sede Viva',
+  'branch-sogamoso': 'Sede Sogamoso',
+}
+
+const MOCK_ASSIGNMENTS_KEY = 'intelligent-nutrition:mock-branch-assignments'
+
+function loadMockAssignments(): Record<string, UserBranchAssignment[]> {
+  try {
+    const raw = globalThis.localStorage?.getItem(MOCK_ASSIGNMENTS_KEY)
+    if (!raw) return {}
+    return JSON.parse(raw) as Record<string, UserBranchAssignment[]>
+  } catch {
+    return {}
+  }
+}
+
+function saveMockAssignments(assignments: Record<string, UserBranchAssignment[]>) {
+  try {
+    globalThis.localStorage?.setItem(MOCK_ASSIGNMENTS_KEY, JSON.stringify(assignments))
+  } catch {
+    return
+  }
+}
+
+function listMockAssignments(userId: string): UserBranchAssignment[] {
+  return (loadMockAssignments()[userId] ?? []).filter((assignment) => assignment.active)
+}
+
+function mockAssignmentDate(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
 function buildUsersQuery({
   page,
   limit,
@@ -151,7 +186,7 @@ export const usersService = {
   listBranches: async (id: string, token: string | null): Promise<UserBranchAssignment[]> => {
     if (USE_MOCKS) {
       await delay()
-      return []
+      return listMockAssignments(id)
     }
     return http.get<UserBranchAssignment[]>(`/users/${id}/branches`, { token })
   },
@@ -163,6 +198,22 @@ export const usersService = {
   ): Promise<void> => {
     if (USE_MOCKS) {
       await delay()
+      const store = loadMockAssignments()
+      const assignments = store[id] ?? []
+      const alreadyActive = assignments.some(
+        (assignment) => assignment.id === payload.branchId && assignment.active,
+      )
+      if (!alreadyActive) {
+        assignments.push({
+          id: payload.branchId,
+          name: MOCK_BRANCH_NAMES[payload.branchId] ?? payload.branchId,
+          assignmentDate: mockAssignmentDate(),
+          endDate: null,
+          active: true,
+        })
+        store[id] = assignments
+        saveMockAssignments(store)
+      }
       return
     }
     await http.post(`/users/${id}/branches`, payload, { token })
@@ -171,6 +222,15 @@ export const usersService = {
   deactivateBranch: async (id: string, branchId: string, token: string | null): Promise<void> => {
     if (USE_MOCKS) {
       await delay()
+      const store = loadMockAssignments()
+      const target = (store[id] ?? []).find(
+        (assignment) => assignment.id === branchId && assignment.active,
+      )
+      if (target) {
+        target.active = false
+        target.endDate = mockAssignmentDate()
+        saveMockAssignments(store)
+      }
       return
     }
     await http.patch(`/users/${id}/branches/${branchId}`, { active: false }, { token })
