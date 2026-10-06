@@ -22,16 +22,19 @@ export class SuppliersController {
   constructor(private readonly suppliersService: SuppliersService) {}
 
   @Get()
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "DEV")
   findAll(@Query() query: ListSuppliersQueryDto) {
     return this.suppliersService.findAll(query);
   }
 
   @Get(":supplierId")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "DEV")
   findOne(@Param("supplierId", new ParseUUIDPipe()) supplierId: string) {
     return this.suppliersService.findOne(supplierId);
   }
 
   @Patch(":supplierId")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "DEV")
   update(
     @Param("supplierId", new ParseUUIDPipe()) supplierId: string,
     @Body() updateSupplierDto: UpdateSupplierDto,
