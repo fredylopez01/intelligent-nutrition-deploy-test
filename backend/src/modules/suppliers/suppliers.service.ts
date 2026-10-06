@@ -25,6 +25,13 @@ const supplierSelect = {
       email: true,
       phone: true,
       address: true,
+      active: true,
+      documentType: {
+        select: {
+          code: true,
+          name: true,
+        },
+      },
     },
   },
 };
@@ -41,6 +48,12 @@ const supplierListSelect = {
       phone: true,
       address: true,
       active: true,
+      documentType: {
+        select: {
+          code: true,
+          name: true,
+        },
+      },
     },
   },
 };
@@ -91,6 +104,16 @@ export class SuppliersService {
                 commercialName: {
                   contains: search,
                   mode: "insensitive" as const,
+                },
+              },
+              {
+                person: {
+                  is: {
+                    documentNumber: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
                 },
               },
             ],

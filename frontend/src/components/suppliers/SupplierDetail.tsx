@@ -30,7 +30,10 @@ export function SupplierDetail({ supplier }: SupplierDetailProps) {
           Datos de la persona
         </h3>
         <dl className="supplier-detail__grid">
-          <DetailItem label="Tipo de documento" value={person.documentType?.name} />
+          <DetailItem
+            label="Tipo de documento"
+            value={person.documentType?.code + ' - ' + person.documentType?.name}
+          />
           <DetailItem label="Número de documento" value={person.documentNumber} />
           <div className="supplier-detail__item supplier-detail__item--full">
             <dt className="supplier-detail__label">Nombre o razón social</dt>
