@@ -26,3 +26,30 @@ export function formatDateTime(value: string | null): string {
     timeStyle: 'short',
   }).format(date)
 }
+
+const ACTION_LABELS: Record<string, string> = {
+  CREATE: 'Creación',
+  UPDATE: 'Actualización',
+  ACTIVATE: 'Activación',
+  DEACTIVATE: 'Desactivación',
+  ASSIGN: 'Asignación',
+  UNASSIGN: 'Desasignación',
+  PASSWORD_RESET: 'Restablecimiento de contraseña',
+  ROLE_ASSIGNMENT: 'Asignación de rol',
+  INVENTORY_ADJUSTMENT: 'Ajuste de inventario',
+  INVENTORY_TRANSFER: 'Transferencia de inventario',
+  SALE_REVERSAL: 'Reversión de venta',
+}
+
+export function getActionLabel(action: string): string {
+  return ACTION_LABELS[action.trim().toUpperCase()] ?? action
+}
+
+const ENTITY_LABELS: Record<string, string> = {
+  USER: 'Usuario',
+  BRANCH: 'Sede',
+}
+
+export function getEntityLabel(entity: string): string {
+  return ENTITY_LABELS[entity.trim().toUpperCase()] ?? entity
+}
