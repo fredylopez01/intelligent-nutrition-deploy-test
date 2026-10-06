@@ -30,6 +30,8 @@ export function SelectField({
   const errorId = `${id}-error`
   const hintId = `${id}-hint`
   const describedBy = [error ? errorId : null, hint ? hintId : null].filter(Boolean).join(' ')
+  const isControlled = rest.value !== undefined
+
   return (
     <div className="ui-field">
       <label className="ui-field__label" htmlFor={id}>
@@ -43,7 +45,7 @@ export function SelectField({
         }`}
         aria-invalid={!!error}
         aria-describedby={describedBy || undefined}
-        defaultValue=""
+        {...(isControlled ? {} : { defaultValue: '' })}
         {...rest}
       >
         {placeholder && (

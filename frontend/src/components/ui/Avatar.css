@@ -28,11 +28,19 @@
   font-size: 1rem;
 }
 
+.ui-avatar--xl {
+  width: 88px;
+  height: 88px;
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
+}
+
 .ui-avatar--highlighted {
   background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 .ui-avatar--muted {
-  background: #221a1b;
+  background: var(--color-surface-muted);
   color: var(--color-text-faint);
 }

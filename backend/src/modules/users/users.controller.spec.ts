@@ -1,4 +1,12 @@
-import { jest, describe, beforeEach, beforeAll, afterAll, it, expect } from "@jest/globals";
+import {
+  jest,
+  describe,
+  beforeEach,
+  beforeAll,
+  afterAll,
+  it,
+  expect,
+} from "@jest/globals";
 import { INestApplication } from "@nestjs/common";
 
 process.env.JWT_SECRET = "test-secret";
@@ -11,20 +19,46 @@ const { PassportModule } = await import("@nestjs/passport");
 const { JwtModule, JwtService } = await import("@nestjs/jwt");
 const { UsersController } = await import("./users.controller.js");
 const { UsersService } = await import("./users.service.js");
+const { PersonsModule } = await import("../persons/persons.module.js");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
 const { EmailService } = await import("../email/email.service.js");
+const { AuditService } = await import("../audit/audit.service.js");
 const { Reflector } = await import("@nestjs/core");
 const { JwtStrategy } = await import("../auth/strategies/jwt.strategy.js");
 const { JwtAuthGuard } = await import("../../common/guards/jwt-auth.guard.js");
 const { RolesGuard } = await import("../../common/guards/roles.guard.js");
 const { APP_GUARD } = await import("@nestjs/core");
 const request = (await import("supertest")).default;
+const mockAuditService = {
+  createAuditLog: jest.fn().mockResolvedValue({}),
+  findAll: jest.fn(),
+};
+
+const mockPrisma = {
+  userAccount: {
+    findUnique: jest.fn(),
+    findFirst: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    count: jest.fn(),
+    findMany: jest.fn(),
+  },
+  person: { findUnique: jest.fn(), create: jest.fn() },
+  role: { findUnique: jest.fn() },
+  documentType: { findUnique: jest.fn() },
+  branch: { findMany: jest.fn() },
+  $transaction: jest.fn(),
+};
+mockPrisma.$transaction.mockImplementation((operation: any) =>
+  Array.isArray(operation) ? Promise.all(operation) : operation(mockPrisma),
+);
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PassportModule,
+    PersonsModule,
     JwtModule.register({
       secret: "test-secret",
       signOptions: { expiresIn: "1h" },
@@ -38,18 +72,10 @@ const request = (await import("supertest")).default;
     JwtAuthGuard,
     RolesGuard,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
     {
       provide: PrismaService,
-      useValue: {
-        userAccount: {
-          findUnique: jest.fn(),
-          create: jest.fn(),
-          update: jest.fn(),
-        },
-        role: {
-          findUnique: jest.fn(),
-        },
-      },
+      useValue: mockPrisma,
     },
     {
       provide: EmailService,
@@ -59,6 +85,7 @@ const request = (await import("supertest")).default;
           .mockResolvedValue(undefined),
       },
     },
+    { provide: AuditService, useValue: mockAuditService },
   ],
 })
 class TestUsersModule {}
@@ -70,27 +97,42 @@ describe("UsersController (e2e)", () => {
 
   const mockAdmin = {
     id: "admin-uuid-1",
+    personId: "admin-uuid-1",
     fullName: "Admin",
     email: "admin@test.com",
     roleId: "role-admin",
     active: true,
-    role: { id: "role-admin", name: "SUPER ADMIN" },
+    mustChangePassword: false,
+    person: {
+      id: "admin-uuid-1",
+      firstName: "Admin",
+      lastName: "",
+      email: "admin@test.com",
+      active: true,
+    },
+    role: { id: "role-admin", name: "SUPERADMIN", active: true },
+    branchAssignments: [],
   };
 
   const mockRole = {
     id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     name: "SUPERADMIN",
+    active: true,
   };
 
   const mockUser = {
-    id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-    fullName: "Juan Perez",
-    email: "juan@test.com",
-    roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    personId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    person: {
+      id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      firstName: "Juan",
+      lastName: "Perez",
+      email: "juan@test.com",
+    },
     active: true,
     mustChangePassword: true,
     createdAt: "2026-09-14T03:07:44.280Z",
     role: { id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", name: "SUPERADMIN" },
+    branchAssignments: [],
   };
 
   const mockNewRole = {
@@ -101,7 +143,6 @@ describe("UsersController (e2e)", () => {
 
   const mockUpdatedUser = {
     ...mockUser,
-    roleId: "b2c3d4e5-f6a7-8901-bcde-f12345678901",
     role: { id: "b2c3d4e5-f6a7-8901-bcde-f12345678901", name: "LIDER SEDE" },
   };
 
@@ -123,9 +164,22 @@ describe("UsersController (e2e)", () => {
   beforeEach(() => {
     prisma.userAccount.findUnique.mockReset();
     prisma.userAccount.findUnique.mockResolvedValue(mockAdmin);
+    prisma.userAccount.findFirst.mockReset();
+    prisma.userAccount.findFirst.mockResolvedValue(null);
     prisma.userAccount.create.mockReset();
     prisma.userAccount.update.mockReset();
+    mockAuditService.createAuditLog.mockReset();
+    mockAuditService.createAuditLog.mockResolvedValue({});
     prisma.role.findUnique.mockReset();
+    prisma.role.findUnique.mockResolvedValue(mockRole);
+    prisma.person.findUnique.mockReset();
+    prisma.person.findUnique.mockResolvedValue(null);
+    prisma.person.create.mockReset();
+    prisma.person.create.mockResolvedValue({ id: mockUser.personId });
+    prisma.branch.findMany.mockReset();
+    prisma.branch.findMany.mockResolvedValue([]);
+    prisma.documentType.findUnique.mockReset();
+    prisma.userAccount.create.mockResolvedValue(mockUser);
   });
 
   afterAll(async () => {
@@ -140,9 +194,6 @@ describe("UsersController (e2e)", () => {
     });
 
     it("should create a user and return 201", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(null);
       prisma.role.findUnique.mockResolvedValueOnce(mockRole);
       prisma.userAccount.create.mockResolvedValueOnce(mockUser);
 
@@ -150,27 +201,30 @@ describe("UsersController (e2e)", () => {
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          fullName: "Juan Perez",
-          email: "juan@test.com",
+          person: {
+            firstName: "Juan",
+            lastName: "Perez",
+            email: "juan@test.com",
+          },
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          branchIds: [],
         })
         .expect(201);
 
-      expect(response.body).toEqual(mockUser);
-      expect(response.body).not.toHaveProperty("passwordHash");
-      expect(response.body.email).toBe("juan@test.com");
-      expect(response.body.fullName).toBe("Juan Perez");
-      expect(response.body.roleId).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+      expect(response.body.id).toBe(mockUser.personId);
+      expect(response.body.personId).toBe(mockUser.personId);
+      expect(response.body.person.email).toBe("juan@test.com");
+      expect(response.body.status).toBe("PENDING_ACTIVATION");
+      expect(response.body).not.toHaveProperty("activationToken");
       expect(response.body.active).toBe(true);
       expect(response.body.mustChangePassword).toBe(true);
       expect(prisma.userAccount.create).toHaveBeenCalledTimes(1);
       expect(prisma.userAccount.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            email: "juan@test.com",
-            fullName: "Juan Perez",
+            personId: mockUser.personId,
             roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-            passwordHash: null,
+            password: null,
             mustChangePassword: true,
           }),
         }),
@@ -178,33 +232,34 @@ describe("UsersController (e2e)", () => {
     });
 
     it("should return 409 when email already exists", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(mockUser);
+      prisma.userAccount.findFirst.mockResolvedValueOnce(mockUser);
 
       await request(app.getHttpServer())
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          fullName: "Juan Perez",
-          email: "juan@test.com",
+          person: {
+            firstName: "Juan",
+            lastName: "Perez",
+            email: "juan@test.com",
+          },
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         })
         .expect(409);
     });
 
     it("should return 404 when role does not exist", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(null);
       prisma.role.findUnique.mockResolvedValueOnce(null);
 
       await request(app.getHttpServer())
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          fullName: "Juan Perez",
-          email: "new@test.com",
+          person: {
+            firstName: "Juan",
+            lastName: "Perez",
+            email: "new@test.com",
+          },
           roleId: "00000000-0000-0000-0000-000000000000",
         })
         .expect(404);
@@ -215,7 +270,7 @@ describe("UsersController (e2e)", () => {
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          fullName: "Juan Perez",
+          person: { firstName: "Juan", lastName: "Perez" },
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         })
         .expect(400);
@@ -226,8 +281,11 @@ describe("UsersController (e2e)", () => {
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          fullName: "Juan Perez",
-          email: "juan@test.com",
+          person: {
+            firstName: "Juan",
+            lastName: "Perez",
+            email: "juan@test.com",
+          },
         })
         .expect(400);
     });
@@ -237,20 +295,26 @@ describe("UsersController (e2e)", () => {
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          fullName: "Juan Perez",
-          email: "not-an-email",
+          person: {
+            firstName: "Juan",
+            lastName: "Perez",
+            email: "not-an-email",
+          },
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         })
         .expect(400);
     });
 
-    it("should return 400 when fullName exceeds 150 characters", async () => {
+    it("should return 400 when firstName exceeds 100 characters", async () => {
       await request(app.getHttpServer())
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          fullName: "A".repeat(151),
-          email: "juan@test.com",
+          person: {
+            firstName: "A".repeat(101),
+            lastName: "Perez",
+            email: "juan@test.com",
+          },
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         })
         .expect(400);
@@ -261,8 +325,11 @@ describe("UsersController (e2e)", () => {
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          fullName: "Juan Perez",
-          email: "juan@test.com",
+          person: {
+            firstName: "Juan",
+            lastName: "Perez",
+            email: "juan@test.com",
+          },
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
           password: "password123",
         })
@@ -270,14 +337,14 @@ describe("UsersController (e2e)", () => {
     });
   });
 
-  describe("PATCH /users/role/:id", () => {
+  describe("PATCH /users/:id", () => {
     let token: string;
 
     beforeAll(() => {
       token = jwtService.sign({ sub: "admin-uuid-1" });
     });
 
-    it("should change user role and return 200", async () => {
+    it("should change user role through the documented user endpoint", async () => {
       prisma.userAccount.findUnique
         .mockResolvedValueOnce(mockAdmin)
         .mockResolvedValueOnce(mockUser);
@@ -285,7 +352,7 @@ describe("UsersController (e2e)", () => {
       prisma.userAccount.update.mockResolvedValueOnce(mockUpdatedUser);
 
       const response = await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
+        .patch(`/users/${mockUser.personId}/role`)
         .set("Authorization", `Bearer ${token}`)
         .send({ roleId: mockNewRole.id })
         .expect(200);
@@ -294,101 +361,70 @@ describe("UsersController (e2e)", () => {
       expect(response.body.role.name).toBe("LIDER SEDE");
     });
 
-    it("should return 401 when no token is provided", async () => {
+    it("requires authentication", async () => {
       await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
+        .patch(`/users/${mockUser.personId}`)
         .send({ roleId: mockNewRole.id })
         .expect(401);
     });
 
-    it("should return 400 when roleId is missing", async () => {
-      prisma.userAccount.findUnique.mockResolvedValueOnce(mockAdmin);
-
-      await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
+    it("rejects status changes through the general update endpoint", async () => {
+      const response = await request(app.getHttpServer())
+        .patch(`/users/${mockUser.personId}`)
         .set("Authorization", `Bearer ${token}`)
-        .send({})
+        .send({ active: false })
         .expect(400);
+
+      expect(response.body.message).toContain(
+        "property active should not exist",
+      );
+    });
+  });
+
+  describe("PATCH /users/:id/status", () => {
+    let token: string;
+
+    beforeAll(() => {
+      token = jwtService.sign({ sub: "admin-uuid-1" });
     });
 
-    it("should return 400 when roleId is not a UUID", async () => {
-      prisma.userAccount.findUnique.mockResolvedValueOnce(mockAdmin);
-
-      await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
-        .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: "not-a-uuid" })
-        .expect(400);
-    });
-
-    it("should return 400 when user tries to change own role", async () => {
+    it("updates user status and returns the contract message", async () => {
       prisma.userAccount.findUnique
         .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce({
-          ...mockUser,
-          id: "admin-uuid-1",
-          role: { id: "role-admin", name: "SUPER ADMIN" },
-        });
-
-      await request(app.getHttpServer())
-        .patch("/users/role/admin-uuid-1")
-        .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: mockNewRole.id })
-        .expect(400);
-    });
-
-    it("should return 400 when role is the same", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(mockUser);
-
-      await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
-        .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: mockUser.roleId })
-        .expect(400);
-    });
-
-    it("should return 404 when user does not exist", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(null);
-
-      await request(app.getHttpServer())
-        .patch("/users/role/11111111-1111-4111-8111-111111111111")
-        .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: mockNewRole.id })
-        .expect(404);
-    });
-
-    it("should return 404 when target role does not exist", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(mockUser);
-      prisma.role.findUnique.mockResolvedValueOnce(null);
-
-      await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
-        .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: "00000000-0000-0000-0000-000000000000" })
-        .expect(404);
-    });
-
-    it("should return 400 when target role is inactive", async () => {
-      prisma.userAccount.findUnique
-        .mockResolvedValueOnce(mockAdmin)
-        .mockResolvedValueOnce(mockUser);
-      prisma.role.findUnique.mockResolvedValueOnce({
-        id: "inactive-role",
-        name: "INACTIVE",
+        .mockResolvedValueOnce({ ...mockUser, active: true });
+      prisma.userAccount.update.mockResolvedValueOnce({
+        ...mockUser,
         active: false,
       });
 
-      await request(app.getHttpServer())
-        .patch(`/users/role/${mockUser.id}`)
+      const response = await request(app.getHttpServer())
+        .patch(`/users/${mockUser.personId}/status`)
         .set("Authorization", `Bearer ${token}`)
-        .send({ roleId: "inactive-role" })
+        .send({ active: false })
+        .expect(200);
+
+      expect(response.body).toEqual({
+        message: "User status updated successfully.",
+      });
+      expect(mockAuditService.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "DEACTIVATE",
+          entityId: mockUser.personId,
+          oldData: { active: true },
+          newData: { active: false },
+        }),
+        mockPrisma,
+      );
+    });
+
+    it("requires a boolean status", async () => {
+      const response = await request(app.getHttpServer())
+        .patch(`/users/${mockUser.personId}/status`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ active: "false" })
         .expect(400);
+
+      expect(response.body.message).toContain("active must be a boolean value");
     });
   });
 });

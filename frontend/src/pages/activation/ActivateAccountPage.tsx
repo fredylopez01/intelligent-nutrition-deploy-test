@@ -45,7 +45,6 @@ type Outcome = 'success' | 'invalid' | null
 
 const ACTIVATION_TAGLINE = 'Tu cuenta ya está creada. Define tu contraseña y empieza a trabajar.'
 
-/** Marco común de las tres vistas: mismo panel de marca, etiqueta y (opcional) enlace de vuelta. */
 function ActivationLayout({
   children,
   showBack = true,

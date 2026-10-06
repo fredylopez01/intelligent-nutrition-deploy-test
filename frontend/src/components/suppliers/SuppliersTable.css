@@ -1,0 +1,133 @@
+.suppliers-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.suppliers-table th {
+  padding: 0.75rem 1rem;
+  background: var(--color-surface-elevated);
+  border-bottom: 1px solid var(--color-border-soft);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--color-text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.suppliers-table td {
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.815rem;
+  color: var(--color-text);
+  vertical-align: middle;
+}
+
+.suppliers-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Anchos: proveedor, nombre comercial y correo se reparten el espacio sobrante */
+.suppliers-table th.suppliers-table__col-document {
+  width: 9.5rem;
+}
+
+.suppliers-table th.suppliers-table__col-phone {
+  width: 8.5rem;
+}
+
+.suppliers-table th.suppliers-table__col-address {
+  width: 12rem;
+}
+
+.suppliers-table th.suppliers-table__col-status,
+.suppliers-table td.suppliers-table__col-status {
+  width: 7rem;
+  text-align: left;
+}
+
+.suppliers-table th.suppliers-table__col-actions,
+.suppliers-table td.suppliers-table__col-actions {
+  width: 5.5rem;
+  padding-left: 0.5rem;
+  padding-right: 0.75rem;
+  text-align: center;
+}
+
+.suppliers-table__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.suppliers-table__name {
+  font-size: 0.845rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suppliers-table__cell-muted {
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suppliers-table__document {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+}
+
+.suppliers-table__email {
+  font-size: 0.78rem;
+}
+
+.suppliers-table__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.suppliers-table__action:hover {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border-soft);
+  color: var(--color-text);
+}
+
+@media (max-width: 1024px) {
+  .suppliers-table th:nth-child(6),
+  .suppliers-table td:nth-child(6) {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .suppliers-table th:nth-child(2),
+  .suppliers-table td:nth-child(2),
+  .suppliers-table th:nth-child(3),
+  .suppliers-table td:nth-child(3),
+  .suppliers-table th:nth-child(5),
+  .suppliers-table td:nth-child(5) {
+    display: none;
+  }
+
+  /* En móvil el teléfono comparte el espacio con el nombre */
+  .suppliers-table th.suppliers-table__col-phone {
+    width: auto;
+  }
+}

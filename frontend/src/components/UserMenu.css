@@ -1,0 +1,64 @@
+.user-menu__trigger {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.user-menu__trigger:hover,
+.user-menu__trigger[aria-expanded='true'] {
+  border-color: var(--color-border-outline);
+}
+
+.user-menu__trigger:focus-visible {
+  outline: none;
+  border-color: var(--color-primary-strong);
+}
+
+.user-menu__panel {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.5rem;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-chip);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px var(--color-shadow);
+}
+
+.user-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 40px;
+  padding: 0 0.75rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.user-menu__item:hover,
+.user-menu__item:focus-visible {
+  outline: none;
+  color: var(--color-text);
+  background: var(--color-border);
+}
+
+.user-menu__icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.user-menu__item:hover .user-menu__icon,
+.user-menu__item:focus-visible .user-menu__icon {
+  color: var(--color-text);
+}

@@ -1,21 +1,29 @@
+import { Type } from "class-transformer";
 import {
-  IsEmail,
-  IsNotEmpty,
-  IsString,
+  ArrayUnique,
+  IsArray,
+  IsOptional,
   IsUUID,
-  MaxLength,
+  ValidateNested,
 } from "class-validator";
+import { CreatePersonDto } from "../../persons/dto/create-person.dto.js";
 
 export class CreateUserDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(150)
-  fullName!: string;
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreatePersonDto)
+  person?: CreatePersonDto;
 
-  @IsEmail()
-  @MaxLength(150)
-  email!: string;
+  @IsOptional()
+  @IsUUID()
+  personId?: string;
 
   @IsUUID()
   roleId!: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID(undefined, { each: true })
+  branchIds?: string[];
 }

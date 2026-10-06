@@ -1,24 +1,29 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
+const configuredApiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000').replace(
+  /\/+$/,
+  '',
+)
+const API_URL = configuredApiUrl.endsWith('/api/v1')
+  ? configuredApiUrl
+  : `${configuredApiUrl}/api/v1`
+
+export const API_BASE_URL = API_URL
 
 export class ApiError extends Error {
   status: number
   details?: unknown
+  code?: string
 
-  constructor(message: string, status: number, details?: unknown) {
+  constructor(message: string, status: number, details?: unknown, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.details = details
+    this.code = code
   }
 }
 
 interface RequestOptions extends RequestInit {
   token?: string | null
-  /**
-   * Para endpoints públicos (activación de cuenta, etc.): un 401 aquí NO significa
-   * "sesión expirada", así que no se dispara el handler global y se conserva el
-   * mensaje del backend.
-   */
   skipUnauthorizedHandler?: boolean
 }
 
@@ -49,11 +54,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const body = isJson ? await response.json() : null
 
   if (!response.ok) {
-    const message = body?.message ?? 'Ocurrió un error inesperado. Intenta de nuevo.'
-    throw new ApiError(message, response.status, body)
+    const error = body?.error
+    const message =
+      error?.message ?? body?.message ?? 'Ocurrió un error inesperado. Intenta de nuevo.'
+    throw new ApiError(message, response.status, error?.details ?? error ?? body, error?.code)
   }
 
-  return body as T
+  const hasMeta = !!body && typeof body === 'object' && 'meta' in body
+  return (hasMeta ? body : (body?.data ?? body)) as T
 }
 
 export const http = {

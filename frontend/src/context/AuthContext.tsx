@@ -15,7 +15,7 @@ const MOCK_USER: SessionUser = {
   email: 'natalia.bernal@intelligent.co',
   roleId: 'mock-role-superadmin',
   active: true,
-  role: { name: 'SUPER ADMIN' },
+  role: { name: 'SUPERADMIN' },
 }
 
 interface StoredSession {
@@ -87,9 +87,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [isMockSession],
   )
+  const loginWithToken = useCallback(async (accessToken: string): Promise<SessionUser> => {
+    setStatus('loading')
+    setError(null)
+    try {
+      const loggedUser = await authService.me(accessToken)
+      setUser(loggedUser)
+      setToken(accessToken)
+      setStatus('authenticated')
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: accessToken, user: loggedUser }))
+      return loggedUser
+    } catch (err) {
+      setStatus('error')
+      setError(
+        err instanceof Error ? err.message : 'No fue posible iniciar sesión. Intenta de nuevo.',
+      )
+      throw err
+    }
+  }, [])
   const value = useMemo<AuthState>(
-    () => ({ user, token, status, error, login, logout }),
-    [user, token, status, error, login, logout],
+    () => ({ user, token, status, error, login, loginWithToken, logout }),
+    [user, token, status, error, login, loginWithToken, logout],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

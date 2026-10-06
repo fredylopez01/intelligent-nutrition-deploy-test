@@ -1,0 +1,22 @@
+.branch-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+}
+
+.branch-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.625rem;
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 479px) {
+  .branch-form__actions {
+    flex-direction: column-reverse;
+  }
+
+  .branch-form__actions .ui-button {
+    width: 100%;
+  }
+}

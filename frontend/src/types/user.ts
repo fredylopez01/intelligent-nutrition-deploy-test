@@ -10,32 +10,81 @@ export interface UserRoleRef {
   name: string
 }
 
+export interface UserBranchRef {
+  id: string
+  name: string
+}
+
+export interface UserPerson {
+  id: string
+  firstName: string | null
+  lastName: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
+}
+
 export interface User {
   id: string
-  fullName: string
-  email: string
+  personId: string
+  person: UserPerson
+  role: UserRoleRef
+  branches: UserBranchRef[]
   active: boolean
   mustChangePassword: boolean
   lastLoginAt: string | null
   createdAt: string
   updatedAt: string
-  role: UserRoleRef
 }
 
 export type UserStatus = 'activo' | 'pendiente' | 'inactivo'
-export interface CreateUserPayload {
-  fullName: string
+
+export interface CreateUserPersonPayload {
+  documentTypeId: string
+  documentNumber: string
+  firstName: string
+  lastName: string
   email: string
+  phone?: string
+  address?: string
+}
+
+export interface CreateUserPayload {
+  person: CreateUserPersonPayload
   roleId: string
+  branchIds?: string[]
+}
+
+export interface UpdateUserPersonPayload {
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+  address?: string
 }
 
 export interface UpdateUserPayload {
-  fullName?: string
-  email?: string
+  person: UpdateUserPersonPayload
 }
 
 export interface UpdateUserRolePayload {
   roleId: string
+}
+
+export interface UpdateUserStatusPayload {
+  active: boolean
+}
+
+export interface UserBranchAssignment {
+  id: string
+  name: string
+  assignmentDate: string | null
+  endDate: string | null
+  active: boolean
+}
+
+export interface AssignUserBranchPayload {
+  branchId: string
 }
 
 export interface PaginationMeta {
@@ -49,6 +98,9 @@ export interface UsersListParams {
   page?: number
   limit?: number
   active?: boolean
+  search?: string
+  roleId?: string
+  branchId?: string
 }
 
 export interface UsersListResponse {

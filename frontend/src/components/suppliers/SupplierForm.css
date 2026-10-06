@@ -1,0 +1,43 @@
+.supplier-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.supplier-form__section-title {
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.supplier-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.supplier-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+@media (max-width: 480px) {
+  .supplier-form__row {
+    grid-template-columns: 1fr;
+  }
+
+  .supplier-form__actions {
+    flex-direction: column-reverse;
+  }
+}
+
+.supplier-form__note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}

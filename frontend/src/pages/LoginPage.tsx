@@ -1,13 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 
-import { Alert } from '../components/ui/Alert'
 import { useAuth } from '../hooks/useAuth'
 import { AuthLayout } from '../layouts/AuthLayout'
 import { getRoleHome } from '../routes/roleHome'
+import { authService } from '../services/auth.service'
 
 import './LoginPage.css'
 
@@ -45,9 +45,9 @@ export function LoginPage() {
   const { login, status } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const [showPassword, setShowPassword] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [showGoogleNotice, setShowGoogleNotice] = useState(false)
   const {
     register,
     handleSubmit,
@@ -58,6 +58,14 @@ export function LoginPage() {
 
   const isSubmitting = status === 'loading'
   const passwordHasError = !!errors.password || !!formError
+  const googleErrorMessages: Record<string, string> = {
+    GOOGLE_EMAIL_NOT_REGISTERED:
+      'No hay una cuenta registrada con este correo de Google. Solicita al administrador que cree tu cuenta.',
+    GOOGLE_ACCOUNT_INACTIVE: 'Tu cuenta está inactiva. Contacta al administrador.',
+    ROLE_INACTIVE: 'El rol asignado a tu cuenta está inactivo. Contacta al administrador.',
+    GOOGLE_AUTH_FAILED: 'No fue posible iniciar sesión con Google. Inténtalo de nuevo.',
+  }
+  const googleError = googleErrorMessages[searchParams.get('authError') ?? '']
 
   const onSubmit = async (values: LoginFormValues) => {
     setFormError(null)
@@ -106,7 +114,7 @@ export function LoginPage() {
         <div className="form-field">
           <div className="form-field__label-row">
             <label htmlFor="password">Contraseña</label>
-            <Link to="/olvide-contrasena" className="login-page__forgot">
+            <Link to="/forget-password" className="login-page__forgot">
               ¿La olvidaste?
             </Link>
           </div>
@@ -147,22 +155,16 @@ export function LoginPage() {
       <button
         type="button"
         className="login-page__google"
-        onClick={() => setShowGoogleNotice(true)}
-        aria-expanded={showGoogleNotice}
-        aria-controls="google-notice"
+        onClick={() => window.location.assign(authService.googleLoginUrl())}
       >
         <GoogleMark />
         Continuar con Google
       </button>
 
-      {showGoogleNotice && (
-        <div className="login-page__notice" id="google-notice">
-          <Alert tone="info">
-            <span className="login-page__notice-eyebrow">Coming next</span>
-            El ingreso con Google llega en un próximo sprint. Por ahora entra con el correo y la
-            contraseña que te envió el Superadmin.
-          </Alert>
-        </div>
+      {googleError && (
+        <p className="form-field__error login-page__notice" role="alert">
+          {googleError}
+        </p>
       )}
 
       <p className="login-page__legal">

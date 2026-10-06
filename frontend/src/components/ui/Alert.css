@@ -7,14 +7,14 @@
 }
 
 .ui-alert--success {
-  background: rgba(199, 240, 74, 0.08);
-  border-color: rgba(199, 240, 74, 0.28);
+  background: var(--color-success-soft);
+  border-color: var(--color-success-border);
   color: var(--color-success);
 }
 
 .ui-alert--error {
-  background: rgba(232, 99, 95, 0.08);
-  border-color: rgba(232, 99, 95, 0.3);
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger-border);
   color: var(--color-danger);
 }
 

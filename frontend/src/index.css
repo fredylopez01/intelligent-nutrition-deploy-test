@@ -49,6 +49,12 @@ textarea {
   color: inherit;
 }
 
+:root[data-theme-switching] *,
+:root[data-theme-switching] *::before,
+:root[data-theme-switching] *::after {
+  transition: none !important;
+}
+
 :focus-visible {
   outline: 2px solid var(--color-primary-strong);
   outline-offset: 2px;

@@ -1,10 +1,12 @@
 import { NavLink, useLocation } from 'react-router-dom'
 
-import logo from '../assets/logo-intelligent-nutrition.png'
 import { useAuth } from '../hooks/useAuth'
+import { useBrandAssets } from '../hooks/useBrandAssets'
 import { getRoleLabel } from '../utils/format'
 
+import { ThemeMenu } from './ThemeMenu'
 import { Avatar } from './ui/Avatar'
+import { UserMenu } from './UserMenu'
 
 import './Sidebar.css'
 
@@ -44,7 +46,11 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Compras y recepción', to: '/proveedores/compras' },
     ],
   },
-  { label: 'Usuarios', to: '/usuarios', allowedRoles: ['SUPER ADMIN'] },
+  {
+    label: 'Usuarios',
+    to: '/usuarios',
+    allowedRoles: ['SUPERADMIN', 'DEV'],
+  },
   {
     label: 'Reportes',
     to: '/reportes',
@@ -53,22 +59,31 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Reposición sugerida', to: '/reportes/reposicion' },
     ],
   },
+  {
+    label: 'Auditoría',
+    to: '/auditoria',
+    allowedRoles: ['SUPERADMIN', 'DEV'],
+  },
 ]
 export function Sidebar() {
   const { user } = useAuth()
   const { pathname } = useLocation()
+  const { logo } = useBrandAssets()
   const roleName = user?.role.name ?? ''
   return (
     <aside className="sidebar">
-      <img className="sidebar__logo" src={logo} alt="Intelligent Nutrition" />
+      <div className="sidebar__brand">
+        <img className="sidebar__logo" src={logo} alt="Intelligent Nutrition" />
+        <ThemeMenu />
+      </div>
       {user && (
-        <div className="sidebar__user">
+        <UserMenu triggerClassName="sidebar__user">
           <Avatar name={user.fullName} size="md" highlighted />
           <div className="sidebar__user-info">
             <p className="sidebar__user-name">{user.fullName}</p>
             <p className="sidebar__user-role">{getRoleLabel(roleName)}</p>
           </div>
-        </div>
+        </UserMenu>
       )}
       <nav className="sidebar__nav" aria-label="Navegación principal">
         {NAV_ITEMS.map((item) => {
