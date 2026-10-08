@@ -84,7 +84,8 @@ model UserAccount {
 
 model Customer {
   personId  String   @id @map("person_id") @db.Uuid
-  fullName  String?  @map("full_name") @db.VarChar(200)
+  fullName  String   @map("full_name") @db.VarChar(200)
+  active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
