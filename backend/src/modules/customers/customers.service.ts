@@ -1,0 +1,193 @@
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { PrismaService } from "../../database/prisma/prisma.service.js";
+import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
+import { AuditService } from "../audit/audit.service.js";
+import {
+  PersonsService,
+  type PersonIdentityInput,
+} from "../persons/persons.service.js";
+import { CreateCustomerDto } from "./dto/create-customer.dto.js";
+
+const customerSelect = {
+  personId: true,
+  fullName: true,
+  active: true,
+  createdAt: true,
+  updatedAt: true,
+  person: {
+    select: {
+      id: true,
+      documentTypeId: true,
+      documentNumber: true,
+      firstName: true,
+      lastName: true,
+      businessName: true,
+      email: true,
+      phone: true,
+      address: true,
+      active: true,
+      documentType: { select: { code: true, name: true } },
+    },
+  },
+};
+
+function alreadyCustomerException() {
+  return new ConflictException({
+    code: "ALREADY_CUSTOMER",
+    message: "This person is already registered as a customer.",
+    details: {},
+  });
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002"
+  );
+}
+
+@Injectable()
+export class CustomersService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly personsService: PersonsService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  async create(
+    createCustomerDto: CreateCustomerDto,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    const { person: personDto, personId } = createCustomerDto;
+    if (Boolean(personDto) === Boolean(personId)) {
+      throw new BadRequestException(
+        "Provide either person or personId, but not both",
+      );
+    }
+
+    return this.prisma.$transaction(async (transaction) => {
+      let person;
+
+      if (personDto) {
+        const hasIndividualName =
+          Boolean(personDto.firstName) && Boolean(personDto.lastName);
+        if (!personDto.businessName && !hasIndividualName) {
+          throw new BadRequestException(
+            "Provide businessName or both firstName and lastName",
+          );
+        }
+        if (
+          (personDto.firstName && !personDto.lastName) ||
+          (!personDto.firstName && personDto.lastName)
+        ) {
+          throw new BadRequestException(
+            "firstName and lastName must be provided together",
+          );
+        }
+
+        const identity: PersonIdentityInput = {
+          documentTypeId: personDto.documentTypeId,
+          documentNumber: personDto.documentNumber,
+          firstName: personDto.firstName,
+          lastName: personDto.lastName,
+          businessName: personDto.businessName,
+          email: personDto.email,
+          phone: personDto.phone,
+          address: personDto.address,
+        };
+        person = await this.personsService.findOrCreateByDocument(
+          transaction,
+          identity,
+        );
+      } else {
+        person = await transaction.person.findUnique({
+          where: { id: personId },
+          select: {
+            id: true,
+            active: true,
+            firstName: true,
+            lastName: true,
+            businessName: true,
+            documentTypeId: true,
+            documentNumber: true,
+            email: true,
+            phone: true,
+            address: true,
+            documentType: { select: { code: true, name: true } },
+          },
+        });
+      }
+
+      if (!person || !person.active) {
+        throw new NotFoundException("Active person not found");
+      }
+
+      const existingCustomer = await transaction.customer.findUnique({
+        where: { personId: person.id },
+        select: { personId: true },
+      });
+      if (existingCustomer) {
+        throw alreadyCustomerException();
+      }
+
+      const fullName =
+        person.businessName?.trim() ||
+        [person.firstName, person.lastName]
+          .map((name) => name?.trim())
+          .filter(Boolean)
+          .join(" ");
+      if (!fullName) {
+        throw new BadRequestException(
+          "Person must have a businessName or a firstName and lastName",
+        );
+      }
+      if (fullName.length > 200) {
+        throw new BadRequestException("Customer full name cannot exceed 200 characters");
+      }
+
+      let customer;
+      try {
+        customer = await transaction.customer.create({
+          data: { personId: person.id, fullName, active: true },
+          select: customerSelect,
+        });
+      } catch (error) {
+        if (isUniqueConstraintError(error)) {
+          throw alreadyCustomerException();
+        }
+        throw error;
+      }
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: "CREATE",
+          entity: "CUSTOMER",
+          entityId: customer.personId,
+          newData: customer,
+          reason: `Creación del cliente ${customer.fullName}`,
+          ipAddress,
+        },
+        transaction,
+      );
+
+      return {
+        id: customer.personId,
+        personId: customer.personId,
+        fullName: customer.fullName,
+        active: customer.active,
+        createdAt: customer.createdAt,
+        updatedAt: customer.updatedAt,
+        person: customer.person,
+      };
+    });
+  }
+}

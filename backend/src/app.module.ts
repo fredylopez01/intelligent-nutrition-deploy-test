@@ -11,6 +11,7 @@ import { DocumentTypesModule } from "./modules/document-types/document-types.mod
 import { AuditModule } from "./modules/audit/audit.module.js";
 import { BranchesModule } from "./modules/branches/branches.module.js";
 import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
+import { CustomersModule } from "./modules/customers/customers.module.js";
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
     UsersModule,
     BranchesModule,
     SuppliersModule,
+    CustomersModule,
     AuditModule,
     HealthModule,
   ],

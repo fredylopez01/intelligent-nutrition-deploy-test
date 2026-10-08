@@ -10,8 +10,83 @@ import { UpdatePersonDto } from "./dto/update-person.dto.js";
 
 type PersonTransaction = Pick<PrismaService, "person" | "documentType">;
 
+export interface PersonIdentityInput {
+  documentTypeId: string;
+  documentNumber: string;
+  firstName?: string;
+  lastName?: string;
+  businessName?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
 @Injectable()
 export class PersonsService {
+  async findOrCreateByDocument(
+    transaction: PersonTransaction,
+    person: PersonIdentityInput,
+  ) {
+    const documentType = await transaction.documentType.findUnique({
+      where: { id: person.documentTypeId },
+      select: { id: true, active: true },
+    });
+    if (!documentType || !documentType.active) {
+      throw new NotFoundException("Active document type not found");
+    }
+
+    const existingPerson = await transaction.person.findUnique({
+      where: {
+        documentTypeId_documentNumber: {
+          documentTypeId: person.documentTypeId,
+          documentNumber: person.documentNumber.trim(),
+        },
+      },
+      select: {
+        id: true,
+        active: true,
+        documentTypeId: true,
+        documentNumber: true,
+        firstName: true,
+        lastName: true,
+        businessName: true,
+        email: true,
+        phone: true,
+        address: true,
+        documentType: { select: { code: true, name: true } },
+      },
+    });
+    if (existingPerson) {
+      return existingPerson;
+    }
+
+    return transaction.person.create({
+      data: {
+        documentTypeId: person.documentTypeId,
+        documentNumber: person.documentNumber.trim(),
+        firstName: person.firstName?.trim(),
+        lastName: person.lastName?.trim(),
+        businessName: person.businessName?.trim(),
+        email: person.email?.trim().toLowerCase(),
+        phone: person.phone?.trim(),
+        address: person.address?.trim(),
+      },
+      select: {
+        id: true,
+        active: true,
+        documentTypeId: true,
+        documentNumber: true,
+        firstName: true,
+        lastName: true,
+        businessName: true,
+        email: true,
+        phone: true,
+        address: true,
+        documentType: { select: { code: true, name: true } },
+      },
+    });
+  }
+
   async create(
     transaction: PersonTransaction,
     person: CreatePersonDto,
