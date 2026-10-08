@@ -144,7 +144,7 @@ cd intelligent-nutrition
 docker compose up --build -d
 
 # 3. Verificar que todo funciona
-curl http://localhost:3000/health
+curl http://localhost:3000/api/v1/health
 # Esperado: {"status":"ok"}
 
 # 4. Abrir el frontend
@@ -177,23 +177,28 @@ cp backend/.env.example backend/.env
 
 Variables requeridas:
 
-| Variable                              | Descripción                        | Ejemplo                               |
-| ------------------------------------- | ---------------------------------- | ------------------------------------- |
-| `DATABASE_URL`                        | Conexión a PostgreSQL              | `postgresql://user:pass@host:5432/db` |
-| `JWT_SECRET`                          | Secreto para firmar JWT            | Cadena larga y aleatoria              |
-| `JWT_EXPIRES_IN`                      | Expiración del token               | `15m`                                 |
-| `RESEND_API_KEY`                      | API key de Resend                  | `re_xxxxxxxx`                         |
-| `RESEND_FROM_EMAIL`                   | Remitente de emails                | `noreply@tudominio.com`               |
-| `RESEND_REPLY_TO_EMAIL`               | Reply-to de emails                 | `soporte@tudominio.com`               |
-| `BRAND_LOGO_URL`                      | URL del logo                       | `https://tudominio.com/logo.png`      |
-| `ACTIVATION_TOKEN_EXPIRATION_MINUTES` | Expiración del token de activación | `30`                                  |
-| `FRONTEND_URL`                        | URL del frontend                   | `http://localhost:5173`               |
+| Variable                                              | Descripción                                                  | Ejemplo                                                                                           |
+| ----------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                        | Conexión a PostgreSQL desde el host                          | `postgresql://intelligent_nutrition:change_me@localhost:5432/intelligent_nutrition?schema=public` |
+| `DATABASE_URL_DOCKER`                                 | Conexión PostgreSQL entre contenedores; usa host `postgres`  | `postgresql://intelligent_nutrition:change_me@postgres:5432/intelligent_nutrition?schema=public`  |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Credenciales de PostgreSQL local                             | `intelligent_nutrition` / `change_me` / `intelligent_nutrition`                                   |
+| `SEED_ADMIN_PASSWORD`                                 | Contraseña para crear/actualizar el usuario inicial del seed | Contraseña local de desarrollo                                                                    |
+| `JWT_SECRET`                                          | Secreto para firmar JWT                                      | Cadena larga y aleatoria                                                                          |
+| `JWT_EXPIRES_IN`                                      | Expiración del token                                         | `15m`                                                                                             |
+| `RESEND_API_KEY`                                      | API key de Resend                                            | `re_xxxxxxxx`                                                                                     |
+| `RESEND_FROM_EMAIL`                                   | Remitente de emails                                          | `noreply@tudominio.com`                                                                           |
+| `RESEND_REPLY_TO_EMAIL`                               | Reply-to de emails                                           | `soporte@tudominio.com`                                                                           |
+| `BRAND_LOGO_URL`                                      | URL del logo                                                 | `https://tudominio.com/logo.png`                                                                  |
+| `ACTIVATION_TOKEN_EXPIRATION_MINUTES`                 | Expiración del token de activación                           | `30`                                                                                              |
+| `FRONTEND_URL`                                        | URL del frontend                                             | `http://localhost:5173`                                                                           |
 
 ### Frontend
 
 El frontend usa variables con prefijo `VITE_`. Consulta `frontend/.env.example` para la lista completa.
 
 > **Nota:** El archivo `.env` está en `.gitignore`. Nunca subas credenciales al repositorio.
+
+Al usar Docker Compose, crea el `.env` en la raíz copiando `.env.example`. Compose inyecta `DATABASE_URL_DOCKER` dentro de los contenedores; no uses `localhost` en esa URL porque apuntaría al propio contenedor. `DATABASE_URL` con `localhost` es para ejecutar el backend directamente en el host.
 
 ---
 
@@ -204,7 +209,7 @@ El frontend usa variables con prefijo `VITE_`. Consulta `frontend/.env.example` 
 Levanta el stack completo (PostgreSQL + Backend + Frontend):
 
 ```bash
-# Stack completo
+# Stack completo; Compose aplica migraciones y ejecuta el seed antes del backend
 docker compose up --build -d
 
 # Solo backend + base de datos (útil para desarrollo del backend)
@@ -222,6 +227,10 @@ docker compose up postgres backend frontend --build -d
 | Frontend   | http://localhost:5173 |
 | PostgreSQL | localhost:5432        |
 
+El servicio `backend-init` espera a que PostgreSQL esté healthy, ejecuta `prisma migrate deploy` y después el seed. El backend inicia solo si ambos pasos terminan correctamente. Ante errores de conexión, migración o seed, consulta `docker compose logs backend-init` en vez de recibir errores 500 en las peticiones.
+
+El healthcheck del backend consulta `/api/v1/health`; ese endpoint también ejecuta `SELECT 1` contra PostgreSQL.
+
 **Comandos útiles:**
 
 ```bash
@@ -231,7 +240,10 @@ docker compose ps
 # Ver logs de un servicio específico
 docker compose logs -f backend
 
-# Ejecutar comandos dentro del contenedor del backend
+# Revisar salida de migraciones y seed
+docker compose logs backend-init
+
+# Aplicar migraciones manualmente si fuera necesario
 docker compose exec backend npx prisma migrate deploy
 
 # Reiniciar un servicio
@@ -314,7 +326,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile smoke 
 
 **Verifica:**
 
-1. `GET /health` responde 200 sin token
+1. `GET /api/v1/health` responde 200 sin token y comprueba PostgreSQL
 2. El body es `{ "status": "ok" }`
 3. El frontend responde 200
 
@@ -402,7 +414,7 @@ El pipeline de PR ejecuta los tests de bootstrap del backend en un contenedor Do
    - **Runtime:** `Docker`
    - **Dockerfile Path:** `Dockerfile`
 4. Configurar variables de entorno (usar **Internal Database URL** de Render)
-5. Health Check Path: `/health`
+5. Health Check Path: `/api/v1/health`
 6. Create Web Service
 
 ### Frontend en Render

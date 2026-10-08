@@ -12,7 +12,7 @@ Verificación rápida de que el stack está operativo después de cada despliegu
 
 Verifica el stack completo tras un deploy:
 
-- `GET /health` → responde 200 sin token
+- `GET /api/v1/health` → responde 200 sin token y valida conexión a PostgreSQL
 - Body del health → `{ "status": "ok" }`
 - Frontend → responde 200
 
@@ -39,7 +39,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test u
 
 ## Health endpoint
 
-`GET /health` (`backend/src/health/health.controller.ts`):
+`GET /api/v1/health` (`backend/src/health/health.controller.ts`):
 
 - Decorado con `@Public()` — bypass del guard global JWT, responde 200 sin token
 - Ejecuta `SELECT 1` contra PostgreSQL vía `PrismaService`
@@ -48,12 +48,12 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test u
 
 ## Variables de entorno
 
-| Variable | Default | Descripción |
-|---|---|---|
-| `BASE_URL` | `http://localhost:3000` | URL del backend |
-| `FRONTEND_URL` | `http://localhost:5173` | URL del frontend |
-| `MAX_RETRIES` | `30` | Intentos máx. de espera |
-| `RETRY_INTERVAL` | `2` | Segundos entre reintentos |
+| Variable         | Default                 | Descripción               |
+| ---------------- | ----------------------- | ------------------------- |
+| `BASE_URL`       | `http://localhost:3000` | URL del backend           |
+| `FRONTEND_URL`   | `http://localhost:5173` | URL del frontend          |
+| `MAX_RETRIES`    | `30`                    | Intentos máx. de espera   |
+| `RETRY_INTERVAL` | `2`                     | Segundos entre reintentos |
 
 ## Exit codes
 

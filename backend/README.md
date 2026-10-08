@@ -201,19 +201,21 @@ npx prisma generate
 
 ### Opción A: Con Docker Compose (recomendada)
 
-Levanta **solo el backend y PostgreSQL** desde la raíz del proyecto:
+Levanta PostgreSQL, inicializa el esquema/datos y luego inicia el backend desde la raíz del proyecto:
 
 ```bash
 # Desde la raíz del repo
 docker compose up postgres backend --build -d
 ```
 
-Esto construye la imagen del backend usando `backend/Dockerfile` y arranca PostgreSQL con las credenciales del `docker-compose.yml`.
+Compose usa `DATABASE_URL_DOCKER` (host `postgres`), espera a que PostgreSQL esté healthy, ejecuta `prisma migrate deploy` y `prisma db seed` en `backend-init`, y solo después inicia el backend. `DATABASE_URL` con host `localhost` es para ejecutar Nest directamente en el host.
+
+Si falla la URL, una migración o el seed, revisa `docker compose logs backend-init`; Compose no inicia el backend hasta que esa etapa termine correctamente.
 
 **Verificar que está corriendo:**
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3000/api/v1/health
 # Esperado: {"status":"ok"}
 ```
 
@@ -404,7 +406,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile smoke 
 
 El smoke test verifica:
 
-1. `GET /health` responde 200 sin token
+1. `GET /api/v1/health` responde 200 sin token y comprueba PostgreSQL
 2. El body es `{ "status": "ok" }`
 3. El frontend responde 200 (cuando está desplegado)
 
@@ -487,7 +489,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test u
 
 ### Paso 3: Health Check
 
-Configura el **Health Check Path** como `/health`. Render lo usará para verificar que el servicio está vivo.
+Configura el **Health Check Path** como `/api/v1/health`. Render lo usará para verificar que el servicio y PostgreSQL estén disponibles.
 
 ### Paso 4: Desplegar
 
@@ -496,7 +498,7 @@ Haz clic en **Create Web Service**. Render construirá la imagen y desplegará.
 **Verificar despliegue:**
 
 ```bash
-curl https://tu-backend.onrender.com/health
+curl https://tu-backend.onrender.com/api/v1/health
 # Esperado: {"status":"ok"}
 ```
 
