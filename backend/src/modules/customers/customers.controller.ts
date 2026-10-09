@@ -5,6 +5,7 @@ import {
   Ip,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from "@nestjs/common";
@@ -14,6 +15,7 @@ import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUse
 import { CreateCustomerDto } from "./dto/create-customer.dto.js";
 import { ListCustomersQueryDto } from "./dto/list-customers-query.dto.js";
 import { CustomersService } from "./customers.service.js";
+import { UpdateCustomerStatusDto } from "./dto/update-customer-status.dto.js";
 
 @Controller("customers")
 export class CustomersController {
@@ -29,6 +31,22 @@ export class CustomersController {
   @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   findOne(@Param("customerId", new ParseUUIDPipe()) customerId: string) {
     return this.customersService.findOne(customerId);
+  }
+
+  @Patch(":customerId/status")
+  @Roles("SUPERADMIN")
+  updateStatus(
+    @Param("customerId", new ParseUUIDPipe()) customerId: string,
+    @Body() updateCustomerStatusDto: UpdateCustomerStatusDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.customersService.updateStatus(
+      customerId,
+      updateCustomerStatusDto.active,
+      currentUser,
+      ipAddress,
+    );
   }
 
   @Post()

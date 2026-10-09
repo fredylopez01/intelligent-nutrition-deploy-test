@@ -97,6 +97,7 @@ model Customer {
 model Supplier {
   personId       String   @id @map("person_id") @db.Uuid
   commercialName String?  @map("commercial_name") @db.VarChar(200)
+  active         Boolean  @default(true)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
