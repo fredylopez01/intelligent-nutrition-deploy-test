@@ -8,6 +8,7 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:3000}"
 FRONTEND_URL="${FRONTEND_URL:-http://localhost:5173}"
+HEALTH_URL="${BASE_URL%/}/api/v1/health"
 MAX_RETRIES="${MAX_RETRIES:-30}"
 RETRY_INTERVAL="${RETRY_INTERVAL:-2}"
 
@@ -33,14 +34,14 @@ wait_for_url() {
 echo "== Smoke test: $(date) =="
 
 # 1. Health endpoint responde 200 sin token
-if wait_for_url "$BASE_URL/health"; then
-  pass "GET $BASE_URL/health -> 200"
+if wait_for_url "$HEALTH_URL"; then
+  pass "GET $HEALTH_URL -> 200"
 else
-  fail "GET $BASE_URL/health no responde tras $MAX_RETRIES intentos"
+  fail "GET $HEALTH_URL no responde tras $MAX_RETRIES intentos"
 fi
 
 # 2. Health endpoint retorna { status: 'ok' }
-HEALTH_BODY=$(curl -sf "$BASE_URL/health" 2>/dev/null || echo "")
+HEALTH_BODY=$(curl -sf "$HEALTH_URL" 2>/dev/null || echo "")
 if echo "$HEALTH_BODY" | grep -q '"status":"ok"'; then
   pass "Health body -> $HEALTH_BODY"
 else
