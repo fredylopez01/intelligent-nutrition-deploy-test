@@ -12,6 +12,7 @@ import {
   type PersonIdentityInput,
 } from "../persons/persons.service.js";
 import { CreateCustomerDto } from "./dto/create-customer.dto.js";
+import { ListCustomersQueryDto } from "./dto/list-customers-query.dto.js";
 
 const customerSelect = {
   personId: true,
@@ -31,6 +32,25 @@ const customerSelect = {
       phone: true,
       address: true,
       active: true,
+      documentType: { select: { code: true, name: true } },
+    },
+  },
+};
+
+const customerListSelect = {
+  personId: true,
+  fullName: true,
+  active: true,
+  person: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      businessName: true,
+      documentNumber: true,
+      email: true,
+      phone: true,
+      address: true,
       documentType: { select: { code: true, name: true } },
     },
   },
@@ -60,6 +80,115 @@ export class CustomersService {
     private readonly personsService: PersonsService,
     private readonly auditService: AuditService,
   ) {}
+
+  async findAll(query: ListCustomersQueryDto) {
+    const { page, limit, active, search } = query;
+    if (search !== undefined && search.length < 2) {
+      throw new BadRequestException({
+        code: "SEARCH_TOO_SHORT",
+        message: "Search must contain at least 2 characters.",
+        details: { minLength: 2 },
+      });
+    }
+
+    const where = {
+      ...(active === undefined ? {} : { active }),
+      ...(search
+        ? {
+            OR: [
+              { fullName: { contains: search, mode: "insensitive" as const } },
+              {
+                person: {
+                  is: {
+                    firstName: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                },
+              },
+              {
+                person: {
+                  is: {
+                    lastName: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                },
+              },
+              {
+                person: {
+                  is: {
+                    businessName: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                },
+              },
+              {
+                person: {
+                  is: {
+                    documentNumber: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+    const skip = (page - 1) * limit;
+
+    const [total, customers] = await this.prisma.$transaction([
+      this.prisma.customer.count({ where }),
+      this.prisma.customer.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ fullName: "asc" }, { personId: "asc" }],
+        select: customerListSelect,
+      }),
+    ]);
+
+    return {
+      data: customers.map(({ personId, fullName, active, person }) => ({
+        id: personId,
+        fullName,
+        active,
+        person,
+      })),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findOne(customerId: string) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { personId: customerId },
+      select: customerSelect,
+    });
+
+    if (!customer) {
+      throw new NotFoundException("Customer not found");
+    }
+
+    return {
+      id: customer.personId,
+      fullName: customer.fullName,
+      active: customer.active,
+      createdAt: customer.createdAt,
+      updatedAt: customer.updatedAt,
+      person: customer.person,
+    };
+  }
 
   async create(
     createCustomerDto: CreateCustomerDto,
@@ -150,7 +279,9 @@ export class CustomersService {
         );
       }
       if (fullName.length > 200) {
-        throw new BadRequestException("Customer full name cannot exceed 200 characters");
+        throw new BadRequestException(
+          "Customer full name cannot exceed 200 characters",
+        );
       }
 
       let customer;
