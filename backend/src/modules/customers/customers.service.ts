@@ -64,6 +64,14 @@ function alreadyCustomerException() {
   });
 }
 
+function alreadyInStateException() {
+  return new ConflictException({
+    code: "ALREADY_IN_STATE",
+    message: "Customer is already in the requested state.",
+    details: {},
+  });
+}
+
 function isUniqueConstraintError(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -188,6 +196,51 @@ export class CustomersService {
       updatedAt: customer.updatedAt,
       person: customer.person,
     };
+  }
+
+  async updateStatus(
+    customerId: string,
+    active: boolean,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const existingCustomer = await transaction.customer.findUnique({
+        where: { personId: customerId },
+        select: { personId: true, fullName: true, active: true },
+      });
+
+      if (!existingCustomer) {
+        throw new NotFoundException("Customer not found");
+      }
+      if (existingCustomer.active === active) {
+        throw alreadyInStateException();
+      }
+
+      const updateResult = await transaction.customer.updateMany({
+        where: { personId: customerId, active: existingCustomer.active },
+        data: { active },
+      });
+      if (updateResult.count === 0) {
+        throw alreadyInStateException();
+      }
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: active ? "ACTIVATE" : "DEACTIVATE",
+          entity: "CUSTOMER",
+          entityId: customerId,
+          oldData: { active: existingCustomer.active },
+          newData: { active },
+          reason: `${active ? "Activación" : "Desactivación"} del cliente ${existingCustomer.fullName}`,
+          ipAddress,
+        },
+        transaction,
+      );
+
+      return { message: "Customer status updated successfully." };
+    });
   }
 
   async create(
