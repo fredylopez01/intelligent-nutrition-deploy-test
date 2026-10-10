@@ -7,7 +7,6 @@ import {
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { CreatePersonDto } from "./dto/create-person.dto.js";
 import { ListPersonsQueryDto } from "./dto/list-persons-query.dto.js";
-import { UpdatePersonDto } from "./dto/update-person.dto.js";
 import { UpdatePersonProfileDto } from "./dto/update-person-profile.dto.js";
 
 type PersonTransaction = Pick<PrismaService, "person" | "documentType">;
@@ -244,29 +243,6 @@ export class PersonsService {
     }
 
     return person.id;
-  }
-
-  async update(
-    transaction: Pick<PrismaService, "person">,
-    personId: string,
-    person: UpdatePersonDto,
-  ) {
-    return transaction.person.update({
-      where: { id: personId },
-      data: {
-        ...(person.firstName !== undefined && {
-          firstName: person.firstName,
-        }),
-        ...(person.lastName !== undefined && {
-          lastName: person.lastName,
-        }),
-        ...(person.email !== undefined && {
-          email: person.email.toLowerCase(),
-        }),
-        ...(person.phone !== undefined && { phone: person.phone }),
-        ...(person.address !== undefined && { address: person.address }),
-      },
-    });
   }
 
   async updateProfile(

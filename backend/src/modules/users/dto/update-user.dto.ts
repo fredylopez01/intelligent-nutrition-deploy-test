@@ -1,10 +1,10 @@
 import { Type } from "class-transformer";
 import { IsOptional, ValidateNested } from "class-validator";
-import { UpdatePersonDto } from "../../persons/dto/update-person.dto.js";
+import { UpdatePersonProfileDto } from "../../persons/dto/update-person-profile.dto.js";
 
 export class UpdateUserDto {
   @IsOptional()
   @ValidateNested()
-  @Type(() => UpdatePersonDto)
-  person?: UpdatePersonDto;
+  @Type(() => UpdatePersonProfileDto)
+  person?: UpdatePersonProfileDto;
 }
