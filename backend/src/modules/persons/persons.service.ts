@@ -7,6 +7,7 @@ import {
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { CreatePersonDto } from "./dto/create-person.dto.js";
 import { UpdatePersonDto } from "./dto/update-person.dto.js";
+import { UpdatePersonProfileDto } from "./dto/update-person-profile.dto.js";
 
 type PersonTransaction = Pick<PrismaService, "person" | "documentType">;
 
@@ -16,17 +17,6 @@ export interface PersonIdentityInput {
   firstName?: string;
   lastName?: string;
   businessName?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-}
-
-export interface UpdateCustomerPersonInput {
-  documentTypeId?: string;
-  documentNumber?: string;
-  firstName?: string | null;
-  lastName?: string | null;
-  businessName?: string | null;
   email?: string;
   phone?: string;
   address?: string;
@@ -202,10 +192,10 @@ export class PersonsService {
     });
   }
 
-  async updateCustomerPerson(
+  async updateProfile(
     transaction: PersonTransaction,
     personId: string,
-    changes: UpdateCustomerPersonInput,
+    changes: UpdatePersonProfileDto,
   ) {
     const hasDocumentTypeId = changes.documentTypeId !== undefined;
     const hasDocumentNumber = changes.documentNumber !== undefined;

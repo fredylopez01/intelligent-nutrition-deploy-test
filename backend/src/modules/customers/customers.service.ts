@@ -224,7 +224,7 @@ export class CustomersService {
         throw new NotFoundException("Customer not found");
       }
 
-      const updatedPerson = await this.personsService.updateCustomerPerson(
+      const updatedPerson = await this.personsService.updateProfile(
         transaction,
         customerId,
         personChanges,

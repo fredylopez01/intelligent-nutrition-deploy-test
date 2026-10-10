@@ -34,7 +34,7 @@ export class SuppliersController {
   }
 
   @Patch(":supplierId")
-  @Roles("SUPERADMIN", "BRANCH_LEADER", "DEV")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
   update(
     @Param("supplierId", new ParseUUIDPipe()) supplierId: string,
     @Body() updateSupplierDto: UpdateSupplierDto,
