@@ -136,6 +136,8 @@ async function main() {
       firstName: "System",
       lastName: "Administrator",
       email: "intelligentnutrition.shop@gmail.com",
+      phone: "0000000000",
+      address: "System account",
       active: true,
     },
     create: {
@@ -144,6 +146,8 @@ async function main() {
       firstName: "System",
       lastName: "Administrator",
       email: "intelligentnutrition.shop@gmail.com",
+      phone: "0000000000",
+      address: "System account",
       active: true,
     },
   });

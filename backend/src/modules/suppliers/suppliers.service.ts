@@ -7,6 +7,7 @@ import {
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { AuditService } from "../audit/audit.service.js";
+import { PersonsService } from "../persons/persons.service.js";
 import { CreateSupplierDto } from "./dto/create-supplier.dto.js";
 import { ListSuppliersQueryDto } from "./dto/list-suppliers-query.dto.js";
 import { UpdateSupplierDto } from "./dto/update-supplier.dto.js";
@@ -80,6 +81,7 @@ export class SuppliersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly personsService: PersonsService,
   ) {}
 
   async findAll(query: ListSuppliersQueryDto) {
@@ -170,11 +172,11 @@ export class SuppliersService {
     currentUser: AuthenticatedUser,
     ipAddress?: string,
   ) {
-    const { commercialName, phone, address } = updateSupplierDto;
+    const { commercialName, person: personChanges } = updateSupplierDto;
     if (
       commercialName === undefined &&
-      phone === undefined &&
-      address === undefined
+      (!personChanges ||
+        Object.values(personChanges).every((value) => value === undefined))
     ) {
       throw new BadRequestException("At least one field must be provided");
     }
@@ -189,6 +191,13 @@ export class SuppliersService {
         throw new NotFoundException("Supplier not found");
       }
 
+      const updatedPerson = personChanges
+        ? await this.personsService.updateProfile(
+            transaction,
+            supplierId,
+            personChanges,
+          )
+        : existingSupplier.person;
       const updatedSupplier =
         commercialName === undefined
           ? existingSupplier
@@ -196,18 +205,6 @@ export class SuppliersService {
               where: { personId: supplierId },
               data: { commercialName },
               select: supplierSelect,
-            });
-
-      const updatedPerson =
-        phone === undefined && address === undefined
-          ? updatedSupplier.person
-          : await transaction.person.update({
-              where: { id: supplierId },
-              data: {
-                ...(phone === undefined ? {} : { phone }),
-                ...(address === undefined ? {} : { address }),
-              },
-              select: supplierSelect.person.select,
             });
 
       await this.auditService.createAuditLog(
@@ -218,17 +215,11 @@ export class SuppliersService {
           entityId: supplierId,
           oldData: {
             commercialName: existingSupplier.commercialName,
-            person: {
-              phone: existingSupplier.person.phone,
-              address: existingSupplier.person.address,
-            },
+            person: existingSupplier.person,
           },
           newData: {
             commercialName: updatedSupplier.commercialName,
-            person: {
-              phone: updatedPerson.phone,
-              address: updatedPerson.address,
-            },
+            person: updatedPerson,
           },
           reason: `Actualización del proveedor ${updatedSupplier.commercialName ?? supplierId}`,
           ipAddress,
@@ -260,64 +251,31 @@ export class SuppliersService {
       let person;
 
       if (personDto) {
-        const documentType = await transaction.documentType.findUnique({
-          where: { id: personDto.documentTypeId },
-          select: { id: true, active: true },
-        });
-        if (!documentType || !documentType.active) {
-          throw new NotFoundException("Active document type not found");
-        }
-
-        person = await transaction.person.findUnique({
-          where: {
-            documentTypeId_documentNumber: {
-              documentTypeId: personDto.documentTypeId,
-              documentNumber: personDto.documentNumber,
-            },
-          },
-          select: {
-            id: true,
-            active: true,
-            supplier: { select: { personId: true } },
-          },
-        });
-
-        if (person?.supplier) {
-          throw alreadySupplierException();
-        }
-        if (person && !person.active) {
-          throw new NotFoundException("Active person not found");
-        }
-
-        if (!person) {
-          person = await transaction.person.create({
-            data: {
-              documentTypeId: personDto.documentTypeId,
-              documentNumber: personDto.documentNumber,
-              businessName: personDto.businessName,
-              email: personDto.email,
-              phone: personDto.phone,
-              address: personDto.address,
-            },
-            select: { id: true },
-          });
-        }
+        person = await this.personsService.findOrCreateByDocument(
+          transaction,
+          personDto,
+        );
       } else {
         person = await transaction.person.findUnique({
           where: { id: personId },
-          select: {
-            id: true,
-            active: true,
-            supplier: { select: { personId: true } },
-          },
+          select: { id: true, active: true },
         });
 
         if (!person || !person.active) {
           throw new NotFoundException("Active person not found");
         }
-        if (person.supplier) {
-          throw alreadySupplierException();
-        }
+      }
+
+      if (!person.active) {
+        throw new NotFoundException("Active person not found");
+      }
+
+      const existingSupplier = await transaction.supplier.findUnique({
+        where: { personId: person.id },
+        select: { personId: true },
+      });
+      if (existingSupplier) {
+        throw alreadySupplierException();
       }
 
       let supplier;

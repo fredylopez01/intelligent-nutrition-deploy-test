@@ -10,7 +10,7 @@ import {
   ValidateIf,
 } from "class-validator";
 
-export class UpdateCustomerPersonDto {
+export class UpdatePersonProfileDto {
   @ValidateIf((_object, value) => value !== undefined)
   @IsUUID()
   documentTypeId?: string;

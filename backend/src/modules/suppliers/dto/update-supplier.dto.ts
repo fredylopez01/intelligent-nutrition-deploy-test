@@ -1,32 +1,23 @@
-import { Transform } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  Matches,
   MaxLength,
+  ValidateNested,
 } from "class-validator";
+import { UpdatePersonProfileDto } from "../../persons/dto/update-person-profile.dto.js";
 
 export class UpdateSupplierDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdatePersonProfileDto)
+  person?: UpdatePersonProfileDto;
+
   @IsOptional()
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
   commercialName?: string;
-
-  @IsOptional()
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(30)
-  @Matches(/^\d+$/)
-  phone?: string;
-
-  @IsOptional()
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
-  address?: string;
 }

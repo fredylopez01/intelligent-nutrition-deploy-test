@@ -39,19 +39,19 @@ model DocumentType {
 
 model Person {
   id             String   @id @default(uuid()) @db.Uuid
-  documentTypeId String?  @map("document_type_id") @db.Uuid
-  documentNumber String?  @map("document_number") @db.VarChar(50)
+  documentTypeId String   @map("document_type_id") @db.Uuid
+  documentNumber String   @map("document_number") @db.VarChar(50)
   firstName      String?  @map("first_name") @db.VarChar(100)
   lastName       String?  @map("last_name") @db.VarChar(100)
   businessName   String?  @map("business_name") @db.VarChar(200)
-  email          String?  @db.VarChar(150)
-  phone          String?  @db.VarChar(30)
-  address        String?  @db.VarChar(255)
+  email          String   @unique @db.VarChar(150)
+  phone          String   @db.VarChar(30)
+  address        String   @db.VarChar(255)
   active         Boolean  @default(true)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  documentType DocumentType? @relation(fields: [documentTypeId], references: [id])
+  documentType DocumentType @relation(fields: [documentTypeId], references: [id])
   userAccount  UserAccount?
   customer     Customer?
   supplier     Supplier?
