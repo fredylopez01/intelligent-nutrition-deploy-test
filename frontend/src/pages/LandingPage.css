@@ -457,6 +457,10 @@
   gap: 1.5rem;
 }
 
+.landing__footer-links a:hover {
+  color: var(--color-hover);
+}
+
 @media (max-width: 1023px) {
   .landing__hero,
   .landing__advisory {
