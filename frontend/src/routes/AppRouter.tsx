@@ -6,6 +6,8 @@ import { BranchesPage } from '../pages/branches/BranchesPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
 import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
 import { LandingPage } from '../pages/LandingPage'
+import { PrivacyPolicyPage } from '../pages/legal/PrivacyPolicyPage'
+import { TermsOfServicePage } from '../pages/legal/TermsOfServicePage'
 import { LoginPage } from '../pages/LoginPage'
 import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
 import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
@@ -26,6 +28,8 @@ export function AppRouter() {
       <Route path="/activate-account" element={<ActivateAccountPage />} />
       <Route path="/forget-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/terminos" element={<TermsOfServicePage />} />
+      <Route path="/privacidad" element={<PrivacyPolicyPage />} />
 
       <Route
         path="/sedes"

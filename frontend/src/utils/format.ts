@@ -27,6 +27,12 @@ export function formatDateTime(value: string | null): string {
   }).format(date)
 }
 
+export function formatLongDate(isoDate: string): string {
+  return new Intl.DateTimeFormat('es-CO', { dateStyle: 'long', timeZone: 'UTC' }).format(
+    new Date(`${isoDate}T00:00:00Z`),
+  )
+}
+
 const ACTION_LABELS: Record<string, string> = {
   CREATE: 'Creación',
   UPDATE: 'Actualización',
