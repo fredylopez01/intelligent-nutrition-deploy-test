@@ -21,6 +21,17 @@ export interface PersonIdentityInput {
   address?: string;
 }
 
+export interface UpdateCustomerPersonInput {
+  documentTypeId?: string;
+  documentNumber?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  businessName?: string | null;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
 @Injectable()
 export class PersonsService {
   async findOrCreateByDocument(
@@ -39,7 +50,7 @@ export class PersonsService {
       where: {
         documentTypeId_documentNumber: {
           documentTypeId: person.documentTypeId,
-          documentNumber: person.documentNumber.trim(),
+          documentNumber: person.documentNumber,
         },
       },
       select: {
@@ -63,13 +74,13 @@ export class PersonsService {
     return transaction.person.create({
       data: {
         documentTypeId: person.documentTypeId,
-        documentNumber: person.documentNumber.trim(),
-        firstName: person.firstName?.trim(),
-        lastName: person.lastName?.trim(),
-        businessName: person.businessName?.trim(),
-        email: person.email?.trim().toLowerCase(),
-        phone: person.phone?.trim(),
-        address: person.address?.trim(),
+        documentNumber: person.documentNumber,
+        firstName: person.firstName,
+        lastName: person.lastName,
+        businessName: person.businessName,
+        email: person.email?.toLowerCase(),
+        phone: person.phone,
+        address: person.address,
       },
       select: {
         id: true,
@@ -111,7 +122,7 @@ export class PersonsService {
         where: {
           documentTypeId_documentNumber: {
             documentTypeId: person.documentTypeId,
-            documentNumber: person.documentNumber!.trim(),
+            documentNumber: person.documentNumber!,
           },
         },
         select: { id: true },
@@ -126,12 +137,12 @@ export class PersonsService {
     const createdPerson = await transaction.person.create({
       data: {
         documentTypeId: person.documentTypeId,
-        documentNumber: person.documentNumber?.trim(),
-        firstName: person.firstName.trim(),
-        lastName: person.lastName.trim(),
+        documentNumber: person.documentNumber,
+        firstName: person.firstName,
+        lastName: person.lastName,
         email,
-        phone: person.phone?.trim(),
-        address: person.address?.trim(),
+        phone: person.phone,
+        address: person.address,
       },
       select: { id: true },
     });
@@ -177,16 +188,113 @@ export class PersonsService {
       where: { id: personId },
       data: {
         ...(person.firstName !== undefined && {
-          firstName: person.firstName.trim(),
+          firstName: person.firstName,
         }),
         ...(person.lastName !== undefined && {
-          lastName: person.lastName.trim(),
+          lastName: person.lastName,
         }),
         ...(person.email !== undefined && {
-          email: person.email.trim().toLowerCase(),
+          email: person.email.toLowerCase(),
         }),
-        ...(person.phone !== undefined && { phone: person.phone.trim() }),
-        ...(person.address !== undefined && { address: person.address.trim() }),
+        ...(person.phone !== undefined && { phone: person.phone }),
+        ...(person.address !== undefined && { address: person.address }),
+      },
+    });
+  }
+
+  async updateCustomerPerson(
+    transaction: PersonTransaction,
+    personId: string,
+    changes: UpdateCustomerPersonInput,
+  ) {
+    const hasDocumentTypeId = changes.documentTypeId !== undefined;
+    const hasDocumentNumber = changes.documentNumber !== undefined;
+    if (hasDocumentTypeId !== hasDocumentNumber) {
+      throw new BadRequestException(
+        "documentTypeId and documentNumber must be provided together",
+      );
+    }
+
+    if (hasDocumentTypeId && hasDocumentNumber) {
+      const documentType = await transaction.documentType.findUnique({
+        where: { id: changes.documentTypeId },
+        select: { id: true, active: true },
+      });
+      if (!documentType || !documentType.active) {
+        throw new NotFoundException("Active document type not found");
+      }
+
+      const personWithDocument = await transaction.person.findUnique({
+        where: {
+          documentTypeId_documentNumber: {
+            documentTypeId: changes.documentTypeId!,
+            documentNumber: changes.documentNumber!,
+          },
+        },
+        select: { id: true },
+      });
+      if (personWithDocument && personWithDocument.id !== personId) {
+        throw new ConflictException({
+          code: "DOCUMENT_ALREADY_IN_USE",
+          message: "This document is already associated with another person.",
+          details: {},
+        });
+      }
+    }
+
+    const email = changes.email?.toLowerCase();
+    if (email !== undefined) {
+      const personWithEmail = await transaction.person.findFirst({
+        where: {
+          id: { not: personId },
+          email: { equals: email, mode: "insensitive" },
+        },
+        select: { id: true },
+      });
+      if (personWithEmail) {
+        throw new ConflictException({
+          code: "EMAIL_ALREADY_IN_USE",
+          message:
+            "This email address is already associated with another person.",
+          details: {},
+        });
+      }
+    }
+
+    return transaction.person.update({
+      where: { id: personId },
+      data: {
+        ...(hasDocumentTypeId && hasDocumentNumber
+          ? {
+              documentTypeId: changes.documentTypeId,
+              documentNumber: changes.documentNumber,
+            }
+          : {}),
+        ...(changes.firstName === undefined
+          ? {}
+          : { firstName: changes.firstName ?? null }),
+        ...(changes.lastName === undefined
+          ? {}
+          : { lastName: changes.lastName ?? null }),
+        ...(changes.businessName === undefined
+          ? {}
+          : { businessName: changes.businessName ?? null }),
+        ...(email === undefined ? {} : { email }),
+        ...(changes.phone === undefined ? {} : { phone: changes.phone }),
+        ...(changes.address === undefined ? {} : { address: changes.address }),
+      },
+      select: {
+        id: true,
+        documentTypeId: true,
+        documentNumber: true,
+        firstName: true,
+        lastName: true,
+        businessName: true,
+        email: true,
+        phone: true,
+        address: true,
+        active: true,
+        documentType: { select: { code: true, name: true } },
       },
     });
   }

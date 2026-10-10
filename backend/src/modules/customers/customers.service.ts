@@ -13,6 +13,7 @@ import {
 } from "../persons/persons.service.js";
 import { CreateCustomerDto } from "./dto/create-customer.dto.js";
 import { ListCustomersQueryDto } from "./dto/list-customers-query.dto.js";
+import { UpdateCustomerDto } from "./dto/update-customer.dto.js";
 
 const customerSelect = {
   personId: true,
@@ -196,6 +197,97 @@ export class CustomersService {
       updatedAt: customer.updatedAt,
       person: customer.person,
     };
+  }
+
+  async update(
+    customerId: string,
+    updateCustomerDto: UpdateCustomerDto,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    const personChanges = updateCustomerDto.person;
+    if (
+      !personChanges ||
+      Object.values(personChanges).every((value) => value === undefined)
+    ) {
+      throw new BadRequestException(
+        "At least one person field must be provided",
+      );
+    }
+
+    return this.prisma.$transaction(async (transaction) => {
+      const existingCustomer = await transaction.customer.findUnique({
+        where: { personId: customerId },
+        select: customerSelect,
+      });
+      if (!existingCustomer) {
+        throw new NotFoundException("Customer not found");
+      }
+
+      const updatedPerson = await this.personsService.updateCustomerPerson(
+        transaction,
+        customerId,
+        personChanges,
+      );
+
+      const fullName =
+        updatedPerson.businessName?.trim() ||
+        [updatedPerson.firstName, updatedPerson.lastName]
+          .map((name) => name?.trim())
+          .filter(Boolean)
+          .join(" ");
+      if (!fullName) {
+        throw new BadRequestException(
+          "Person must have a businessName or a firstName and lastName",
+        );
+      }
+      if (fullName.length > 200) {
+        throw new BadRequestException(
+          "Customer full name cannot exceed 200 characters",
+        );
+      }
+
+      const updatedCustomer = await transaction.customer.update({
+        where: { personId: customerId },
+        data: { fullName },
+        select: {
+          personId: true,
+          fullName: true,
+          active: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: "UPDATE",
+          entity: "CUSTOMER",
+          entityId: customerId,
+          oldData: {
+            fullName: existingCustomer.fullName,
+            person: existingCustomer.person,
+          },
+          newData: {
+            fullName: updatedCustomer.fullName,
+            person: updatedPerson,
+          },
+          reason: `Actualización de datos del cliente ${customerId}`,
+          ipAddress,
+        },
+        transaction,
+      );
+
+      return {
+        id: updatedCustomer.personId,
+        fullName: updatedCustomer.fullName,
+        active: updatedCustomer.active,
+        createdAt: updatedCustomer.createdAt,
+        updatedAt: updatedCustomer.updatedAt,
+        person: updatedPerson,
+      };
+    });
   }
 
   async updateStatus(
