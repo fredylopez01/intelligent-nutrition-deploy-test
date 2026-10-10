@@ -251,64 +251,31 @@ export class SuppliersService {
       let person;
 
       if (personDto) {
-        const documentType = await transaction.documentType.findUnique({
-          where: { id: personDto.documentTypeId },
-          select: { id: true, active: true },
-        });
-        if (!documentType || !documentType.active) {
-          throw new NotFoundException("Active document type not found");
-        }
-
-        person = await transaction.person.findUnique({
-          where: {
-            documentTypeId_documentNumber: {
-              documentTypeId: personDto.documentTypeId,
-              documentNumber: personDto.documentNumber,
-            },
-          },
-          select: {
-            id: true,
-            active: true,
-            supplier: { select: { personId: true } },
-          },
-        });
-
-        if (person?.supplier) {
-          throw alreadySupplierException();
-        }
-        if (person && !person.active) {
-          throw new NotFoundException("Active person not found");
-        }
-
-        if (!person) {
-          person = await transaction.person.create({
-            data: {
-              documentTypeId: personDto.documentTypeId,
-              documentNumber: personDto.documentNumber,
-              businessName: personDto.businessName,
-              email: personDto.email,
-              phone: personDto.phone,
-              address: personDto.address,
-            },
-            select: { id: true },
-          });
-        }
+        person = await this.personsService.findOrCreateByDocument(
+          transaction,
+          personDto,
+        );
       } else {
         person = await transaction.person.findUnique({
           where: { id: personId },
-          select: {
-            id: true,
-            active: true,
-            supplier: { select: { personId: true } },
-          },
+          select: { id: true, active: true },
         });
 
         if (!person || !person.active) {
           throw new NotFoundException("Active person not found");
         }
-        if (person.supplier) {
-          throw alreadySupplierException();
-        }
+      }
+
+      if (!person.active) {
+        throw new NotFoundException("Active person not found");
+      }
+
+      const existingSupplier = await transaction.supplier.findUnique({
+        where: { personId: person.id },
+        select: { personId: true },
+      });
+      if (existingSupplier) {
+        throw alreadySupplierException();
       }
 
       let supplier;

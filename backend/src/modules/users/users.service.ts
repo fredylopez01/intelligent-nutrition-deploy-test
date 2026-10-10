@@ -373,14 +373,16 @@ export class UsersService {
             person,
             normalizedEmail!,
           )
-        : await this.personsService.findAvailableForUserAccount(
-            transaction,
-            personId!,
-          );
+        : personId!;
+      const availablePersonId =
+        await this.personsService.findAvailableForUserAccount(
+          transaction,
+          resolvedPersonId,
+        );
 
       const createdUser = await transaction.userAccount.create({
         data: {
-          personId: resolvedPersonId!,
+          personId: availablePersonId,
           roleId,
           password: null,
           mustChangePassword: true,
@@ -399,14 +401,14 @@ export class UsersService {
 
       await this.recordUserAudit(transaction, currentUser, ipAddress, {
         action: "CREATE",
-        entityId: resolvedPersonId!,
+        entityId: availablePersonId,
         newData: {
           person: createdUser.person,
           role: createdUser.role,
           active: createdUser.active,
           branches: branches.map(({ id, name }) => ({ id, name })),
         },
-        reason: `Creación de cuenta para el usuario ${resolvedPersonId}`,
+        reason: `Creación de cuenta para el usuario ${availablePersonId}`,
       });
 
       for (const branch of branches) {
@@ -414,7 +416,7 @@ export class UsersService {
           action: "ASSIGN",
           entityId: resolvedPersonId!,
           newData: { branchId: branch.id, branchName: branch.name },
-          reason: `Asignación de la sede ${branch.name} al usuario ${resolvedPersonId}`,
+          reason: `Asignación de la sede ${branch.name} al usuario ${availablePersonId}`,
         });
       }
 

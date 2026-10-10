@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { CreatePersonDto } from "./dto/create-person.dto.js";
+import { ListPersonsQueryDto } from "./dto/list-persons-query.dto.js";
 import { UpdatePersonDto } from "./dto/update-person.dto.js";
 import { UpdatePersonProfileDto } from "./dto/update-person-profile.dto.js";
 
@@ -17,17 +18,117 @@ export interface PersonIdentityInput {
   firstName?: string;
   lastName?: string;
   businessName?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
+  email: string;
+  phone: string;
+  address: string;
 }
 
 @Injectable()
 export class PersonsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async findAll(query: ListPersonsQueryDto) {
+    const { page, limit, search } = query;
+    if (search !== undefined && search.length < 2) {
+      throw new BadRequestException({
+        code: "SEARCH_TOO_SHORT",
+        message: "Search must contain at least 2 characters.",
+        details: { minLength: 2 },
+      });
+    }
+
+    const where = {
+      active: true,
+      ...(search
+        ? {
+            OR: [
+              { firstName: { contains: search, mode: "insensitive" as const } },
+              { lastName: { contains: search, mode: "insensitive" as const } },
+              {
+                businessName: {
+                  contains: search,
+                  mode: "insensitive" as const,
+                },
+              },
+              {
+                documentNumber: {
+                  contains: search,
+                  mode: "insensitive" as const,
+                },
+              },
+              { email: { contains: search, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    };
+    const skip = (page - 1) * limit;
+
+    const [total, people] = await this.prisma.$transaction([
+      this.prisma.person.count({ where }),
+      this.prisma.person.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [
+          { businessName: "asc" },
+          { lastName: "asc" },
+          { firstName: "asc" },
+          { id: "asc" },
+        ],
+        select: {
+          id: true,
+          documentTypeId: true,
+          documentNumber: true,
+          firstName: true,
+          lastName: true,
+          businessName: true,
+          email: true,
+          phone: true,
+          address: true,
+          userAccount: { select: { personId: true } },
+          customer: { select: { personId: true } },
+          supplier: { select: { personId: true } },
+        },
+      }),
+    ]);
+
+    return {
+      data: people.map(({ userAccount, customer, supplier, ...person }) => ({
+        ...person,
+        relationships: {
+          hasUserAccount: Boolean(userAccount),
+          isCustomer: Boolean(customer),
+          isSupplier: Boolean(supplier),
+        },
+      })),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
+  }
+
   async findOrCreateByDocument(
     transaction: PersonTransaction,
     person: PersonIdentityInput,
   ) {
+    const hasFirstName = Boolean(person.firstName);
+    const hasLastName = Boolean(person.lastName);
+    const hasBusinessName = Boolean(person.businessName);
+
+    if (hasFirstName !== hasLastName) {
+      throw new BadRequestException(
+        "firstName and lastName must be provided together",
+      );
+    }
+    if (!hasBusinessName && !(hasFirstName && hasLastName)) {
+      throw new BadRequestException(
+        "Provide businessName or both firstName and lastName",
+      );
+    }
+
     const documentType = await transaction.documentType.findUnique({
       where: { id: person.documentTypeId },
       select: { id: true, active: true },
@@ -61,6 +162,21 @@ export class PersonsService {
       return existingPerson;
     }
 
+    const existingEmail = await transaction.person.findFirst({
+      where: {
+        email: { equals: person.email.toLowerCase(), mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+    if (existingEmail) {
+      throw new ConflictException({
+        code: "EMAIL_ALREADY_IN_USE",
+        message:
+          "This email address is already associated with another person.",
+        details: {},
+      });
+    }
+
     return transaction.person.create({
       data: {
         documentTypeId: person.documentTypeId,
@@ -68,7 +184,7 @@ export class PersonsService {
         firstName: person.firstName,
         lastName: person.lastName,
         businessName: person.businessName,
-        email: person.email?.toLowerCase(),
+        email: person.email.toLowerCase(),
         phone: person.phone,
         address: person.address,
       },
@@ -93,51 +209,12 @@ export class PersonsService {
     person: CreatePersonDto,
     email: string,
   ) {
-    if (Boolean(person.documentTypeId) !== Boolean(person.documentNumber)) {
-      throw new BadRequestException(
-        "documentTypeId and documentNumber must be provided together",
-      );
-    }
-
-    if (person.documentTypeId) {
-      const documentType = await transaction.documentType.findUnique({
-        where: { id: person.documentTypeId },
-        select: { id: true, active: true },
-      });
-      if (!documentType || !documentType.active) {
-        throw new NotFoundException("Active document type not found");
-      }
-
-      const existingPerson = await transaction.person.findUnique({
-        where: {
-          documentTypeId_documentNumber: {
-            documentTypeId: person.documentTypeId,
-            documentNumber: person.documentNumber!,
-          },
-        },
-        select: { id: true },
-      });
-      if (existingPerson) {
-        throw new ConflictException(
-          "Person with this document already exists; use personId to associate the account",
-        );
-      }
-    }
-
-    const createdPerson = await transaction.person.create({
-      data: {
-        documentTypeId: person.documentTypeId,
-        documentNumber: person.documentNumber,
-        firstName: person.firstName,
-        lastName: person.lastName,
-        email,
-        phone: person.phone,
-        address: person.address,
-      },
-      select: { id: true },
+    const resolvedPerson = await this.findOrCreateByDocument(transaction, {
+      ...person,
+      email,
     });
 
-    return createdPerson.id;
+    return resolvedPerson.id;
   }
 
   async findAvailableForUserAccount(

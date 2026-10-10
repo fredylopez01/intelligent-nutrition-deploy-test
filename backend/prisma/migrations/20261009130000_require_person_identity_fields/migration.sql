@@ -1,3 +1,11 @@
+-- The initial seeded administrator predates the required contact columns.
+-- Keep its migration-time values aligned with prisma/seed.ts.
+UPDATE "person"
+SET "phone" = COALESCE(NULLIF(BTRIM("phone"), ''), '0000000000'),
+        "address" = COALESCE(NULLIF(BTRIM("address"), ''), 'System account')
+WHERE "document_number" = '1000000000'
+    AND LOWER("email") = LOWER('intelligentnutrition.shop@gmail.com');
+
 DO $$
 BEGIN
     IF EXISTS (
