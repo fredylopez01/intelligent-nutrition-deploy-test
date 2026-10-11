@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  NotFoundException,
 } from "@nestjs/common";
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { CreateCategoryDto } from "./dto/create-category.dto.js";
@@ -86,6 +87,14 @@ export class CategoriesService {
         skip,
         take: limit,
         orderBy: { [sortBy]: sortOrder },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          active: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       }),
     ]);
 
@@ -98,5 +107,16 @@ export class CategoriesService {
         totalPages: total === 0 ? 0 : Math.ceil(total / limit),
       },
     };
+  }
+
+  async findOne(categoryId: string) {
+    const categoy = await this.prisma.category.findUnique({
+      where: { id: categoryId },
+    });
+    if (!categoy) {
+      throw new NotFoundException("Category not found");
+    }
+
+    return categoy;
   }
 }

@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Ip, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Ip,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from "@nestjs/common";
 import { CategoriesService } from "./categories.service.js";
 import { Roles } from "../../common/decorators/roles.decorator.js";
 import { CreateCategoryDto } from "./dto/create-category.dto.js";
@@ -26,7 +35,13 @@ export class CategoriesController {
 
   @Get()
   @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
-  finAll(@Query() query: ListCategoriesQueryDto) {
+  findAll(@Query() query: ListCategoriesQueryDto) {
     return this.categoriesService.findAll(query);
+  }
+
+  @Get(":categoryId")
+  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  findOne(@Param("categoryId", new ParseUUIDPipe()) categoryId: string) {
+    return this.categoriesService.findOne(categoryId);
   }
 }
