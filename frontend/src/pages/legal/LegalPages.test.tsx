@@ -83,8 +83,8 @@ describe.each([
 
     const contact = screen.getByRole('complementary', { name: 'Contacto' })
     expect(
-      within(contact).getByRole('link', { name: 'intelligentenutrition.shop@gmail.com' }),
-    ).toHaveAttribute('href', 'mailto:intelligentenutrition.shop@gmail.com')
+      within(contact).getByRole('link', { name: 'intelligentnutrition.shop@gmail.com' }),
+    ).toHaveAttribute('href', 'mailto:intelligentnutrition.shop@gmail.com')
   })
 })
 

@@ -183,7 +183,12 @@ export function SuppliersPage() {
         )}
       </div>
 
-      <Modal open={isCreateOpen} title="Registrar proveedor" onClose={() => setIsCreateOpen(false)}>
+      <Modal
+        open={isCreateOpen}
+        title="Registrar proveedor"
+        description="Busca primero a la persona o empresa para no duplicarla. Si no existe, la registras desde cero."
+        onClose={() => setIsCreateOpen(false)}
+      >
         <CreateSupplierForm
           onCreated={handleSupplierCreated}
           onCancel={() => setIsCreateOpen(false)}

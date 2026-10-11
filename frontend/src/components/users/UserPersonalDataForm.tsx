@@ -28,8 +28,16 @@ const personalDataSchema = z.object({
     .min(1, 'Ingresa el correo electrónico')
     .email('Ingresa un correo válido')
     .max(150, 'El correo no puede superar 150 caracteres'),
-  phone: z.string().trim().max(30, 'El teléfono no puede superar 30 caracteres'),
-  address: z.string().trim().max(255, 'La dirección no puede superar 255 caracteres'),
+  phone: z
+    .string()
+    .trim()
+    .min(1, 'Ingresa el teléfono')
+    .regex(/^\d{7,15}$/, 'El teléfono solo lleva números, entre 7 y 15 dígitos'),
+  address: z
+    .string()
+    .trim()
+    .min(1, 'Ingresa la dirección')
+    .max(255, 'La dirección no puede superar 255 caracteres'),
 })
 
 type PersonalDataValues = z.infer<typeof personalDataSchema>
@@ -140,7 +148,7 @@ export function UserPersonalDataForm({ user, onSaved }: UserPersonalDataFormProp
           id="user-phone"
           label="Teléfono"
           autoComplete="tel"
-          placeholder="Sin registrar"
+          inputMode="numeric"
           error={errors.phone?.message}
           {...register('phone')}
         />
@@ -148,7 +156,6 @@ export function UserPersonalDataForm({ user, onSaved }: UserPersonalDataFormProp
           id="user-address"
           label="Dirección"
           autoComplete="street-address"
-          placeholder="Sin registrar"
           error={errors.address?.message}
           {...register('address')}
         />

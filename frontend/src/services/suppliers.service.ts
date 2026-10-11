@@ -66,12 +66,12 @@ export const suppliersService = {
       return {
         id: `mock-${Date.now()}`,
         person: {
-          businessName: payload.person.businessName,
-          documentNumber: payload.person.documentNumber,
-          documentType: { code: 'CC', name: 'Cédula de Ciudadanía' },
-          email: payload.person.email,
-          phone: payload.person.phone,
-          address: payload.person.address ?? null,
+          businessName: 'person' in payload ? payload.person.businessName : null,
+          documentNumber: 'person' in payload ? payload.person.documentNumber : null,
+          documentType: { code: 'NIT', name: 'Número de Identificación Tributaria' },
+          email: 'person' in payload ? payload.person.email : null,
+          phone: 'person' in payload ? payload.person.phone : null,
+          address: 'person' in payload ? payload.person.address : null,
           active: true,
         },
         commercialName: payload.commercialName,
