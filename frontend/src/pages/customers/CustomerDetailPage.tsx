@@ -1,17 +1,26 @@
+import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 
+import { CustomerDataForm } from '../../components/customers/CustomerDataForm'
+import { CustomerStatusModal } from '../../components/customers/CustomerStatusModal'
 import { Alert } from '../../components/ui/Alert'
 import { Avatar } from '../../components/ui/Avatar'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { TextField } from '../../components/ui/TextField'
 import { StatusBadge } from '../../components/users/StatusBadge'
+import { useAuth } from '../../hooks/useAuth'
 import { useCustomer } from '../../hooks/useCustomer'
 import { AppLayout } from '../../layouts/AppLayout'
-import { CUSTOMER_KIND_LABELS, getCustomerDocument, getCustomerKind } from '../../utils/customers'
+import type { Customer } from '../../types/customer'
+import {
+  CUSTOMER_KIND_LABELS,
+  canManageCustomerStatus,
+  getStatusChangedMessage,
+  getCustomerDocument,
+  getCustomerKind,
+} from '../../utils/customers'
 import { formatDateTime } from '../../utils/format'
 
-import '../../components/customers/CustomerForm.css'
 import './CustomerDetailPage.css'
 
 const BACK_LABEL = 'Volver al listado de clientes'
@@ -19,7 +28,10 @@ const BACK_LABEL = 'Volver al listado de clientes'
 export function CustomerDetailPage() {
   const { customerId } = useParams()
   const location = useLocation()
+  const { user } = useAuth()
   const { status, customer, error, refetch } = useCustomer(customerId)
+  const [statusCustomer, setStatusCustomer] = useState<Customer | null>(null)
+  const [statusFeedback, setStatusFeedback] = useState<string | null>(null)
 
   const backTo = (location.state as { from?: string } | null)?.from ?? '/clientes'
 
@@ -77,6 +89,24 @@ export function CustomerDetailPage() {
 
   const kind = getCustomerKind(customer)
 
+  const statusAction = canManageCustomerStatus(user?.role.name) ? (
+    <Button
+      variant={customer.active ? 'danger' : 'outline'}
+      onClick={() => {
+        setStatusFeedback(null)
+        setStatusCustomer(customer)
+      }}
+    >
+      {customer.active ? 'Desactivar cliente' : 'Activar cliente'}
+    </Button>
+  ) : null
+
+  const handleStatusChanged = (changed: Customer, active: boolean) => {
+    setStatusCustomer(null)
+    setStatusFeedback(getStatusChangedMessage(changed.fullName, active))
+    refetch()
+  }
+
   return (
     <AppLayout
       title={customer.fullName}
@@ -85,8 +115,15 @@ export function CustomerDetailPage() {
       }
       backTo={backTo}
       backLabel={BACK_LABEL}
+      actions={statusAction}
     >
-      {!customer.active && (
+      {statusFeedback && (
+        <div className="customer-page__feedback">
+          <Alert tone="success">{statusFeedback}</Alert>
+        </div>
+      )}
+
+      {!customer.active && !statusFeedback && (
         <div className="customer-page__feedback">
           <Alert tone="info">
             Este cliente está inactivo: conserva su historial, pero no se puede usar en ventas
@@ -134,70 +171,19 @@ export function CustomerDetailPage() {
           <h2 id="customer-data-title" className="customer-page__panel-title">
             Datos del cliente
           </h2>
-          <p className="customer-page__panel-text">Información registrada del cliente.</p>
-          <div className="customer-form customer-form--readonly">
-            <p className="customer-form__section-title">Identificación</p>
-            <div className="customer-form__row">
-              <TextField
-                id="customer-documentType"
-                label="Tipo de documento"
-                value={customer.person.documentType.name}
-                readOnly
-              />
-              <TextField
-                id="customer-documentNumber"
-                label="Número de documento"
-                value={customer.person.documentNumber}
-                readOnly
-              />
-            </div>
-            {kind === 'empresa' ? (
-              <TextField
-                id="customer-businessName"
-                label="Razón social"
-                value={customer.person.businessName ?? ''}
-                readOnly
-              />
-            ) : (
-              <div className="customer-form__row">
-                <TextField
-                  id="customer-firstName"
-                  label="Nombres"
-                  value={customer.person.firstName ?? ''}
-                  readOnly
-                />
-                <TextField
-                  id="customer-lastName"
-                  label="Apellidos"
-                  value={customer.person.lastName ?? ''}
-                  readOnly
-                />
-              </div>
-            )}
-            <p className="customer-form__section-title">Contacto</p>
-            <TextField
-              id="customer-email"
-              label="Correo electrónico"
-              value={customer.person.email}
-              readOnly
-            />
-            <div className="customer-form__row">
-              <TextField
-                id="customer-phone"
-                label="Teléfono"
-                value={customer.person.phone}
-                readOnly
-              />
-              <TextField
-                id="customer-address"
-                label="Dirección"
-                value={customer.person.address}
-                readOnly
-              />
-            </div>
-          </div>
+          <p className="customer-page__panel-text">
+            Pulsa "Actualizar información" para editar. Si esta persona también es proveedor o
+            usuario del sistema, los cambios de contacto se reflejan allí.
+          </p>
+          <CustomerDataForm customer={customer} onSaved={refetch} />
         </section>
       </div>
+
+      <CustomerStatusModal
+        customer={statusCustomer}
+        onClose={() => setStatusCustomer(null)}
+        onChanged={handleStatusChanged}
+      />
     </AppLayout>
   )
 }

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
@@ -67,6 +67,10 @@ function field(label: string) {
   return screen.getByLabelText(label)
 }
 
+async function startEditing(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: 'Actualizar información' }))
+}
+
 beforeEach(() => {
   vi.resetAllMocks()
   auth.role = 'SUPERADMIN'
@@ -116,18 +120,15 @@ describe('CustomerDetailPage view', () => {
   })
 })
 
-describe('CustomerDetailPage data', () => {
-  it('shows the registered data read only', async () => {
+describe('CustomerDetailPage update', () => {
+  it('loads the current data read only, with the document always locked', async () => {
     renderPage()
-    await screen.findByRole('heading', { level: 1, name: 'Laura Pérez' })
+    await screen.findByRole('button', { name: 'Actualizar información' })
 
     expect(field('Tipo de documento')).toHaveValue('Cédula de Ciudadanía')
     expect(field('Número de documento')).toHaveValue('1049000111')
     expect(field('Nombres')).toHaveValue('Laura')
-    expect(field('Apellidos')).toHaveValue('Pérez')
     expect(field('Correo electrónico')).toHaveValue('laura@correo.com')
-    expect(field('Teléfono')).toHaveValue('3001112233')
-    expect(field('Dirección')).toHaveValue('Calle 20 # 10-15, Tunja')
     for (const label of [
       'Tipo de documento',
       'Número de documento',
@@ -139,13 +140,198 @@ describe('CustomerDetailPage data', () => {
     ]) {
       expect(field(label)).toHaveAttribute('readonly')
     }
+    expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument()
   })
 
-  it('shows the business name of a company', async () => {
-    getCustomer.mockResolvedValue(buildCompanyCustomer())
-    renderPage('customer-gym')
+  it('enables the editable fields but keeps the document read only', async () => {
+    const { user } = renderPage()
 
-    expect(await screen.findByLabelText('Razón social')).toHaveValue('Gimnasio Fuerza SAS')
+    await startEditing(user)
+
+    for (const label of ['Nombres', 'Apellidos', 'Correo electrónico', 'Teléfono', 'Dirección']) {
+      expect(field(label)).not.toHaveAttribute('readonly')
+    }
+    expect(field('Tipo de documento')).toHaveAttribute('readonly')
+    expect(field('Número de documento')).toHaveAttribute('readonly')
+    expect(field('Nombres')).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled()
+  })
+
+  it('sends only the changed fields and confirms', async () => {
+    const updated = buildNaturalCustomer({
+      person: { ...laura.person, phone: '3127778899', email: 'laura.p@correo.com' },
+    })
+    updateCustomer.mockResolvedValue(updated)
+    const { user } = renderPage()
+    await startEditing(user)
+
+    await user.clear(field('Teléfono'))
+    await user.type(field('Teléfono'), '3127778899')
+    await user.clear(field('Correo electrónico'))
+    await user.type(field('Correo electrónico'), ' Laura.P@Correo.com ')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(updateCustomer).toHaveBeenCalledWith(
+      'customer-laura',
+      { person: { email: 'laura.p@correo.com', phone: '3127778899' } },
+      'test-token',
+    )
+    expect(await screen.findByText('Cliente actualizado exitosamente.')).toBeInTheDocument()
+    await waitFor(() => expect(getCustomer).toHaveBeenCalledTimes(2))
+    expect(field('Teléfono')).toHaveAttribute('readonly')
+  })
+
+  it('edits the business name of a company', async () => {
+    const gym = buildCompanyCustomer()
+    getCustomer.mockResolvedValue(gym)
+    updateCustomer.mockResolvedValue(gym)
+    const { user } = renderPage('customer-gym')
+    await startEditing(user)
+
     expect(screen.queryByLabelText('Nombres')).not.toBeInTheDocument()
+    expect(field('Razón social')).toHaveFocus()
+    await user.clear(field('Razón social'))
+    await user.type(field('Razón social'), 'Gimnasio Fuerza Boyacá SAS')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(updateCustomer).toHaveBeenCalledWith(
+      'customer-gym',
+      { person: { businessName: 'Gimnasio Fuerza Boyacá SAS' } },
+      'test-token',
+    )
+  })
+
+  it('does not call the api when nothing changed', async () => {
+    const { user } = renderPage()
+    await startEditing(user)
+
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No hay cambios por guardar.')
+    expect(updateCustomer).not.toHaveBeenCalled()
+  })
+
+  it('validates before saving', async () => {
+    const { user } = renderPage()
+    await startEditing(user)
+
+    await user.clear(field('Nombres'))
+    await user.clear(field('Teléfono'))
+    await user.type(field('Teléfono'), '300-111')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(await screen.findByText('Ingresa los nombres')).toBeInTheDocument()
+    expect(
+      screen.getByText('El teléfono solo lleva números, entre 7 y 15 dígitos'),
+    ).toBeInTheDocument()
+    expect(updateCustomer).not.toHaveBeenCalled()
+  })
+
+  it('discards the changes when cancelled', async () => {
+    const { user } = renderPage()
+    await startEditing(user)
+
+    await user.clear(field('Dirección'))
+    await user.type(field('Dirección'), 'Otra dirección')
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(field('Dirección')).toHaveValue('Calle 20 # 10-15, Tunja')
+    expect(field('Dirección')).toHaveAttribute('readonly')
+    expect(updateCustomer).not.toHaveBeenCalled()
+  })
+
+  it('shows the api error and stays in edit mode', async () => {
+    updateCustomer.mockRejectedValue(new ApiError('Email in use', 409, {}, 'EMAIL_ALREADY_IN_USE'))
+    const { user } = renderPage()
+    await startEditing(user)
+
+    await user.clear(field('Correo electrónico'))
+    await user.type(field('Correo electrónico'), 'gym@correo.com')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Ese correo ya pertenece a otra persona registrada. Usa un correo diferente.',
+    )
+    expect(field('Correo electrónico')).not.toHaveAttribute('readonly')
+  })
+})
+
+describe('CustomerDetailPage state', () => {
+  it('lets the superadmin deactivate from the header', async () => {
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar cliente' }))
+    const dialog = screen.getByRole('dialog', { name: '¿Desactivar este cliente?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, desactivar' }))
+
+    expect(updateStatus).toHaveBeenCalledWith('customer-laura', { active: false }, 'test-token')
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'El cliente Laura Pérez quedó inactivo. Ya no se podrá usar en ventas nuevas.',
+    )
+    await waitFor(() => expect(getCustomer).toHaveBeenCalledTimes(2))
+  })
+
+  it('activates an inactive customer', async () => {
+    getCustomer.mockResolvedValue({ ...laura, active: false })
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Activar cliente' }))
+    const dialog = screen.getByRole('dialog', { name: '¿Activar este cliente?' })
+    expect(dialog).toHaveTextContent(
+      'Laura Pérez volverá a estar disponible para registrarle ventas.',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, activar' }))
+
+    expect(updateStatus).toHaveBeenCalledWith('customer-laura', { active: true }, 'test-token')
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'El cliente Laura Pérez quedó activo.',
+    )
+  })
+
+  it('does nothing when the confirmation is cancelled', async () => {
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar cliente' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
+
+    expect(updateStatus).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps the confirmation open with the api error', async () => {
+    updateStatus.mockRejectedValue(
+      new ApiError('Customer is already in the requested state.', 409, {}, 'ALREADY_IN_STATE'),
+    )
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar cliente' }))
+    const dialog = screen.getByRole('dialog', { name: '¿Desactivar este cliente?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, desactivar' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'El cliente ya tenía ese estado. Recarga el listado para ver su estado actual.',
+    )
+  })
+
+  it('lets the branch leader deactivate, as the contract allows', async () => {
+    auth.role = 'BRANCH_LEADER'
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar cliente' }))
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Sí, desactivar' }),
+    )
+
+    expect(updateStatus).toHaveBeenCalledWith('customer-laura', { active: false }, 'test-token')
+  })
+
+  it('hides the state action from the branch assistant', async () => {
+    auth.role = 'BRANCH_ASSISTANT'
+    renderPage()
+
+    await screen.findByRole('button', { name: 'Actualizar información' })
+    expect(
+      screen.queryByRole('button', { name: /Desactivar cliente|Activar cliente/ }),
+    ).not.toBeInTheDocument()
   })
 })
