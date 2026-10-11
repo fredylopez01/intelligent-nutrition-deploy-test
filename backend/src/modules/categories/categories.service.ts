@@ -23,7 +23,10 @@ export class CategoriesService {
     });
 
     if (existingCategory) {
-      throw new ConflictException("Category with this name already exists");
+      throw new ConflictException({
+        code: "CATEGORY_NAME_ALREADY_EXISTS",
+        message: "Category with this name already exists",
+      });
     }
 
     return this.prisma.$transaction(async (transaction) => {
