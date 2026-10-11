@@ -1,15 +1,21 @@
 import { jest, describe, beforeEach, it, expect } from "@jest/globals";
 
+type AsyncMock = (...args: unknown[]) => Promise<unknown>;
+
+const userAccountFindUnique = jest.fn<AsyncMock>();
+const personFindUnique = jest.fn<AsyncMock>();
+const transactionSpy = jest.fn<AsyncMock>();
+
 const prismaMock: any = {
   userAccount: {
     findFirst: jest.fn(),
-    findUnique: jest.fn(),
+    findUnique: userAccountFindUnique,
     create: jest.fn(),
     update: jest.fn(),
     count: jest.fn(),
     findMany: jest.fn(),
   },
-  person: { findUnique: jest.fn(), create: jest.fn() },
+  person: { findUnique: personFindUnique, create: jest.fn() },
   role: { findUnique: jest.fn() },
   documentType: { findUnique: jest.fn() },
   branch: { findMany: jest.fn(), findUnique: jest.fn() },
@@ -20,7 +26,7 @@ const prismaMock: any = {
     create: jest.fn(),
     updateMany: jest.fn(),
   },
-  $transaction: jest.fn(),
+  $transaction: transactionSpy,
 };
 
 jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
@@ -49,7 +55,7 @@ const emailMock = {
 const personsMock = {
   create: jest.fn<(...args: any[]) => Promise<string>>(),
   findAvailableForUserAccount: jest.fn<(...args: any[]) => Promise<string>>(),
-  update: jest.fn<(...args: any[]) => Promise<void>>(),
+  updateProfile: jest.fn<(...args: any[]) => Promise<unknown>>(),
 };
 const auditMock = {
   createAuditLog: jest.fn<(...args: any[]) => Promise<any>>(),
@@ -97,7 +103,7 @@ describe("UsersService contract", () => {
     prismaMock.userBranch.updateMany.mockResolvedValue({ count: 1 });
     personsMock.create.mockResolvedValue("person-uuid-1");
     personsMock.findAvailableForUserAccount.mockResolvedValue("person-uuid-1");
-    personsMock.update.mockResolvedValue({
+    personsMock.updateProfile.mockResolvedValue({
       ...userRecord.person,
       phone: "5551234",
       address: null,
@@ -304,7 +310,7 @@ describe("UsersService contract", () => {
       phone: "5550000",
       address: "Calle 1",
     });
-    personsMock.update.mockResolvedValueOnce({
+    personsMock.updateProfile.mockResolvedValueOnce({
       ...userRecord.person,
       phone: "5551234",
       address: "Calle 2",
@@ -323,7 +329,7 @@ describe("UsersService contract", () => {
       },
     );
 
-    expect(personsMock.update).toHaveBeenCalledWith(
+    expect(personsMock.updateProfile).toHaveBeenCalledWith(
       prismaMock,
       "person-uuid-1",
       { firstName: " Juan Carlos " },
@@ -347,6 +353,83 @@ describe("UsersService contract", () => {
       }),
       prismaMock,
     );
+  });
+
+  describe("update guards", () => {
+    const branchLeader = {
+      id: "leader-person-id",
+      active: true,
+      role: { name: "BRANCH_LEADER" },
+    };
+
+    it("rejects a non-privileged user updating another account", async () => {
+      await expect(
+        service.update(
+          "person-uuid-1",
+          { person: { firstName: "Juan" } },
+          branchLeader,
+        ),
+      ).rejects.toMatchObject({
+        status: 400,
+        message: "You can only update your own account",
+      });
+      expect(transactionSpy).not.toHaveBeenCalled();
+      expect(personsMock.updateProfile).not.toHaveBeenCalled();
+    });
+
+    it("lets a non-privileged user update their own account", async () => {
+      await service.update(
+        "leader-person-id",
+        { person: { firstName: "Juan" } },
+        branchLeader,
+      );
+
+      expect(personsMock.updateProfile).toHaveBeenCalledWith(
+        prismaMock,
+        "leader-person-id",
+        { firstName: "Juan" },
+      );
+    });
+
+    it.each([
+      ["no person block", {}],
+      ["an empty person block", { person: {} }],
+    ])("rejects an update with %s", async (_label, changes) => {
+      await expect(
+        service.update("person-uuid-1", changes, currentAdmin),
+      ).rejects.toMatchObject({
+        status: 400,
+        message: "At least one field must be provided",
+      });
+      expect(transactionSpy).not.toHaveBeenCalled();
+    });
+
+    it("returns not found when the person does not exist", async () => {
+      personFindUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        service.update(
+          "person-uuid-1",
+          { person: { firstName: "Juan" } },
+          currentAdmin,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(personsMock.updateProfile).not.toHaveBeenCalled();
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+    });
+
+    it("returns not found when the account cannot be read after the update", async () => {
+      userAccountFindUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        service.update(
+          "person-uuid-1",
+          { person: { firstName: "Juan" } },
+          currentAdmin,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+    });
   });
 
   it("deactivates a user and audits the status transition", async () => {
