@@ -342,7 +342,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test u
 
 ```bash
 cd backend
-node --experimental-vm-modules node_modules/jest/bin/jest.js
+npm test
 ```
 
 ### Tests E2E
