@@ -9,6 +9,8 @@ import {
 } from "@jest/globals";
 import { INestApplication } from "@nestjs/common";
 
+type AsyncMock = (...args: unknown[]) => Promise<unknown>;
+
 process.env.JWT_SECRET = "test-secret";
 process.env.FRONTEND_URL = "http://localhost:3000";
 
@@ -19,7 +21,7 @@ const { PassportModule } = await import("@nestjs/passport");
 const { JwtModule, JwtService } = await import("@nestjs/jwt");
 const { UsersController } = await import("./users.controller.js");
 const { UsersService } = await import("./users.service.js");
-const { PersonsModule } = await import("../persons/persons.module.js");
+const { PersonsService } = await import("../persons/persons.service.js");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
 const { EmailService } = await import("../email/email.service.js");
@@ -47,7 +49,13 @@ const mockPrisma = {
     count: jest.fn(),
     findMany: jest.fn(),
   },
-  person: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+  person: {
+    findUnique: jest.fn<AsyncMock>(),
+    findFirst: jest.fn<AsyncMock>(),
+    create: jest.fn(),
+    update: jest.fn(),
+  },
+  documentType: { findUnique: jest.fn<AsyncMock>() },
   role: { findUnique: jest.fn() },
   branch: { findMany: jest.fn(), findUnique: jest.fn() },
   userBranch: {
@@ -67,7 +75,6 @@ mockPrisma.$transaction.mockImplementation((operation: any) =>
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PassportModule,
-    PersonsModule,
     JwtModule.register({
       secret: "test-secret",
       signOptions: { expiresIn: "1h" },
@@ -76,6 +83,7 @@ mockPrisma.$transaction.mockImplementation((operation: any) =>
   controllers: [UsersController],
   providers: [
     UsersService,
+    PersonsService,
     Reflector,
     JwtStrategy,
     JwtAuthGuard,
@@ -131,6 +139,28 @@ describe("Users audit log generation (e2e)", () => {
   const mockNewRole = { id: newRoleId, name: "LIDER SEDE", active: true };
   const mockBranch = { id: branchId, name: "Sede Centro", active: true };
 
+  const documentTypeId = "d4e5f6a7-b8c9-4123-8def-234567890123";
+
+  const validPersonPayload = {
+    documentTypeId,
+    documentNumber: "1020304050",
+    firstName: "Juan",
+    lastName: "Perez",
+    email: "juan@test.com",
+    phone: "3000000000",
+    address: "Carrera 10 # 20-30",
+  };
+
+  const mockPersonLookupsForCreation = () =>
+    mockPrisma.person.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: userId,
+        active: true,
+        email: "juan@test.com",
+        userAccount: null,
+      });
+
   const mockUser = {
     personId: userId,
     person: {
@@ -179,6 +209,13 @@ describe("Users audit log generation (e2e)", () => {
     prisma.userAccount.update.mockReset();
     prisma.userAccount.update.mockResolvedValue(mockUser);
     prisma.person.findUnique.mockReset();
+    mockPrisma.documentType.findUnique.mockReset();
+    mockPrisma.documentType.findUnique.mockResolvedValue({
+      id: documentTypeId,
+      active: true,
+    });
+    mockPrisma.person.findFirst.mockReset();
+    mockPrisma.person.findFirst.mockResolvedValue(null);
     prisma.person.create.mockReset();
     prisma.person.create.mockResolvedValue({ id: userId });
     prisma.person.update.mockReset();
@@ -207,15 +244,13 @@ describe("Users audit log generation (e2e)", () => {
 
   describe("POST /users — CREATE", () => {
     it("records exactly one CREATE audit log with reason and new values", async () => {
+      mockPersonLookupsForCreation();
+
       await request(app.getHttpServer())
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          person: {
-            firstName: "Juan",
-            lastName: "Perez",
-            email: "juan@test.com",
-          },
+          person: validPersonPayload,
           roleId,
           branchIds: [],
         })
@@ -244,16 +279,13 @@ describe("Users audit log generation (e2e)", () => {
 
     it("records one CREATE plus one ASSIGN audit log per assigned branch", async () => {
       prisma.branch.findMany.mockResolvedValueOnce([mockBranch]);
+      mockPersonLookupsForCreation();
 
       await request(app.getHttpServer())
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          person: {
-            firstName: "Juan",
-            lastName: "Perez",
-            email: "juan@test.com",
-          },
+          person: validPersonPayload,
           roleId,
           branchIds: [branchId],
         })
@@ -287,11 +319,7 @@ describe("Users audit log generation (e2e)", () => {
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          person: {
-            firstName: "Juan",
-            lastName: "Perez",
-            email: "juan@test.com",
-          },
+          person: validPersonPayload,
           roleId,
           branchIds: [],
         })
