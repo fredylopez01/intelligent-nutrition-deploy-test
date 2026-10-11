@@ -1,10 +1,25 @@
 import { jest, describe, beforeEach, it, expect } from "@jest/globals";
+import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
+import type { CreateSupplierDto } from "./dto/create-supplier.dto.js";
 
-const prismaMock: any = {
-  documentType: { findUnique: jest.fn() },
-  person: { findUnique: jest.fn(), create: jest.fn() },
-  supplier: { create: jest.fn() },
-  $transaction: jest.fn(),
+type AsyncMock = (...args: unknown[]) => Promise<unknown>;
+type TransactionOperation = (client: unknown) => Promise<unknown>;
+type PersonDto = NonNullable<CreateSupplierDto["person"]>;
+type PersonSource = Pick<CreateSupplierDto, "person" | "personId">;
+
+const prismaMock = {
+  person: { findUnique: jest.fn<AsyncMock>() },
+  supplier: { findUnique: jest.fn<AsyncMock>(), create: jest.fn<AsyncMock>() },
+  $transaction:
+    jest.fn<(operation: TransactionOperation) => Promise<unknown>>(),
+};
+
+const personsServiceMock = {
+  findOrCreateByDocument: jest.fn<AsyncMock>(),
+};
+
+const auditMock = {
+  createAuditLog: jest.fn<AsyncMock>(),
 };
 
 jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
@@ -17,22 +32,13 @@ const { BadRequestException, ConflictException, NotFoundException } =
 const { SuppliersService } = await import("./suppliers.service.js");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
+const { PersonsService } = await import("../persons/persons.service.js");
 const { AuditService } = await import("../audit/audit.service.js");
 
-const auditMock = {
-  createAuditLog: jest.fn<(...args: any[]) => Promise<any>>(),
-};
-
-const currentUser = {
+const currentUser: AuthenticatedUser = {
   id: "admin-person-id",
   active: true,
   role: { name: "SUPERADMIN" },
-};
-
-const personSelect = {
-  id: true,
-  active: true,
-  supplier: { select: { personId: true } },
 };
 
 const supplierRecord = {
@@ -51,7 +57,7 @@ const supplierRecord = {
   },
 };
 
-const personDto = {
+const personDto: PersonDto = {
   documentTypeId: "document-type-uuid",
   documentNumber: "900123456",
   businessName: "Distribuidora Salud SAS",
@@ -65,20 +71,19 @@ describe("SuppliersService.create", () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    prismaMock.$transaction.mockImplementation((operation: any) =>
-      Array.isArray(operation) ? Promise.all(operation) : operation(prismaMock),
+    prismaMock.$transaction.mockImplementation((operation) =>
+      operation(prismaMock),
     );
-    prismaMock.documentType.findUnique.mockResolvedValue({
-      id: "document-type-uuid",
-      active: true,
-    });
     prismaMock.person.findUnique.mockResolvedValue({
       id: "person-uuid-1",
       active: true,
-      supplier: null,
     });
-    prismaMock.person.create.mockResolvedValue({ id: "person-new-uuid" });
+    prismaMock.supplier.findUnique.mockResolvedValue(null);
     prismaMock.supplier.create.mockResolvedValue(supplierRecord);
+    personsServiceMock.findOrCreateByDocument.mockResolvedValue({
+      id: "person-new-uuid",
+      active: true,
+    });
     auditMock.createAuditLog.mockResolvedValue({});
 
     const module = await Test.createTestingModule({
@@ -86,6 +91,7 @@ describe("SuppliersService.create", () => {
         SuppliersService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
+        { provide: PersonsService, useValue: personsServiceMock },
       ],
     }).compile();
     service = module.get(SuppliersService);
@@ -93,18 +99,19 @@ describe("SuppliersService.create", () => {
 
   it("creates a supplier from an existing person and records the audit log", async () => {
     const result = await service.create(
-      { personId: "person-uuid-1", commercialName: " Distribuidora Salud SAS " },
+      {
+        personId: "person-uuid-1",
+        commercialName: " Distribuidora Salud SAS ",
+      },
       currentUser,
       "127.0.0.1",
     );
 
-    expect(prismaMock.person.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "person-uuid-1" },
-        select: personSelect,
-      }),
-    );
-    expect(prismaMock.person.create).not.toHaveBeenCalled();
+    expect(prismaMock.person.findUnique).toHaveBeenCalledWith({
+      where: { id: "person-uuid-1" },
+      select: { id: true, active: true },
+    });
+    expect(personsServiceMock.findOrCreateByDocument).not.toHaveBeenCalled();
     expect(prismaMock.supplier.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: {
@@ -135,39 +142,17 @@ describe("SuppliersService.create", () => {
     );
   });
 
-  it("creates a new person when the document does not exist", async () => {
-    prismaMock.person.findUnique.mockResolvedValue(null);
-
+  it("creates the supplier for the person resolved from the document", async () => {
     const result = await service.create(
       { person: personDto, commercialName: "Distribuidora Salud SAS" },
       currentUser,
     );
 
-    expect(prismaMock.documentType.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: "document-type-uuid" },
-        select: { id: true, active: true },
-      }),
+    expect(personsServiceMock.findOrCreateByDocument).toHaveBeenCalledWith(
+      prismaMock,
+      personDto,
     );
-    expect(prismaMock.person.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          documentTypeId_documentNumber: {
-            documentTypeId: "document-type-uuid",
-            documentNumber: "900123456",
-          },
-        },
-      }),
-    );
-    expect(prismaMock.person.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          documentTypeId: "document-type-uuid",
-          documentNumber: "900123456",
-          businessName: "Distribuidora Salud SAS",
-        }),
-      }),
-    );
+    expect(prismaMock.person.findUnique).not.toHaveBeenCalled();
     expect(prismaMock.supplier.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ personId: "person-new-uuid" }),
@@ -176,21 +161,29 @@ describe("SuppliersService.create", () => {
     expect(result.id).toBe("person-uuid-1");
   });
 
-  it("reuses an existing active person without duplicating it", async () => {
+  it("links the supplier to the person already registered for the document", async () => {
+    personsServiceMock.findOrCreateByDocument.mockResolvedValue({
+      id: "person-uuid-1",
+      active: true,
+    });
+
     await service.create(
       { person: personDto, commercialName: "Distribuidora Salud SAS" },
       currentUser,
     );
 
-    expect(prismaMock.person.create).not.toHaveBeenCalled();
+    expect(personsServiceMock.findOrCreateByDocument).toHaveBeenCalledTimes(1);
     expect(prismaMock.supplier.create).toHaveBeenCalledTimes(1);
+    expect(prismaMock.supplier.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ personId: "person-uuid-1" }),
+      }),
+    );
   });
 
   it("rejects a duplicated NIT when the person is already a supplier", async () => {
-    prismaMock.person.findUnique.mockResolvedValue({
-      id: "person-uuid-1",
-      active: true,
-      supplier: { personId: "person-uuid-1" },
+    prismaMock.supplier.findUnique.mockResolvedValue({
+      personId: "person-uuid-1",
     });
 
     await expect(
@@ -205,6 +198,10 @@ describe("SuppliersService.create", () => {
         message: "This person is already registered as a supplier.",
       },
     });
+    expect(prismaMock.supplier.findUnique).toHaveBeenCalledWith({
+      where: { personId: "person-uuid-1" },
+      select: { personId: true },
+    });
     expect(prismaMock.supplier.create).not.toHaveBeenCalled();
     expect(auditMock.createAuditLog).not.toHaveBeenCalled();
   });
@@ -214,7 +211,10 @@ describe("SuppliersService.create", () => {
 
     await expect(
       service.create(
-        { personId: "person-uuid-1", commercialName: "Distribuidora Salud SAS" },
+        {
+          personId: "person-uuid-1",
+          commercialName: "Distribuidora Salud SAS",
+        },
         currentUser,
       ),
     ).rejects.toMatchObject({
@@ -224,40 +224,65 @@ describe("SuppliersService.create", () => {
     expect(auditMock.createAuditLog).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["both person and personId", { person: personDto, personId: "person-uuid-1" }],
-    ["neither person nor personId", {} as any],
-  ])("rejects the request when %s is provided", async (_label, payload) => {
-    await expect(
-      service.create(
-        { ...payload, commercialName: "Distribuidora Salud SAS" },
-        currentUser,
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
-  });
+  const invalidSources: Array<[string, PersonSource]> = [
+    [
+      "both person and personId",
+      { person: personDto, personId: "person-uuid-1" },
+    ],
+    ["neither person nor personId", {}],
+  ];
 
-  it.each([
-    ["missing", null],
-    ["inactive", { id: "document-type-uuid", active: false }],
-  ])(
-    "rejects person creation when the document type is %s",
-    async (_label, documentType) => {
-      prismaMock.documentType.findUnique.mockResolvedValue(documentType);
+  it.each(invalidSources)(
+    "rejects the request when %s is provided",
+    async (_label, source) => {
+      await expect(
+        service.create(
+          { ...source, commercialName: "Distribuidora Salud SAS" },
+          currentUser,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  const personsServiceErrors: Array<[string, Error, number]> = [
+    [
+      "document type",
+      new NotFoundException("Active document type not found"),
+      404,
+    ],
+    [
+      "email already in use",
+      new ConflictException({
+        code: "EMAIL_ALREADY_IN_USE",
+        message:
+          "This email address is already associated with another person.",
+        details: {},
+      }),
+      409,
+    ],
+  ];
+
+  it.each(personsServiceErrors)(
+    "propagates the %s error from the persons service and creates nothing",
+    async (_label, error, status) => {
+      personsServiceMock.findOrCreateByDocument.mockRejectedValue(error);
 
       await expect(
         service.create(
           { person: personDto, commercialName: "Distribuidora Salud SAS" },
           currentUser,
         ),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toMatchObject({ status });
+      expect(prismaMock.supplier.findUnique).not.toHaveBeenCalled();
       expect(prismaMock.supplier.create).not.toHaveBeenCalled();
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
     },
   );
 
   it.each([
     ["missing", null],
-    ["inactive", { id: "person-uuid-1", active: false, supplier: null }],
+    ["inactive", { id: "person-uuid-1", active: false }],
   ])(
     "rejects supplier creation when the person is %s",
     async (_label, person) => {
@@ -265,7 +290,10 @@ describe("SuppliersService.create", () => {
 
       await expect(
         service.create(
-          { personId: "person-uuid-1", commercialName: "Distribuidora Salud SAS" },
+          {
+            personId: "person-uuid-1",
+            commercialName: "Distribuidora Salud SAS",
+          },
           currentUser,
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -274,10 +302,9 @@ describe("SuppliersService.create", () => {
   );
 
   it("rejects an inactive person during person-based creation", async () => {
-    prismaMock.person.findUnique.mockResolvedValue({
+    personsServiceMock.findOrCreateByDocument.mockResolvedValue({
       id: "person-uuid-1",
       active: false,
-      supplier: null,
     });
 
     await expect(
@@ -294,7 +321,10 @@ describe("SuppliersService.create", () => {
 
     await expect(
       service.create(
-        { personId: "person-uuid-1", commercialName: "Distribuidora Salud SAS" },
+        {
+          personId: "person-uuid-1",
+          commercialName: "Distribuidora Salud SAS",
+        },
         currentUser,
       ),
     ).rejects.toThrow("connection lost");

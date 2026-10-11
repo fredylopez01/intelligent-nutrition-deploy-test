@@ -9,6 +9,8 @@ import {
 } from "@jest/globals";
 import { INestApplication } from "@nestjs/common";
 
+type AsyncMock = (...args: unknown[]) => Promise<unknown>;
+
 process.env.JWT_SECRET = "test-secret";
 process.env.FRONTEND_URL = "http://localhost:3000";
 
@@ -22,6 +24,7 @@ const { SuppliersService } = await import("./suppliers.service.js");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
 const { AuditService } = await import("../audit/audit.service.js");
+const { PersonsService } = await import("../persons/persons.service.js");
 const { Reflector } = await import("@nestjs/core");
 const { JwtStrategy } = await import("../auth/strategies/jwt.strategy.js");
 const { JwtAuthGuard } = await import("../../common/guards/jwt-auth.guard.js");
@@ -37,8 +40,12 @@ const mockAuditService = {
 
 const mockPrisma = {
   documentType: { findUnique: jest.fn() },
-  person: { findUnique: jest.fn(), create: jest.fn() },
-  supplier: { create: jest.fn() },
+  person: {
+    findUnique: jest.fn(),
+    findFirst: jest.fn<AsyncMock>(),
+    create: jest.fn(),
+  },
+  supplier: { findUnique: jest.fn<AsyncMock>(), create: jest.fn() },
   userAccount: { findUnique: jest.fn() },
   $transaction: jest.fn(),
 };
@@ -58,6 +65,7 @@ mockPrisma.$transaction.mockImplementation((operation: any) =>
   controllers: [SuppliersController],
   providers: [
     SuppliersService,
+    PersonsService,
     Reflector,
     JwtStrategy,
     JwtAuthGuard,
@@ -144,8 +152,15 @@ describe("SuppliersController (e2e)", () => {
     });
     prisma.person.findUnique.mockReset();
     prisma.person.findUnique.mockResolvedValue(null);
+    mockPrisma.person.findFirst.mockReset();
+    mockPrisma.person.findFirst.mockResolvedValue(null);
     prisma.person.create.mockReset();
-    prisma.person.create.mockResolvedValue({ id: "person-new-uuid" });
+    prisma.person.create.mockResolvedValue({
+      id: "person-new-uuid",
+      active: true,
+    });
+    mockPrisma.supplier.findUnique.mockReset();
+    mockPrisma.supplier.findUnique.mockResolvedValue(null);
     prisma.supplier.create.mockReset();
     prisma.supplier.create.mockResolvedValue(supplierRecord);
     mockAuditService.createAuditLog.mockReset();
@@ -234,8 +249,8 @@ describe("SuppliersController (e2e)", () => {
       prisma.person.findUnique.mockResolvedValue({
         id: personId,
         active: true,
-        supplier: { personId },
       });
+      mockPrisma.supplier.findUnique.mockResolvedValue({ personId });
 
       const response = await request(app.getHttpServer())
         .post("/suppliers")
