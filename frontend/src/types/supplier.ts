@@ -28,15 +28,18 @@ export interface Supplier {
   commercialName: string | null
 }
 
-export interface CreateSupplierPayload {
-  person: {
-    documentTypeId: string
-    documentNumber: string
-    businessName: string
-    email: string
-    phone: string
-    address?: string
-  }
+export interface CreateSupplierPersonPayload {
+  documentTypeId: string
+  documentNumber: string
+  businessName: string
+  email: string
+  phone: string
+  address: string
+}
+
+export type CreateSupplierPayload = (
+  { person: CreateSupplierPersonPayload } | { personId: string }
+) & {
   commercialName: string
 }
 
