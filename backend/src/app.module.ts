@@ -12,6 +12,7 @@ import { AuditModule } from "./modules/audit/audit.module.js";
 import { BranchesModule } from "./modules/branches/branches.module.js";
 import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
 import { CustomersModule } from "./modules/customers/customers.module.js";
+import { CategoriesModule } from "./modules/categories/categories.module.js";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { CustomersModule } from "./modules/customers/customers.module.js";
     CustomersModule,
     AuditModule,
     HealthModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
