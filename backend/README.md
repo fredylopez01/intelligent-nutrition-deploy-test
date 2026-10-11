@@ -346,23 +346,23 @@ Si la conexión falla, verifica que el **Inbound IP Restrictions** de la base de
 
 ### Tests unitarios (Jest + ESM)
 
-El proyecto usa **ESM nativo** (`"type": "module"`). Jest debe correr con el flag de VM modules:
+El proyecto usa **ESM nativo** (`"type": "module"`), por lo que Jest necesita el flag `--experimental-vm-modules`. Los scripts `test`, `test:watch`, `test:cov` y `test:debug` ya lo incluyen, así que no hace falta configurar variables de entorno:
 
 ```bash
 cd backend
-node --experimental-vm-modules node_modules/jest/bin/jest.js
-```
-
-O usando el script:
-
-```bash
 npm test
 ```
 
-**Nota:** El script `test` en `package.json` no incluye el flag de VM modules explícitamente, pero la configuración de Jest en `package.json` usa `useESM: true` y `extensionsToTreatAsEsm: [".ts"]`. Si experimentas errores de módulos, ejecuta manualmente:
+Para ejecutar un solo archivo o filtrar por nombre, pasa el filtro después de `--`:
 
 ```bash
-node --experimental-vm-modules node_modules/jest/bin/jest.js --config package.json
+npm test -- customers.service
+```
+
+Si invocas Jest directamente (por ejemplo `npx jest`), debes agregar el flag tú mismo:
+
+```bash
+node --experimental-vm-modules node_modules/jest/bin/jest.js customers.service
 ```
 
 ### Tests E2E
@@ -534,13 +534,19 @@ Sin el `"0.0.0.0"`, NestJS escucha solo en localhost y Render no puede enrutar t
 
 ### Jest falla con errores de módulos ESM
 
-El proyecto usa ESM nativo. Ejecuta Jest con:
+El proyecto usa ESM nativo. Ejecuta las pruebas con los scripts del proyecto, que ya incluyen el flag `--experimental-vm-modules`:
+
+```bash
+npm test
+```
+
+El error `Must use import to load ES Module` aparece cuando se invoca Jest directamente (`npx jest`, `jest`) sin ese flag. En ese caso usa `npm test` o ejecuta:
 
 ```bash
 node --experimental-vm-modules node_modules/jest/bin/jest.js
 ```
 
-O verifica que el flag esté incluido en la ejecución del pipeline.
+En el pipeline, ejecuta `npm test` en lugar de invocar `jest` directamente.
 
 ### `prisma generate` falla en CI
 
