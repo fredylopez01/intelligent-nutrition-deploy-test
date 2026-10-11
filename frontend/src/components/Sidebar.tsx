@@ -39,6 +39,11 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   {
+    label: 'Clientes',
+    to: '/clientes',
+    allowedRoles: ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
+  },
+  {
     label: 'Proveedores',
     to: '/proveedores',
     subs: [
