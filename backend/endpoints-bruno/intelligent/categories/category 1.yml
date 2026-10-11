@@ -1,0 +1,25 @@
+info:
+  name: category
+  type: http
+  seq: 5
+
+http:
+  method: PATCH
+  url: http://localhost:3000/api/v1/categories/d34026fe-501d-459c-840e-6cf1d9287a8b
+  body:
+    type: json
+    data: |-
+      {
+        "name": "Productos 2",
+        "description": "Productos 2"
+      }
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
