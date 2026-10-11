@@ -1,0 +1,21 @@
+info:
+  name: update-branch-status
+  type: http
+  seq: 18
+
+http:
+  method: PATCH
+  url: http://localhost:3000/api/v1/branches/9c2798de-ebbd-4641-ae2d-b4e3bfbf3b14/status
+  body:
+    type: json
+    data: "{\r\n    \"active\": true\r\n}"
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

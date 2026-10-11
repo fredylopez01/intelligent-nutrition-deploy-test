@@ -1,0 +1,39 @@
+info:
+  name: customer
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:3000/api/v1/customers
+  body:
+    type: json
+    data: "{\r
+
+      \    \"person\": {\r
+
+      \        \"documentTypeId\": \"55a45278-d11a-46d9-acb7-2b584b4fef21\",\r
+
+      \        \"documentNumber\": \"753987162\", \r
+
+      \        \"businessName\": \"Comedica S.A.S\",\r
+
+      \        \"email\": \"colmedica@gmail.com\",\r
+
+      \        \"phone\": \"108005652\",\r
+
+      \        \"address\": \"Cl 1 # 12 -18\"\r
+
+      \    }\r
+
+      }"
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

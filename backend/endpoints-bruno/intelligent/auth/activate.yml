@@ -1,0 +1,24 @@
+info:
+  name: activate
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/auth/activate
+  body:
+    type: json
+    data: "{\r
+
+      \    \"token\": \"c1b48178cea49e37c27ea6ddec87ce8ec9ea9328ff784cf9f381d4754dd8ed71\",\r
+
+      \    \"password\": \"@Password123!\"\r
+
+      }"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

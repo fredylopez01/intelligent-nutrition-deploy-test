@@ -1,0 +1,25 @@
+info:
+  name: user-assign-branch
+  type: http
+  seq: 15
+
+http:
+  method: POST
+  url: http://localhost:3000/api/v1/users/eceb2e43-57f4-4382-949f-0bd5989531fe/branches
+  body:
+    type: json
+    data: "{\r
+
+      \    \"branchId\": \"d2b8ccb0-9e8d-47a9-aba3-db8901054dcf\"\r
+
+      }"
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
