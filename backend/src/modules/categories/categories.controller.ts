@@ -16,6 +16,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { ListCategoriesQueryDto } from "./dto/list-categories-query.dto.js";
 import { UpdateCategoryStatusDto } from "./dto/update-category-status.dto.js";
+import { UpdateCategoryDto } from "./dto/update-category.dto.js";
 
 @Controller("categories")
 export class CategoriesController {
@@ -45,6 +46,22 @@ export class CategoriesController {
   @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   findOne(@Param("categoryId", new ParseUUIDPipe()) categoryId: string) {
     return this.categoriesService.findOne(categoryId);
+  }
+
+  @Patch(":categoryId")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
+  update(
+    @Param("categoryId", new ParseUUIDPipe()) categoryId: string,
+    @Body() updateCategoryDto: UpdateCategoryDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.categoriesService.update(
+      categoryId,
+      updateCategoryDto,
+      currentUser,
+      ipAddress,
+    );
   }
 
   @Patch(":categoryId/status")
