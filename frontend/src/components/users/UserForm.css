@@ -21,6 +21,17 @@
   }
 }
 
+.user-form__note {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.user-form__back {
+  margin-right: auto;
+}
+
 .user-form__section-title {
   margin-top: 0.25rem;
   font-family: var(--font-mono);

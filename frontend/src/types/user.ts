@@ -45,12 +45,11 @@ export interface CreateUserPersonPayload {
   firstName: string
   lastName: string
   email: string
-  phone?: string
-  address?: string
+  phone: string
+  address: string
 }
 
-export interface CreateUserPayload {
-  person: CreateUserPersonPayload
+export type CreateUserPayload = ({ person: CreateUserPersonPayload } | { personId: string }) & {
   roleId: string
   branchIds?: string[]
 }
