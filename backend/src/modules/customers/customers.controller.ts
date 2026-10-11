@@ -51,7 +51,7 @@ export class CustomersController {
   }
 
   @Patch(":customerId/status")
-  @Roles("SUPERADMIN")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
   updateStatus(
     @Param("customerId", new ParseUUIDPipe()) customerId: string,
     @Body() updateCustomerStatusDto: UpdateCustomerStatusDto,
