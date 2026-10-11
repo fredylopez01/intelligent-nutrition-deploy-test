@@ -9,6 +9,8 @@ import {
 } from "@jest/globals";
 import { INestApplication } from "@nestjs/common";
 
+type AsyncMock = (...args: unknown[]) => Promise<unknown>;
+
 process.env.JWT_SECRET = "test-secret";
 process.env.FRONTEND_URL = "http://localhost:3000";
 
@@ -19,7 +21,7 @@ const { PassportModule } = await import("@nestjs/passport");
 const { JwtModule, JwtService } = await import("@nestjs/jwt");
 const { UsersController } = await import("./users.controller.js");
 const { UsersService } = await import("./users.service.js");
-const { PersonsModule } = await import("../persons/persons.module.js");
+const { PersonsService } = await import("../persons/persons.service.js");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
 const { EmailService } = await import("../email/email.service.js");
@@ -44,9 +46,13 @@ const mockPrisma = {
     count: jest.fn(),
     findMany: jest.fn(),
   },
-  person: { findUnique: jest.fn(), create: jest.fn() },
+  person: {
+    findUnique: jest.fn<AsyncMock>(),
+    findFirst: jest.fn<AsyncMock>(),
+    create: jest.fn(),
+  },
   role: { findUnique: jest.fn() },
-  documentType: { findUnique: jest.fn() },
+  documentType: { findUnique: jest.fn<AsyncMock>() },
   branch: { findMany: jest.fn() },
   $transaction: jest.fn(),
 };
@@ -58,7 +64,6 @@ mockPrisma.$transaction.mockImplementation((operation: any) =>
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PassportModule,
-    PersonsModule,
     JwtModule.register({
       secret: "test-secret",
       signOptions: { expiresIn: "1h" },
@@ -67,6 +72,7 @@ mockPrisma.$transaction.mockImplementation((operation: any) =>
   controllers: [UsersController],
   providers: [
     UsersService,
+    PersonsService,
     Reflector,
     JwtStrategy,
     JwtAuthGuard,
@@ -146,6 +152,21 @@ describe("UsersController (e2e)", () => {
     role: { id: "b2c3d4e5-f6a7-8901-bcde-f12345678901", name: "LIDER SEDE" },
   };
 
+  const documentTypeId = "d4e5f6a7-b8c9-4123-8def-234567890123";
+
+  const validPersonPayload = {
+    documentTypeId,
+    documentNumber: "1020304050",
+    firstName: "Juan",
+    lastName: "Perez",
+    email: "juan@test.com",
+    phone: "3000000000",
+    address: "Carrera 10 # 20-30",
+  };
+
+  const validationMessages = (body: unknown): string[] =>
+    (body as { message: string[] }).message;
+
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({
       imports: [TestUsersModule],
@@ -178,7 +199,13 @@ describe("UsersController (e2e)", () => {
     prisma.person.create.mockResolvedValue({ id: mockUser.personId });
     prisma.branch.findMany.mockReset();
     prisma.branch.findMany.mockResolvedValue([]);
-    prisma.documentType.findUnique.mockReset();
+    mockPrisma.documentType.findUnique.mockReset();
+    mockPrisma.documentType.findUnique.mockResolvedValue({
+      id: documentTypeId,
+      active: true,
+    });
+    mockPrisma.person.findFirst.mockReset();
+    mockPrisma.person.findFirst.mockResolvedValue(null);
     prisma.userAccount.create.mockResolvedValue(mockUser);
   });
 
@@ -196,16 +223,20 @@ describe("UsersController (e2e)", () => {
     it("should create a user and return 201", async () => {
       prisma.role.findUnique.mockResolvedValueOnce(mockRole);
       prisma.userAccount.create.mockResolvedValueOnce(mockUser);
+      mockPrisma.person.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: mockUser.personId,
+          active: true,
+          email: "juan@test.com",
+          userAccount: null,
+        });
 
       const response = await request(app.getHttpServer())
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          person: {
-            firstName: "Juan",
-            lastName: "Perez",
-            email: "juan@test.com",
-          },
+          person: validPersonPayload,
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
           branchIds: [],
         })
@@ -238,11 +269,7 @@ describe("UsersController (e2e)", () => {
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          person: {
-            firstName: "Juan",
-            lastName: "Perez",
-            email: "juan@test.com",
-          },
+          person: validPersonPayload,
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         })
         .expect(409);
@@ -255,85 +282,105 @@ describe("UsersController (e2e)", () => {
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          person: {
-            firstName: "Juan",
-            lastName: "Perez",
-            email: "new@test.com",
-          },
+          person: { ...validPersonPayload, email: "new@test.com" },
           roleId: "00000000-0000-0000-0000-000000000000",
         })
         .expect(404);
     });
 
     it("should return 400 when email is missing", async () => {
-      await request(app.getHttpServer())
+      const response = await request(app.getHttpServer())
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          person: { firstName: "Juan", lastName: "Perez" },
+          person: { ...validPersonPayload, email: undefined },
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         })
         .expect(400);
+
+      expect(validationMessages(response.body)).toEqual(
+        expect.arrayContaining([expect.stringContaining("email")]),
+      );
     });
 
     it("should return 400 when roleId is missing", async () => {
-      await request(app.getHttpServer())
+      const response = await request(app.getHttpServer())
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
-        .send({
-          person: {
-            firstName: "Juan",
-            lastName: "Perez",
-            email: "juan@test.com",
-          },
-        })
+        .send({ person: validPersonPayload })
         .expect(400);
+
+      expect(validationMessages(response.body)).toEqual(
+        expect.arrayContaining([expect.stringContaining("roleId")]),
+      );
+    });
+
+    it.each([
+      [
+        "both person and personId",
+        {
+          person: validPersonPayload,
+          personId: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        },
+      ],
+      ["neither person nor personId", {}],
+    ])("should return 400 when %s is provided", async (_label, source) => {
+      const response = await request(app.getHttpServer())
+        .post("/users")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ ...source, roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890" })
+        .expect(400);
+
+      expect(response.body).toMatchObject({
+        message: "Provide either person or personId, but not both",
+      });
+      expect(mockPrisma.userAccount.create).not.toHaveBeenCalled();
     });
 
     it("should return 400 when email is invalid", async () => {
-      await request(app.getHttpServer())
+      const response = await request(app.getHttpServer())
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          person: {
-            firstName: "Juan",
-            lastName: "Perez",
-            email: "not-an-email",
-          },
+          person: { ...validPersonPayload, email: "not-an-email" },
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         })
         .expect(400);
+
+      expect(validationMessages(response.body)).toEqual(
+        expect.arrayContaining([expect.stringContaining("email")]),
+      );
     });
 
     it("should return 400 when firstName exceeds 100 characters", async () => {
-      await request(app.getHttpServer())
+      const response = await request(app.getHttpServer())
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          person: {
-            firstName: "A".repeat(101),
-            lastName: "Perez",
-            email: "juan@test.com",
-          },
+          person: { ...validPersonPayload, firstName: "A".repeat(101) },
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
         })
         .expect(400);
+
+      expect(validationMessages(response.body)).toEqual(
+        expect.arrayContaining([expect.stringContaining("firstName")]),
+      );
     });
 
     it("should return 400 when forbidden fields are sent", async () => {
-      await request(app.getHttpServer())
+      const response = await request(app.getHttpServer())
         .post("/users")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          person: {
-            firstName: "Juan",
-            lastName: "Perez",
-            email: "juan@test.com",
-          },
+          person: validPersonPayload,
           roleId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
           password: "password123",
         })
         .expect(400);
+
+      expect(validationMessages(response.body)).toContain(
+        "property password should not exist",
+      );
     });
   });
 
