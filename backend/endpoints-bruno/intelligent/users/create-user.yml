@@ -1,0 +1,45 @@
+info:
+  name: create-user
+  type: http
+  seq: 13
+
+http:
+  method: POST
+  url: http://localhost:3000/api/v1/users
+  body:
+    type: json
+    data: "{\r
+
+      \  \"person\": {\r
+
+      \    \"documentTypeId\": \"5e10c0f4-718d-41e8-8784-e0c74ad2a6ff\",\r
+
+      \    \"documentNumber\": \"123456789\",\r
+
+      \    \"firstName\": \"Intelligent\",\r
+
+      \    \"lastName\": \"Administrator\",\r
+
+      \    \"email\": \"juan@example.com\",\r
+
+      \    \"phone\": \"3001234567\",\r
+
+      \    \"address\": \"Calle 10 # 20-30\"\r
+
+      \  },\r
+
+      \  \"roleId\": \"role-uuid\",\r
+
+      \  \"branchIds\": [\"branch-uuid\"]\r
+
+      }"
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

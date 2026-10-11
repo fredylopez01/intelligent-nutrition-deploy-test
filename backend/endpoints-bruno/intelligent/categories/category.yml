@@ -1,0 +1,25 @@
+info:
+  name: category
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/api/v1/categories
+  body:
+    type: json
+    data: |-
+      {
+        "name": "Proteinas",
+        "description": "Productos en polvo, líquidos o en barras que aportan macronutrientes proteicos de alta biodisponibilidad"
+      }
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

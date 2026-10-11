@@ -1,0 +1,25 @@
+info:
+  name: update-role
+  type: http
+  seq: 1
+
+http:
+  method: PATCH
+  url: http://localhost:3000/roles/4a5270af-6dd0-40be-ae55-ddd9e58c914f
+  body:
+    type: json
+    data: "{\r
+
+      \  \"name\": \"ADMIN SEDE\",\r
+
+      \  \"description\": \"Administrator role for branch\"\r
+
+      }"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -1,0 +1,31 @@
+info:
+  name: update
+  type: http
+  seq: 16
+
+http:
+  method: PATCH
+  url: http://localhost:3000/api/v1/users/eceb2e43-57f4-4382-949f-0bd5989531fe
+  body:
+    type: json
+    data: "{\r
+
+      \    \"person\": {\r
+
+      \        \"firstName\": \"Intelligent\",\r
+
+      \        \"lastName\": \"Administrator\"\r
+
+      \    }\r
+
+      }"
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

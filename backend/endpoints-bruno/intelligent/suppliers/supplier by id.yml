@@ -1,0 +1,18 @@
+info:
+  name: supplier by id
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: http://localhost:3000/api/v1/suppliers/ec4cfd5a-c0d7-4cc5-97d7-5fb3bc269d9c
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
