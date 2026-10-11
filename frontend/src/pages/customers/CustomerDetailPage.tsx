@@ -1,14 +1,24 @@
+import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 
 import { CustomerDataForm } from '../../components/customers/CustomerDataForm'
+import { CustomerStatusModal } from '../../components/customers/CustomerStatusModal'
 import { Alert } from '../../components/ui/Alert'
 import { Avatar } from '../../components/ui/Avatar'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { StatusBadge } from '../../components/users/StatusBadge'
+import { useAuth } from '../../hooks/useAuth'
 import { useCustomer } from '../../hooks/useCustomer'
 import { AppLayout } from '../../layouts/AppLayout'
-import { CUSTOMER_KIND_LABELS, getCustomerDocument, getCustomerKind } from '../../utils/customers'
+import type { Customer } from '../../types/customer'
+import {
+  CUSTOMER_KIND_LABELS,
+  canManageCustomerStatus,
+  getStatusChangedMessage,
+  getCustomerDocument,
+  getCustomerKind,
+} from '../../utils/customers'
 import { formatDateTime } from '../../utils/format'
 
 import './CustomerDetailPage.css'
@@ -18,7 +28,10 @@ const BACK_LABEL = 'Volver al listado de clientes'
 export function CustomerDetailPage() {
   const { customerId } = useParams()
   const location = useLocation()
+  const { user } = useAuth()
   const { status, customer, error, refetch } = useCustomer(customerId)
+  const [statusCustomer, setStatusCustomer] = useState<Customer | null>(null)
+  const [statusFeedback, setStatusFeedback] = useState<string | null>(null)
 
   const backTo = (location.state as { from?: string } | null)?.from ?? '/clientes'
 
@@ -76,6 +89,24 @@ export function CustomerDetailPage() {
 
   const kind = getCustomerKind(customer)
 
+  const statusAction = canManageCustomerStatus(user?.role.name) ? (
+    <Button
+      variant={customer.active ? 'danger' : 'outline'}
+      onClick={() => {
+        setStatusFeedback(null)
+        setStatusCustomer(customer)
+      }}
+    >
+      {customer.active ? 'Desactivar cliente' : 'Activar cliente'}
+    </Button>
+  ) : null
+
+  const handleStatusChanged = (changed: Customer, active: boolean) => {
+    setStatusCustomer(null)
+    setStatusFeedback(getStatusChangedMessage(changed.fullName, active))
+    refetch()
+  }
+
   return (
     <AppLayout
       title={customer.fullName}
@@ -84,8 +115,15 @@ export function CustomerDetailPage() {
       }
       backTo={backTo}
       backLabel={BACK_LABEL}
+      actions={statusAction}
     >
-      {!customer.active && (
+      {statusFeedback && (
+        <div className="customer-page__feedback">
+          <Alert tone="success">{statusFeedback}</Alert>
+        </div>
+      )}
+
+      {!customer.active && !statusFeedback && (
         <div className="customer-page__feedback">
           <Alert tone="info">
             Este cliente está inactivo: conserva su historial, pero no se puede usar en ventas
@@ -140,6 +178,12 @@ export function CustomerDetailPage() {
           <CustomerDataForm customer={customer} onSaved={refetch} />
         </section>
       </div>
+
+      <CustomerStatusModal
+        customer={statusCustomer}
+        onClose={() => setStatusCustomer(null)}
+        onChanged={handleStatusChanged}
+      />
     </AppLayout>
   )
 }
