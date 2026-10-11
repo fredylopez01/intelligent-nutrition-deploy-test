@@ -36,7 +36,7 @@ export class CategoriesService {
     }
 
     return this.prisma.$transaction(async (transaction) => {
-      const category = await this.prisma.category.create({
+      const category = await transaction.category.create({
         data: {
           name,
           description,
@@ -118,5 +118,49 @@ export class CategoriesService {
     }
 
     return categoy;
+  }
+
+  async updateStatus(
+    categoryId: string,
+    active: boolean,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    return await this.prisma.$transaction(async (transaction) => {
+      const existingCategory = await this.prisma.category.findUnique({
+        where: { id: categoryId },
+        select: { name: true, description: true, active: true },
+      });
+      if (!existingCategory) {
+        throw new NotFoundException("Category not found");
+      }
+      if (existingCategory.active === active) {
+        throw new ConflictException({
+          code: "ALREADY_IN_STATE",
+          message: "Category is already in the requested state.",
+        });
+      }
+
+      await transaction.category.update({
+        where: { id: categoryId, active: existingCategory.active },
+        data: { active },
+      });
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: active ? "ACTIVATE" : "DEACTIVATE",
+          entity: "CUSTOMER",
+          entityId: categoryId,
+          oldData: { active: existingCategory.active },
+          newData: { active },
+          reason: `${active ? "Activación" : "Desactivación"} de la categoria ${existingCategory.name}`,
+          ipAddress,
+        },
+        transaction,
+      );
+
+      return { message: "Category status updated successfully." };
+    });
   }
 }
