@@ -4,6 +4,8 @@ import { ActivateAccountPage } from '../pages/activation/ActivateAccountPage'
 import { AuditLogsPage } from '../pages/audit-logs/AuditLogsPage'
 import { BranchesPage } from '../pages/branches/BranchesPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
+import { CustomerDetailPage } from '../pages/customers/CustomerDetailPage'
+import { CustomersPage } from '../pages/customers/CustomersPage'
 import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
 import { LandingPage } from '../pages/LandingPage'
 import { PrivacyPolicyPage } from '../pages/legal/PrivacyPolicyPage'
@@ -15,9 +17,12 @@ import { SettingsPage } from '../pages/settings/SettingsPage'
 import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
 import { UserDetailPage } from '../pages/users/UserDetailPage'
 import { UsersPage } from '../pages/users/UsersPage'
+import type { RoleName } from '../types/auth'
 
 import { PENDING_MODULES } from './pendingModules'
 import { ProtectedRoute } from './ProtectedRoute'
+
+const CUSTOMER_ROLES: RoleName[] = ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT']
 
 export function AppRouter() {
   return (
@@ -45,6 +50,23 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={['SUPERADMIN', 'BRANCH_LEADER']}>
             <SuppliersPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/clientes"
+        element={
+          <ProtectedRoute allowedRoles={CUSTOMER_ROLES}>
+            <CustomersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/clientes/:customerId"
+        element={
+          <ProtectedRoute allowedRoles={CUSTOMER_ROLES}>
+            <CustomerDetailPage />
           </ProtectedRoute>
         }
       />
