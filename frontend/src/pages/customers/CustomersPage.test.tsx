@@ -12,7 +12,7 @@ import {
   buildCompanyCustomer,
   buildNaturalCustomer,
 } from '../../test-utils/customers'
-import { openNewForm, searchResponse } from '../../test-utils/persons'
+import { buildPerson, openNewForm, searchPerson, searchResponse } from '../../test-utils/persons'
 import type { Customer } from '../../types/customer'
 
 import { CustomersPage } from './CustomersPage'
@@ -199,6 +199,17 @@ describe('CustomersPage search and filters', () => {
     expect(lastListCall()).toEqual({ page: 1, limit: 10, search: 'laura', active: true })
   })
 
+  it('asks the server again when the same search is repeated', async () => {
+    const { user } = renderPage('/clientes?q=laura')
+    await waitForRows()
+    const requests = listCustomers.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'Buscar' }))
+
+    await waitFor(() => expect(listCustomers).toHaveBeenCalledTimes(requests + 1))
+    expect(lastListCall()).toEqual({ page: 1, limit: 10, search: 'laura' })
+  })
+
   it('does not search with a single character', async () => {
     const { user } = renderPage()
     await waitForRows()
@@ -252,6 +263,49 @@ describe('CustomersPage search and filters', () => {
 
     await waitFor(() => expect(lastListCall()).toEqual({ page: 2, limit: 10 }))
   })
+
+  it('goes back to the previous page', async () => {
+    listCustomers.mockResolvedValue(page([laura], { page: 2, totalPages: 3 }))
+    const { user } = renderPage('/clientes?pagina=2')
+    await waitForRows()
+
+    const pagination = screen.getByRole('navigation', { name: 'Paginación de clientes' })
+    await user.click(within(pagination).getByRole('button', { name: 'Anterior' }))
+
+    await waitFor(() => expect(lastListCall()).toEqual({ page: 1, limit: 10 }))
+  })
+
+  it('hides the pagination when everything fits in one page', async () => {
+    listCustomers.mockResolvedValue(page([gym, laura]))
+    renderPage()
+    await waitForRows()
+
+    expect(screen.queryByRole('navigation', { name: 'Paginación de clientes' })).toBeNull()
+  })
+
+  it('uses the singular when there is a single customer', async () => {
+    listCustomers.mockResolvedValue(page([laura]))
+    renderPage()
+
+    expect(
+      await screen.findByText('1 cliente. Abre uno para ver y actualizar sus datos.'),
+    ).toBeInTheDocument()
+  })
+
+  it('hides the pagination and shows the loading state while the list reloads', async () => {
+    listCustomers.mockResolvedValue(page([laura], { page: 1, totalPages: 3 }))
+    const { user } = renderPage()
+    await waitForRows()
+    expect(screen.getByRole('navigation', { name: 'Paginación de clientes' })).toBeInTheDocument()
+    listCustomers.mockReturnValue(new Promise(() => {}))
+
+    await user.click(screen.getByRole('button', { name: 'Recargar' }))
+
+    const reload = await screen.findByRole('button', { name: 'Cargando...' })
+    expect(reload).toBeDisabled()
+    expect(reload).toHaveAttribute('aria-busy', 'true')
+    expect(screen.queryByRole('navigation', { name: 'Paginación de clientes' })).toBeNull()
+  })
 })
 
 describe('CustomersPage register', () => {
@@ -280,6 +334,25 @@ describe('CustomersPage register', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Cliente creado exitosamente.')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await waitFor(() => expect(listCustomers.mock.calls.length).toBeGreaterThan(requests))
+  })
+})
+
+describe('CustomersPage register from another page', () => {
+  it('goes back to the first page after registering a customer', async () => {
+    listCustomers.mockResolvedValue(page([laura], { page: 2, totalPages: 3 }))
+    createCustomer.mockResolvedValue(laura)
+    vi.mocked(personsService.search).mockResolvedValue(searchResponse([buildPerson()]))
+    const { user } = renderPage('/clientes?pagina=2')
+    await waitForRows()
+
+    await user.click(screen.getByRole('button', { name: 'Registrar cliente' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Registrar cliente' })
+    await searchPerson(user, 'laura')
+    await user.click(await within(dialog).findByRole('button', { name: /Registrar a Laura Pérez/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar cliente' }))
+
+    await waitFor(() => expect(lastListCall()).toEqual({ page: 1, limit: 10 }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Cliente creado exitosamente.')
   })
 })
 
