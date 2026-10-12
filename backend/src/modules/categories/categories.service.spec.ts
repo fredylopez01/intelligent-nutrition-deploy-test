@@ -460,6 +460,140 @@ describe("CategoriesService", () => {
         service.update(categoryId, { name: "Otra" }, currentUser),
       ).rejects.toThrow("connection lost");
     });
+
+    it("sends only the name when only the name is provided", async () => {
+      await service.update(
+        categoryId,
+        { name: "Proteínas Premium" },
+        currentUser,
+      );
+
+      expect(prismaMock.category.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: categoryId },
+          data: { name: "Proteínas Premium" },
+        }),
+      );
+    });
+
+    it("sends only the description when only the description is provided", async () => {
+      await service.update(
+        categoryId,
+        { description: "Solo descripción" },
+        currentUser,
+      );
+
+      expect(prismaMock.category.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: categoryId },
+          data: { description: "Solo descripción" },
+        }),
+      );
+      // Only the category itself is read: there is no name to check.
+      expect(prismaMock.category.findUnique).toHaveBeenCalledTimes(1);
+      expect(prismaMock.category.findUnique).toHaveBeenCalledWith({
+        where: { id: categoryId },
+      });
+    });
+
+    it("checks the new name against the other categories", async () => {
+      await service.update(categoryId, { name: "Vitaminas" }, currentUser);
+
+      expect(prismaMock.category.findUnique).toHaveBeenCalledWith({
+        where: { name: "Vitaminas" },
+        select: { id: true },
+      });
+    });
+
+    it("reads, writes and audits with the transaction client", async () => {
+      const updated = buildCategory({ name: "Proteínas Premium" });
+      const transactionClient = {
+        category: {
+          findUnique: jest.fn<AsyncMock>().mockImplementation((args) => {
+            const { where } = args as NameLookup;
+            return Promise.resolve(where.id === categoryId ? existing : null);
+          }),
+          update: jest.fn<AsyncMock>().mockResolvedValue(updated),
+        },
+      };
+      prismaMock.$transaction.mockImplementation((operation) =>
+        Array.isArray(operation)
+          ? Promise.all(operation)
+          : operation(transactionClient),
+      );
+
+      await service.update(
+        categoryId,
+        { name: "Proteínas Premium" },
+        currentUser,
+      );
+
+      expect(transactionClient.category.findUnique).toHaveBeenCalledTimes(2);
+      expect(transactionClient.category.update).toHaveBeenCalledTimes(1);
+      expect(prismaMock.category.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.category.update).not.toHaveBeenCalled();
+      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "UPDATE", entityId: categoryId }),
+        transactionClient,
+      );
+    });
+
+    it("does not audit when nothing changes", async () => {
+      prismaMock.category.update.mockResolvedValue(existing);
+
+      await service.update(
+        categoryId,
+        { name: "Proteínas", description: "Descripción anterior" },
+        currentUser,
+      );
+
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+    });
+
+    it("fails the update when the audit log cannot be written", async () => {
+      prismaMock.category.update.mockResolvedValue(
+        buildCategory({ name: "Proteínas Premium" }),
+      );
+      auditMock.createAuditLog.mockRejectedValue(new Error("audit down"));
+
+      await expect(
+        service.update(categoryId, { name: "Proteínas Premium" }, currentUser),
+      ).rejects.toThrow("audit down");
+    });
+
+    // Known defect (Contract API Sprint 4, §3.2 and §3.3): the name must be
+    // unique ignoring case, but the lookup is an exact match. The fakes behave
+    // like the database: exact match for findUnique and a case-insensitive
+    // match for a lookup done with findFirst or findMany.
+    it.failing(
+      "rejects a name that differs from another category only by case",
+      async () => {
+        const other = buildCategory({ id: otherCategoryId, name: "Vitaminas" });
+        prismaMock.category.findUnique.mockImplementation((args) => {
+          const { where } = args as NameLookup;
+          if (where.id === categoryId) return Promise.resolve(existing);
+          return Promise.resolve(where.name === other.name ? other : null);
+        });
+        const caseInsensitiveLookup = (args: unknown) => {
+          const { where } = args as { where: { name: { equals: string } } };
+          const matches =
+            where.name.equals.toLowerCase() === other.name.toLowerCase();
+          return matches ? other : null;
+        };
+        prismaMock.category.findFirst.mockImplementation((args) =>
+          Promise.resolve(caseInsensitiveLookup(args)),
+        );
+        prismaMock.category.findMany.mockImplementation((args) => {
+          const found = caseInsensitiveLookup(args);
+          return Promise.resolve(found ? [found] : []);
+        });
+
+        await expect(
+          service.update(categoryId, { name: "VITAMINAS" }, currentUser),
+        ).rejects.toMatchObject({ status: 409 });
+        expect(prismaMock.category.update).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe("updateStatus", () => {
@@ -518,23 +652,20 @@ describe("CategoriesService", () => {
       );
     });
 
-    // Known defect (Contract API Sprint 4, §2.9): the status audit is recorded
-    // against the CUSTOMER entity instead of CATEGORY.
-    it.failing(
-      "audits the status change against the CATEGORY entity",
-      async () => {
-        prismaMock.category.findUnique.mockResolvedValue(
-          buildCategory({ active: true }),
-        );
+    // Regression guard (Contract API Sprint 4, §2.9): the status audit used to
+    // be recorded against the CUSTOMER entity instead of CATEGORY.
+    it("audits the status change against the CATEGORY entity", async () => {
+      prismaMock.category.findUnique.mockResolvedValue(
+        buildCategory({ active: true }),
+      );
 
-        await service.updateStatus(categoryId, false, currentUser);
+      await service.updateStatus(categoryId, false, currentUser);
 
-        expect(auditMock.createAuditLog).toHaveBeenCalledWith(
-          expect.objectContaining({ entity: "CATEGORY" }),
-          prismaMock,
-        );
-      },
-    );
+      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ entity: "CATEGORY" }),
+        prismaMock,
+      );
+    });
 
     it("rejects the request when the category is already in that state", async () => {
       prismaMock.category.findUnique.mockResolvedValue(
@@ -557,5 +688,96 @@ describe("CategoriesService", () => {
       ).rejects.toMatchObject({ status: 404, message: "Category not found" });
       expect(prismaMock.category.update).not.toHaveBeenCalled();
     });
+
+    it("reads the name and the current state of the category", async () => {
+      prismaMock.category.findUnique.mockResolvedValue(
+        buildCategory({ active: true }),
+      );
+
+      await service.updateStatus(categoryId, false, currentUser);
+
+      expect(prismaMock.category.findUnique).toHaveBeenCalledWith({
+        where: { id: categoryId },
+        select: { name: true, description: true, active: true },
+      });
+    });
+
+    it("rejects activating a category that is already active", async () => {
+      prismaMock.category.findUnique.mockResolvedValue(
+        buildCategory({ active: true }),
+      );
+
+      await expect(
+        service.updateStatus(categoryId, true, currentUser),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: {
+          code: "ALREADY_IN_STATE",
+          message: "Category is already in the requested state.",
+        },
+      });
+      expect(prismaMock.category.update).not.toHaveBeenCalled();
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+    });
+
+    it("updates and audits the status with the transaction client", async () => {
+      prismaMock.category.findUnique.mockResolvedValue(
+        buildCategory({ active: true }),
+      );
+      const transactionClient = {
+        category: {
+          update: jest
+            .fn<AsyncMock>()
+            .mockResolvedValue(buildCategory({ active: false })),
+        },
+      };
+      prismaMock.$transaction.mockImplementation((operation) =>
+        Array.isArray(operation)
+          ? Promise.all(operation)
+          : operation(transactionClient),
+      );
+
+      await service.updateStatus(categoryId, false, currentUser);
+
+      expect(transactionClient.category.update).toHaveBeenCalledTimes(1);
+      expect(prismaMock.category.update).not.toHaveBeenCalled();
+      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "DEACTIVATE" }),
+        transactionClient,
+      );
+    });
+
+    it("does not report success when the audit log cannot be written", async () => {
+      prismaMock.category.findUnique.mockResolvedValue(
+        buildCategory({ active: true }),
+      );
+      auditMock.createAuditLog.mockRejectedValue(new Error("audit down"));
+
+      await expect(
+        service.updateStatus(categoryId, false, currentUser),
+      ).rejects.toThrow("audit down");
+    });
+
+    // Known defect (Contract API Sprint 4, §3.4): the update is conditioned on
+    // the state that was read (`where: { id, active }`). When another request
+    // changes the category in between, Prisma raises P2025 and nothing maps
+    // it, so the client gets a 500 instead of 409 ALREADY_IN_STATE.
+    it.failing(
+      "answers ALREADY_IN_STATE when another request changed the state first",
+      async () => {
+        prismaMock.category.findUnique.mockResolvedValue(
+          buildCategory({ active: true }),
+        );
+        prismaMock.category.update.mockRejectedValue({ code: "P2025" });
+
+        await expect(
+          service.updateStatus(categoryId, false, currentUser),
+        ).rejects.toMatchObject({
+          status: 409,
+          response: { code: "ALREADY_IN_STATE" },
+        });
+        expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+      },
+    );
   });
 });
