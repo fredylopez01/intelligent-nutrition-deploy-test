@@ -71,6 +71,83 @@ src/
 └── utils/ Funciones auxiliares
 \`\`\`
 
+## Paginación de listados
+
+Todos los listados usan el componente `Pagination` (`src/components/ui/Pagination.tsx`)
+y el hook `usePagination` (`src/hooks/usePagination.ts`), así se comportan igual y
+siguen la sección 2.4 del contrato de la API.
+
+### `usePagination`
+
+Lee y escribe en la URL la página, el tamaño de página, la búsqueda y los filtros,
+así que se conservan al recargar o al volver de un detalle.
+
+| Parámetro en la URL | Valor                                                                 |
+| ------------------- | --------------------------------------------------------------------- |
+| `pagina`            | Página actual. Se omite cuando es la 1.                               |
+| `porPagina`         | Tamaño de página (10, 20 o 50). Se omite cuando es el de por defecto. |
+| `q`                 | Búsqueda confirmada con la lupa o con Enter.                          |
+| Filtros propios     | Por ejemplo `estado`. Se omiten cuando valen `todos`.                 |
+
+Reglas:
+
+- Buscar, cambiar un filtro o cambiar el tamaño de página vuelve a la página 1.
+- "Limpiar filtros" quita la búsqueda y los filtros, pero conserva el tamaño de página.
+- Un tamaño de página que no esté en las opciones se ignora, para no enviar al backend
+  un `limit` inválido (más de 100 devuelve `400 INVALID_PAGINATION`).
+- `params` trae `{ page, limit, search }` listos para la petición; `search` es
+  `undefined` cuando no hay búsqueda.
+
+### `Pagination`
+
+- Es un `nav` con nombre accesible (`label`), con botones numerados; la página actual
+  se marca con `aria-current="page"`.
+- Muestra "Mostrando X–Y de Z" en una región `aria-live`, para que los lectores de
+  pantalla anuncien el cambio.
+- Si recibe `total`, `limit`, `limitOptions` y `onLimitChange`, muestra el selector
+  "Filas por página".
+- No se muestra cuando todo cabe en una página y no hay tamaño de página que cambiar.
+
+### Ejemplo
+
+```tsx
+const FILTER_DEFAULTS = { estado: 'todos' }
+
+export function CategoriesPage() {
+  const { params, filters, limitOptions, setPage, setLimit, applySearch, setFilter } =
+    usePagination({ filters: FILTER_DEFAULTS })
+
+  const { categories, meta } = useCategories({
+    ...params,
+    active: ACTIVE_FILTER_VALUES[filters.estado],
+  })
+
+  return (
+    <>
+      <SearchBar
+        id="categories-search"
+        label="Buscar"
+        value={params.search ?? ''}
+        onSearch={applySearch}
+      />
+      <CategoriesTable categories={categories} />
+      {meta && (
+        <Pagination
+          page={meta.page}
+          totalPages={meta.totalPages}
+          total={meta.total}
+          limit={params.limit}
+          limitOptions={limitOptions}
+          label="Paginación de categorías"
+          onChange={setPage}
+          onLimitChange={setLimit}
+        />
+      )}
+    </>
+  )
+}
+```
+
 ## Convenciones
 
 El flujo de ramas, commits y Pull Requests sigue lo definido en

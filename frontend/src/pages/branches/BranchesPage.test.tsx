@@ -147,7 +147,7 @@ describe('BranchesPage filters', () => {
     })
     const { user } = renderPage()
 
-    await user.click(await screen.findByRole('button', { name: 'Siguiente' }))
+    await user.click(await screen.findByRole('button', { name: 'Página siguiente' }))
     await waitFor(() => expect(lastListParams().page).toBe(2))
 
     await user.selectOptions(
@@ -298,11 +298,11 @@ describe('BranchesPage search with the magnifier and reload', () => {
       ),
     )
     const { user } = renderPage()
-    await screen.findByText('Página 1 de 3')
+    await screen.findByRole('button', { name: 'Página 1 de 3', current: 'page' })
     await user.type(searchBox(), 'Makro{Enter}')
     await waitFor(() => expect(lastListParams()).toMatchObject({ search: 'Makro' }))
-    await user.click(await screen.findByRole('button', { name: 'Siguiente' }))
-    await screen.findByText('Página 2 de 3')
+    await user.click(await screen.findByRole('button', { name: 'Página siguiente' }))
+    await screen.findByRole('button', { name: 'Página 2 de 3', current: 'page' })
     const requests = listBranches.mock.calls.length
 
     await user.click(await screen.findByRole('button', { name: 'Recargar' }))

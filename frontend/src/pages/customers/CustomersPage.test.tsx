@@ -256,10 +256,12 @@ describe('CustomersPage search and filters', () => {
     await waitForRows()
 
     const pagination = screen.getByRole('navigation', { name: 'Paginación de clientes' })
-    expect(within(pagination).getByText('Página 1 de 3')).toBeInTheDocument()
-    expect(within(pagination).getByRole('button', { name: 'Anterior' })).toBeDisabled()
+    expect(
+      within(pagination).getByRole('button', { name: 'Página 1 de 3', current: 'page' }),
+    ).toBeInTheDocument()
+    expect(within(pagination).getByRole('button', { name: 'Página anterior' })).toBeDisabled()
 
-    await user.click(within(pagination).getByRole('button', { name: 'Siguiente' }))
+    await user.click(within(pagination).getByRole('button', { name: 'Página siguiente' }))
 
     await waitFor(() => expect(lastListCall()).toEqual({ page: 2, limit: 10 }))
   })
@@ -270,7 +272,7 @@ describe('CustomersPage search and filters', () => {
     await waitForRows()
 
     const pagination = screen.getByRole('navigation', { name: 'Paginación de clientes' })
-    await user.click(within(pagination).getByRole('button', { name: 'Anterior' }))
+    await user.click(within(pagination).getByRole('button', { name: 'Página anterior' }))
 
     await waitFor(() => expect(lastListCall()).toEqual({ page: 1, limit: 10 }))
   })

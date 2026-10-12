@@ -1,22 +1,37 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 const PAGE_PARAM = 'pagina'
+const LIMIT_PARAM = 'porPagina'
 const SEARCH_PARAM = 'q'
 const ALL = 'todos'
+
+export const DEFAULT_LIMIT_OPTIONS = [10, 20, 50]
 
 type FilterValues<F extends string> = Record<F, string>
 
 interface UsePaginationOptions<F extends string> {
   filters: FilterValues<F>
+  defaultLimit?: number
+  limitOptions?: number[]
+}
+
+export interface PaginationParams {
+  page: number
+  limit: number
+  search: string | undefined
 }
 
 export function usePagination<F extends string = never>({
   filters: defaults,
+  defaultLimit = DEFAULT_LIMIT_OPTIONS[0],
+  limitOptions = DEFAULT_LIMIT_OPTIONS,
 }: UsePaginationOptions<F>) {
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const page = Math.max(1, Number(searchParams.get(PAGE_PARAM)) || 1)
+  const page = Math.max(1, Math.trunc(Number(searchParams.get(PAGE_PARAM))) || 1)
+  const requestedLimit = Number(searchParams.get(LIMIT_PARAM))
+  const limit = limitOptions.includes(requestedLimit) ? requestedLimit : defaultLimit
   const search = searchParams.get(SEARCH_PARAM) ?? ''
   const filters = Object.fromEntries(
     (Object.keys(defaults) as F[]).map((key) => [key, searchParams.get(key) ?? defaults[key]]),
@@ -24,6 +39,11 @@ export function usePagination<F extends string = never>({
 
   const hasFilters =
     search !== '' || (Object.keys(defaults) as F[]).some((key) => filters[key] !== defaults[key])
+
+  const params = useMemo<PaginationParams>(
+    () => ({ page, limit, search: search || undefined }),
+    [page, limit, search],
+  )
 
   const update = useCallback(
     (changes: Record<string, string | null>, resetPage: boolean) => {
@@ -48,6 +68,12 @@ export function usePagination<F extends string = never>({
     [update],
   )
 
+  const setLimit = useCallback(
+    (nextLimit: number) =>
+      update({ [LIMIT_PARAM]: nextLimit === defaultLimit ? null : String(nextLimit) }, true),
+    [update, defaultLimit],
+  )
+
   const applySearch = useCallback(
     (term: string) => update({ [SEARCH_PARAM]: term.trim() || null }, true),
     [update],
@@ -61,5 +87,18 @@ export function usePagination<F extends string = never>({
     update(cleared, true)
   }, [update, defaults])
 
-  return { page, search, filters, hasFilters, setPage, applySearch, setFilter, clearFilters }
+  return {
+    page,
+    limit,
+    limitOptions,
+    search,
+    filters,
+    hasFilters,
+    params,
+    setPage,
+    setLimit,
+    applySearch,
+    setFilter,
+    clearFilters,
+  }
 }

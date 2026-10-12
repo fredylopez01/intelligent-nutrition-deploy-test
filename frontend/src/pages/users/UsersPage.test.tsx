@@ -178,7 +178,7 @@ describe('UsersPage pagination', () => {
     await screen.findByText('Laura Prueba')
 
     const pagination = screen.getByRole('navigation', { name: 'Paginación de usuarios' })
-    await user.click(within(pagination).getByRole('button', { name: 'Siguiente' }))
+    await user.click(within(pagination).getByRole('button', { name: 'Página siguiente' }))
 
     await waitFor(() => expect(lastListParams()).toMatchObject({ page: 2, active: true }))
   })
