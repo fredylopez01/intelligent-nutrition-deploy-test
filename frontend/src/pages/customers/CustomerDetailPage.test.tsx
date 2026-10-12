@@ -515,4 +515,133 @@ describe('CustomerDetailPage state', () => {
       screen.queryByRole('button', { name: /Desactivar cliente|Activar cliente/ }),
     ).not.toBeInTheDocument()
   })
+
+  it.each(['DEV', 'UNKNOWN_ROLE'])('hides the state action from the %s role', async (role) => {
+    auth.role = role
+    renderPage()
+
+    await screen.findByRole('button', { name: 'Actualizar información' })
+    expect(
+      screen.queryByRole('button', { name: /Desactivar cliente|Activar cliente/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('offers the deactivation of an active customer with a destructive button', async () => {
+    renderPage()
+
+    const action = await screen.findByRole('button', { name: 'Desactivar cliente' })
+    expect(action).toHaveClass('ui-button--danger')
+    expect(screen.getByText('Activo')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('opens the confirmation with the name of the customer without calling the api', async () => {
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar cliente' }))
+
+    expect(screen.getByRole('dialog', { name: '¿Desactivar este cliente?' })).toHaveTextContent(
+      'Laura Pérez no podrá usarse en ventas nuevas.',
+    )
+    expect(updateStatus).not.toHaveBeenCalled()
+  })
+
+  it('updates the profile to inactive after the confirmation', async () => {
+    getCustomer.mockResolvedValueOnce(laura).mockResolvedValue({ ...laura, active: false })
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar cliente' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, desactivar' }))
+
+    const profile = await screen.findByRole('region', { name: 'Laura Pérez' })
+    await waitFor(() => expect(within(profile).getByText('Inactivo')).toBeInTheDocument())
+    expect(within(profile).queryByText('Activo')).not.toBeInTheDocument()
+    expect(within(profile).getByText('LP')).toHaveClass('ui-avatar--muted')
+    expect(screen.getByRole('button', { name: 'Activar cliente' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Desactivar cliente' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('updates the profile to active after the confirmation', async () => {
+    getCustomer.mockResolvedValueOnce({ ...laura, active: false }).mockResolvedValue(laura)
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Activar cliente' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, activar' }))
+
+    const profile = await screen.findByRole('region', { name: 'Laura Pérez' })
+    await waitFor(() => expect(within(profile).getByText('Activo')).toBeInTheDocument())
+    expect(within(profile).queryByText('Inactivo')).not.toBeInTheDocument()
+    expect(within(profile).getByText('LP')).not.toHaveClass('ui-avatar--muted')
+    expect(screen.getByRole('button', { name: 'Desactivar cliente' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Activar cliente' })).not.toBeInTheDocument()
+  })
+
+  it('shows the success message instead of the inactive warning', async () => {
+    getCustomer.mockResolvedValueOnce(laura).mockResolvedValue({ ...laura, active: false })
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar cliente' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, desactivar' }))
+
+    expect(await screen.findByRole('button', { name: 'Activar cliente' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'El cliente Laura Pérez quedó inactivo. Ya no se podrá usar en ventas nuevas.',
+    )
+    expect(screen.queryByText(/Este cliente está inactivo/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the profile unchanged when the api rejects the change', async () => {
+    updateStatus.mockRejectedValue(new ApiError('Forbidden', 403, {}, 'FORBIDDEN'))
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar cliente' }))
+    const dialog = screen.getByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, desactivar' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'No tienes permiso para realizar esta acción.',
+    )
+    expect(screen.getByRole('button', { name: 'Desactivar cliente' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Laura Pérez' })).toHaveTextContent('Activo')
+    expect(screen.queryByText(/quedó inactivo/)).not.toBeInTheDocument()
+    expect(getCustomer).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not show the previous error when the confirmation is opened again', async () => {
+    updateStatus.mockRejectedValueOnce(new ApiError('Internal error', 500, {}, 'INTERNAL_ERROR'))
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar cliente' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, desactivar' }))
+    await within(screen.getByRole('dialog')).findByRole('alert')
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await user.click(screen.getByRole('button', { name: 'Desactivar cliente' }))
+
+    expect(screen.getByRole('dialog', { name: '¿Desactivar este cliente?' })).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('clears the previous success message when a new change is started', async () => {
+    getCustomer.mockResolvedValueOnce(laura).mockResolvedValue({ ...laura, active: false })
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar cliente' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, desactivar' }))
+    await user.click(await screen.findByRole('button', { name: 'Activar cliente' }))
+
+    expect(screen.getByRole('dialog', { name: '¿Activar este cliente?' })).toBeInTheDocument()
+    expect(screen.queryByText(/quedó inactivo/)).not.toBeInTheDocument()
+  })
+
+  it('closes the confirmation with Escape without changing the state', async () => {
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Desactivar cliente' }))
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(updateStatus).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Desactivar cliente' })).toBeInTheDocument()
+  })
 })
