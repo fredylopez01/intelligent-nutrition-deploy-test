@@ -1,7 +1,9 @@
 import { useState } from 'react'
 
 import { CategoriesTable } from '../../components/categories/CategoriesTable'
+import { CategoryStatusConfirmation } from '../../components/categories/CategoryStatusConfirmation'
 import { CreateCategoryForm } from '../../components/categories/CreateCategoryForm'
+import { EditCategoryForm } from '../../components/categories/EditCategoryForm'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -15,7 +17,7 @@ import { useCategories } from '../../hooks/useCategories'
 import { usePagination } from '../../hooks/usePagination'
 import { AppLayout } from '../../layouts/AppLayout'
 import type { Category } from '../../types/category'
-import { CATEGORY_MANAGE_ROLES, hasRole } from '../../utils/categories'
+import { CATEGORY_MANAGE_ROLES, CATEGORY_STATUS_ROLES, hasRole } from '../../utils/categories'
 
 import './CatalogPage.css'
 
@@ -30,7 +32,9 @@ const FILTER_DEFAULTS = { estado: 'todos' }
 
 export function CategoriesPage() {
   const { user } = useAuth()
-  const canManage = hasRole(CATEGORY_MANAGE_ROLES, user?.role.name)
+  const roleName = user?.role.name
+  const canManage = hasRole(CATEGORY_MANAGE_ROLES, roleName)
+  const canChangeStatus = hasRole(CATEGORY_STATUS_ROLES, roleName)
 
   const {
     page,
@@ -46,6 +50,8 @@ export function CategoriesPage() {
     clearFilters,
   } = usePagination({ filters: FILTER_DEFAULTS })
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [statusCategory, setStatusCategory] = useState<Category | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, categories, meta, error, refetch } = useCategories({
@@ -68,6 +74,20 @@ export function CategoriesPage() {
     setFeedbackMessage(`La categoría ${category.name} quedó registrada y activa.`)
     if (page === 1) refetch()
     else setPage(1)
+  }
+
+  const handleUpdated = (category: Category) => {
+    setEditingCategory(null)
+    setFeedbackMessage(`Los cambios de la categoría ${category.name} se guardaron.`)
+    refetch()
+  }
+
+  const handleStatusChanged = (category: Category) => {
+    setStatusCategory(null)
+    setFeedbackMessage(
+      `La categoría ${category.name} ahora está ${category.active ? 'activa' : 'inactiva'}.`,
+    )
+    refetch()
   }
 
   const renderList = () => {
@@ -104,7 +124,21 @@ export function CategoriesPage() {
       )
     }
 
-    return <CategoriesTable categories={categories} />
+    return (
+      <CategoriesTable
+        categories={categories}
+        canEdit={canManage}
+        canChangeStatus={canChangeStatus}
+        onEdit={(category) => {
+          setFeedbackMessage(null)
+          setEditingCategory(category)
+        }}
+        onToggleStatus={(category) => {
+          setFeedbackMessage(null)
+          setStatusCategory(category)
+        }}
+      />
+    )
   }
 
   return (
@@ -172,6 +206,39 @@ export function CategoriesPage() {
         onClose={() => setIsCreateOpen(false)}
       >
         <CreateCategoryForm onCreated={handleCreated} onCancel={() => setIsCreateOpen(false)} />
+      </Modal>
+
+      <Modal
+        open={editingCategory !== null}
+        title="Editar categoría"
+        onClose={() => setEditingCategory(null)}
+      >
+        {editingCategory && (
+          <EditCategoryForm
+            category={editingCategory}
+            onUpdated={handleUpdated}
+            onCancel={() => setEditingCategory(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={statusCategory !== null}
+        title={statusCategory?.active ? '¿Desactivar esta categoría?' : '¿Activar esta categoría?'}
+        description={
+          statusCategory?.active
+            ? `${statusCategory.name} no se podrá asignar a productos nuevos o editados. Los productos que ya la usan la conservan y siguen en el catálogo.`
+            : `${statusCategory?.name} volverá a estar disponible para asignarla a productos.`
+        }
+        onClose={() => setStatusCategory(null)}
+      >
+        {statusCategory && (
+          <CategoryStatusConfirmation
+            category={statusCategory}
+            onChanged={handleStatusChanged}
+            onCancel={() => setStatusCategory(null)}
+          />
+        )}
       </Modal>
     </AppLayout>
   )

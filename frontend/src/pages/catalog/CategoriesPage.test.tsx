@@ -13,7 +13,7 @@ import { CategoriesPage } from './CategoriesPage'
 const auth = vi.hoisted(() => ({ role: 'SUPERADMIN' }))
 
 vi.mock('../../services/categories.service', () => ({
-  categoriesService: { list: vi.fn(), create: vi.fn() },
+  categoriesService: { list: vi.fn(), create: vi.fn(), update: vi.fn(), updateStatus: vi.fn() },
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
@@ -31,6 +31,8 @@ vi.mock('../../layouts/AppLayout', () => ({
 
 const listCategories = vi.mocked(categoriesService.list)
 const createCategory = vi.mocked(categoriesService.create)
+const updateCategory = vi.mocked(categoriesService.update)
+const updateStatus = vi.mocked(categoriesService.updateStatus)
 
 const proteins: Category = {
   id: 'cat-1',
@@ -210,5 +212,67 @@ describe('CategoriesPage register', () => {
     renderPage()
     await screen.findByText('Proteínas')
     expect(screen.queryByRole('button', { name: 'Registrar categoría' })).not.toBeInTheDocument()
+  })
+})
+
+describe('CategoriesPage edit and state', () => {
+  it('edits a category from the table', async () => {
+    updateCategory.mockResolvedValue({ ...proteins, description: 'Proteína en polvo' })
+    const { user } = renderPage()
+    await screen.findByText('Proteínas')
+
+    await user.click(screen.getByRole('button', { name: 'Acciones para Proteínas' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Editar' }))
+    const dialog = within(screen.getByRole('dialog', { name: 'Editar categoría' }))
+    expect(dialog.getByLabelText('Nombre')).toHaveValue('Proteínas')
+    await user.clear(dialog.getByLabelText('Descripción'))
+    await user.type(dialog.getByLabelText('Descripción'), 'Proteína en polvo')
+    await user.click(dialog.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(
+      await screen.findByText('Los cambios de la categoría Proteínas se guardaron.'),
+    ).toBeInTheDocument()
+    expect(updateCategory).toHaveBeenCalledWith(
+      'cat-1',
+      { description: 'Proteína en polvo' },
+      'test-token',
+    )
+  })
+
+  it('asks for confirmation before deactivating and explains the effect on products', async () => {
+    updateStatus.mockResolvedValue({ message: 'ok' })
+    const { user } = renderPage()
+    await screen.findByText('Proteínas')
+
+    await user.click(screen.getByRole('button', { name: 'Acciones para Proteínas' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Desactivar' }))
+    const dialog = screen.getByRole('dialog', { name: '¿Desactivar esta categoría?' })
+    expect(dialog).toHaveTextContent('Los productos que ya la usan la conservan')
+    expect(updateStatus).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, desactivar' }))
+
+    expect(
+      await screen.findByText('La categoría Proteínas ahora está inactiva.'),
+    ).toBeInTheDocument()
+    expect(updateStatus).toHaveBeenCalledWith('cat-1', { active: false }, 'test-token')
+  })
+
+  it('lets the branch leader edit but not change the state', async () => {
+    auth.role = 'BRANCH_LEADER'
+    const { user } = renderPage()
+    await screen.findByText('Proteínas')
+
+    await user.click(screen.getByRole('button', { name: 'Acciones para Proteínas' }))
+
+    expect(screen.getByRole('menuitem', { name: 'Editar' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Desactivar' })).not.toBeInTheDocument()
+  })
+
+  it('only lets the branch assistant consult', async () => {
+    auth.role = 'BRANCH_ASSISTANT'
+    renderPage()
+    await screen.findByText('Proteínas')
+
+    expect(screen.queryByRole('button', { name: /Acciones para/ })).not.toBeInTheDocument()
   })
 })

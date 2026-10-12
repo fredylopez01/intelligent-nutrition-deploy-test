@@ -6,6 +6,7 @@ import type { RoleName } from '../types/auth'
 import type { Category } from '../types/category'
 
 export const CATEGORY_MANAGE_ROLES: RoleName[] = ['SUPERADMIN', 'BRANCH_LEADER']
+export const CATEGORY_STATUS_ROLES: RoleName[] = ['SUPERADMIN']
 
 export const CATEGORY_NAME_MIN_LENGTH = 3
 export const CATEGORY_NAME_MAX_LENGTH = 100
@@ -78,11 +79,14 @@ export function resolveCategoryError(error: unknown, fallback: string): string {
   switch (error.code) {
     case 'CATEGORY_NAME_ALREADY_EXISTS':
       return 'Ya existe una categoría con ese nombre. Usa uno diferente.'
+    case 'ALREADY_IN_STATE':
+      return 'La categoría ya tenía ese estado. Recarga el listado para ver su estado actual.'
     case 'SEARCH_TOO_SHORT':
       return 'Escribe al menos 2 caracteres para buscar.'
   }
   if (error.status === 409) return 'Ya existe una categoría con ese nombre. Usa uno diferente.'
   if (error.status === 403) return 'No tienes permiso para realizar esta acción.'
+  if (error.status === 404) return 'Esta categoría ya no existe. Recarga el listado.'
   if (error.status === 400) return 'Revisa los datos: hay un campo que el servidor no aceptó.'
   return fallback
 }

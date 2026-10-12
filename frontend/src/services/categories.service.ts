@@ -3,6 +3,8 @@ import type {
   CategoriesListResponse,
   Category,
   CreateCategoryPayload,
+  UpdateCategoryPayload,
+  UpdateCategoryStatusPayload,
 } from '../types/category'
 
 import { http } from './http'
@@ -23,4 +25,10 @@ export const categoriesService = {
 
   create: (payload: CreateCategoryPayload, token: string | null) =>
     http.post<Category>('/categories', payload, { token }),
+
+  update: (categoryId: string, payload: UpdateCategoryPayload, token: string | null) =>
+    http.patch<Category>(`/categories/${categoryId}`, payload, { token }),
+
+  updateStatus: (categoryId: string, payload: UpdateCategoryStatusPayload, token: string | null) =>
+    http.patch<{ message: string }>(`/categories/${categoryId}/status`, payload, { token }),
 }
