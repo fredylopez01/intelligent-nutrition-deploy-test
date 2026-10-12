@@ -183,6 +183,17 @@ describe('CreateCategoryForm', () => {
     expect(onCreated).not.toHaveBeenCalled()
   })
 
+  it('disables both buttons and shows "Registrando..." while submitting', async () => {
+    createCategory.mockReturnValue(new Promise(() => {}))
+    const { user } = renderForm()
+
+    await fill(user, { name: 'Proteínas', description: 'Suplementos' })
+    await submit(user)
+
+    expect(await screen.findByRole('button', { name: 'Registrando...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+  })
+
   it('cancels without saving', async () => {
     const { user, onCancel } = renderForm()
 
