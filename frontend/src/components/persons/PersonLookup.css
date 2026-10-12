@@ -22,40 +22,8 @@
   color: var(--color-text-faint);
 }
 
-.person-lookup__controls {
-  display: flex;
-  gap: 0.625rem;
-}
-
-.person-lookup__input {
-  flex: 1;
-  min-width: 0;
-  height: 42px;
-  padding: 0 0.875rem;
-  background: var(--color-surface-field);
-  border: 1px solid var(--color-border-outline);
-  border-radius: 10px;
-  color: var(--color-text);
-  font-size: 0.845rem;
-}
-
-.person-lookup__input::placeholder {
-  color: var(--color-text-faint);
-}
-
-.person-lookup__input:focus {
-  outline: none;
-  border-color: var(--color-primary-strong);
-  box-shadow: 0 0 0 3px var(--color-focus-ring);
-}
-
-.person-lookup__input--invalid {
-  border-color: var(--color-danger);
-}
-
-.person-lookup__error {
-  font-size: 0.75rem;
-  color: var(--color-danger);
+.person-lookup__search .ui-search {
+  max-width: none;
 }
 
 .person-lookup__results {
@@ -211,7 +179,6 @@
 }
 
 @media (max-width: 479px) {
-  .person-lookup__controls,
   .person-lookup__item {
     flex-direction: column;
     align-items: stretch;

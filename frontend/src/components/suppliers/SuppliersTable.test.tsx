@@ -114,4 +114,27 @@ describe('SuppliersTable', () => {
     expect(onEdit).toHaveBeenCalledWith(suppliers[1])
     expect(onView).not.toHaveBeenCalled()
   })
+
+  it('shows the full name of a natural person supplier', async () => {
+    const marcela: Supplier = {
+      id: 'supplier-3',
+      commercialName: 'Distribuciones Marcela',
+      person: {
+        firstName: 'Marcela',
+        lastName: 'Rojas',
+        businessName: null,
+        documentNumber: '1049555666',
+        documentType: { code: 'CC', name: 'Cédula de Ciudadanía' },
+        email: 'marcela@correo.com',
+        phone: '3205557788',
+        address: 'Calle 15 # 9-30',
+        active: true,
+      },
+    }
+    const { user, onEdit } = renderTable([marcela])
+
+    expect(screen.getByRole('cell', { name: 'Marcela Rojas' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Editar Marcela Rojas' }))
+    expect(onEdit).toHaveBeenCalledWith(marcela)
+  })
 })

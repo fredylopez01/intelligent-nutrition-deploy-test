@@ -1,4 +1,5 @@
 import type { Supplier } from '../../types/supplier'
+import { getSupplierKind, getSupplierName } from '../../utils/suppliers'
 
 import './SupplierDetail.css'
 
@@ -36,8 +37,10 @@ export function SupplierDetail({ supplier }: SupplierDetailProps) {
           />
           <DetailItem label="Número de documento" value={person.documentNumber} />
           <div className="supplier-detail__item supplier-detail__item--full">
-            <dt className="supplier-detail__label">Nombre o razón social</dt>
-            <dd className="supplier-detail__value">{person.businessName || '—'}</dd>
+            <dt className="supplier-detail__label">
+              {getSupplierKind(supplier) === 'empresa' ? 'Razón social' : 'Nombre'}
+            </dt>
+            <dd className="supplier-detail__value">{getSupplierName(supplier)}</dd>
           </div>
           <DetailItem label="Correo electrónico" value={person.email} />
           <DetailItem label="Teléfono" value={person.phone} />

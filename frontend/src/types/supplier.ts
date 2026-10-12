@@ -13,6 +13,9 @@ export interface DocumentType {
 }
 
 export interface SupplierPerson {
+  documentTypeId?: string
+  firstName?: string | null
+  lastName?: string | null
   businessName: string | null
   documentNumber: string | null
   documentType: DocumentTypeRef | null
@@ -31,7 +34,9 @@ export interface Supplier {
 export interface CreateSupplierPersonPayload {
   documentTypeId: string
   documentNumber: string
-  businessName: string
+  businessName?: string
+  firstName?: string
+  lastName?: string
   email: string
   phone: string
   address: string

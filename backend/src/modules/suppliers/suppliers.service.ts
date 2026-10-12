@@ -43,6 +43,9 @@ const supplierListSelect = {
   person: {
     select: {
       id: true,
+      documentTypeId: true,
+      firstName: true,
+      lastName: true,
       businessName: true,
       documentNumber: true,
       email: true,
@@ -106,6 +109,26 @@ export class SuppliersService {
                 commercialName: {
                   contains: search,
                   mode: "insensitive" as const,
+                },
+              },
+              {
+                person: {
+                  is: {
+                    firstName: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                },
+              },
+              {
+                person: {
+                  is: {
+                    lastName: {
+                      contains: search,
+                      mode: "insensitive" as const,
+                    },
+                  },
                 },
               },
               {

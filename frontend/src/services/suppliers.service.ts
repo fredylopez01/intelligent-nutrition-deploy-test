@@ -66,7 +66,7 @@ export const suppliersService = {
       return {
         id: `mock-${Date.now()}`,
         person: {
-          businessName: 'person' in payload ? payload.person.businessName : null,
+          businessName: 'person' in payload ? (payload.person.businessName ?? null) : null,
           documentNumber: 'person' in payload ? payload.person.documentNumber : null,
           documentType: { code: 'NIT', name: 'Número de Identificación Tributaria' },
           email: 'person' in payload ? payload.person.email : null,

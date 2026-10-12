@@ -15,6 +15,11 @@ const DOCUMENT_NUMBER_RULES: Record<string, { pattern: RegExp; message: string }
   },
 }
 
+export const PERSON_KIND_DOCUMENT_CODES: Record<'natural' | 'empresa', string[]> = {
+  natural: ['CC', 'CE', 'PAS'],
+  empresa: ['NIT'],
+}
+
 export const contactFields = {
   email: z
     .string()
