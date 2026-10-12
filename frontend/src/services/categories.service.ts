@@ -1,4 +1,9 @@
-import type { CategoriesListParams, CategoriesListResponse } from '../types/category'
+import type {
+  CategoriesListParams,
+  CategoriesListResponse,
+  Category,
+  CreateCategoryPayload,
+} from '../types/category'
 
 import { http } from './http'
 
@@ -15,4 +20,7 @@ function buildCategoriesQuery({ page, limit, search, active }: CategoriesListPar
 export const categoriesService = {
   list: (params: CategoriesListParams, token: string | null) =>
     http.get<CategoriesListResponse>(`/categories${buildCategoriesQuery(params)}`, { token }),
+
+  create: (payload: CreateCategoryPayload, token: string | null) =>
+    http.post<Category>('/categories', payload, { token }),
 }

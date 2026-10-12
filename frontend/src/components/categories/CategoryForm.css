@@ -1,0 +1,29 @@
+.category-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+}
+
+.category-form__note {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.category-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.625rem;
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 479px) {
+  .category-form__actions {
+    flex-direction: column-reverse;
+  }
+
+  .category-form__actions .ui-button {
+    width: 100%;
+  }
+}
