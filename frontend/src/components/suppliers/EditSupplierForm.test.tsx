@@ -1,34 +1,45 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { documentTypesService } from '../../services/document-types.service'
 import { ApiError } from '../../services/http'
+import { suppliersService } from '../../services/suppliers.service'
 import type { Supplier } from '../../types/supplier'
 
 import { EditSupplierForm } from './EditSupplierForm'
 
-const mocks = vi.hoisted(() => ({
-  token: 'test-token',
-  update: vi.fn(),
-  onUpdated: vi.fn(),
-  onCancel: vi.fn(),
+vi.mock('../../services/suppliers.service', () => ({
+  suppliersService: { update: vi.fn() },
+}))
+
+vi.mock('../../services/document-types.service', () => ({
+  documentTypesService: { list: vi.fn() },
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({ token: mocks.token }),
+  useAuth: () => ({ token: 'test-token' }),
 }))
 
-vi.mock('../../services/suppliers.service', () => ({
-  suppliersService: { update: mocks.update },
-}))
+const updateSupplier = vi.mocked(suppliersService.update)
 
-const supplier: Supplier = {
+const DOCUMENT_TYPES = [
+  { id: 'doc-cc', code: 'CC', name: 'Cédula de Ciudadanía', active: true },
+  { id: 'doc-ce', code: 'CE', name: 'Cédula de Extranjería', active: true },
+  { id: 'doc-nit', code: 'NIT', name: 'Número de Identificación Tributaria', active: true },
+  { id: 'doc-pas', code: 'PAS', name: 'Pasaporte', active: true },
+]
+
+const company: Supplier = {
   id: 'supplier-1',
   commercialName: 'Suplementos Norte',
   person: {
+    documentTypeId: 'doc-nit',
+    firstName: null,
+    lastName: null,
     businessName: 'Suplementos Norte SAS',
-    documentNumber: '900123456',
-    documentType: { code: 'NIT', name: 'NIT' },
+    documentNumber: '900123456-7',
+    documentType: { code: 'NIT', name: 'Número de Identificación Tributaria' },
     email: 'contacto@norte.test',
     phone: '3001112222',
     address: 'Calle 10 # 20-30',
@@ -36,146 +47,214 @@ const supplier: Supplier = {
   },
 }
 
-function renderForm() {
-  return render(
-    <EditSupplierForm supplier={supplier} onUpdated={mocks.onUpdated} onCancel={mocks.onCancel} />,
+const naturalPerson: Supplier = {
+  id: 'supplier-2',
+  commercialName: 'Distribuciones Marcela',
+  person: {
+    documentTypeId: 'doc-cc',
+    firstName: 'Marcela',
+    lastName: 'Rojas',
+    businessName: null,
+    documentNumber: '1049555666',
+    documentType: { code: 'CC', name: 'Cédula de Ciudadanía' },
+    email: 'marcela@correo.com',
+    phone: '3205557788',
+    address: 'Calle 15 # 9-30',
+    active: true,
+  },
+}
+
+async function renderForm(supplier: Supplier = company) {
+  const onUpdated = vi.fn()
+  const onCancel = vi.fn()
+  const user = userEvent.setup()
+  render(<EditSupplierForm supplier={supplier} onUpdated={onUpdated} onCancel={onCancel} />)
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Tipo de documento' })).toHaveValue(
+      supplier.person.documentTypeId,
+    ),
   )
+  return { user, onUpdated, onCancel }
 }
 
-async function save(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+function field(label: string) {
+  return screen.getByLabelText(label)
 }
 
-describe('EditSupplierForm', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.update.mockResolvedValue({})
+function save(user: ReturnType<typeof userEvent.setup>) {
+  return user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+}
+
+beforeEach(() => {
+  vi.resetAllMocks()
+  vi.mocked(documentTypesService.list).mockResolvedValue(DOCUMENT_TYPES)
+  updateSupplier.mockResolvedValue(company)
+})
+
+describe('EditSupplierForm preloaded fields', () => {
+  it('preloads every person field of a company', async () => {
+    await renderForm()
+
+    expect(field('Número de documento')).toHaveValue('900123456-7')
+    expect(field('Razón social')).toHaveValue('Suplementos Norte SAS')
+    expect(field('Correo electrónico')).toHaveValue('contacto@norte.test')
+    expect(field('Teléfono')).toHaveValue('3001112222')
+    expect(field('Dirección')).toHaveValue('Calle 10 # 20-30')
+    expect(field('Nombre comercial')).toHaveValue('Suplementos Norte')
+    expect(screen.queryByLabelText('Nombres')).not.toBeInTheDocument()
   })
 
-  it('does not render any field to edit the identity document', () => {
-    renderForm()
+  it('preloads names and only offers personal documents to a natural person', async () => {
+    await renderForm(naturalPerson)
 
-    expect(screen.queryByLabelText(/documento/i)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/número de documento/i)).not.toBeInTheDocument()
-    expect(screen.getAllByRole('textbox')).toHaveLength(3)
+    expect(field('Nombres')).toHaveValue('Marcela')
+    expect(field('Apellidos')).toHaveValue('Rojas')
+    expect(screen.queryByLabelText('Razón social')).not.toBeInTheDocument()
+    const options = within(screen.getByRole('combobox', { name: 'Tipo de documento' }))
+      .getAllByRole('option')
+      .filter((option) => (option as HTMLOptionElement).value !== '')
+      .map((option) => option.textContent)
+    expect(options).toEqual(['Cédula de Ciudadanía', 'Cédula de Extranjería', 'Pasaporte'])
+  })
+})
+
+describe('EditSupplierForm saving', () => {
+  it('sends only the changed person fields inside person', async () => {
+    const { user, onUpdated } = await renderForm()
+
+    await user.clear(field('Teléfono'))
+    await user.type(field('Teléfono'), '3009998888')
+    await user.clear(field('Correo electrónico'))
+    await user.type(field('Correo electrónico'), ' Ventas@Norte.test ')
+    await save(user)
+
+    expect(updateSupplier).toHaveBeenCalledWith(
+      'supplier-1',
+      { person: { email: 'ventas@norte.test', phone: '3009998888' } },
+      'test-token',
+    )
+    await waitFor(() => expect(onUpdated).toHaveBeenCalledTimes(1))
+  })
+
+  it('sends the commercial name outside person', async () => {
+    const { user } = await renderForm()
+
+    await user.clear(field('Nombre comercial'))
+    await user.type(field('Nombre comercial'), 'Norte Nutrición')
+    await save(user)
+
+    expect(updateSupplier).toHaveBeenCalledWith(
+      'supplier-1',
+      { commercialName: 'Norte Nutrición' },
+      'test-token',
+    )
+  })
+
+  it('sends the document type and number together when the number changes', async () => {
+    const { user } = await renderForm()
+
+    await user.clear(field('Número de documento'))
+    await user.type(field('Número de documento'), '900999888-1')
+    await save(user)
+
+    expect(updateSupplier).toHaveBeenCalledWith(
+      'supplier-1',
+      { person: { documentTypeId: 'doc-nit', documentNumber: '900999888-1' } },
+      'test-token',
+    )
+  })
+
+  it('edits the names of a natural person', async () => {
+    const { user } = await renderForm(naturalPerson)
+
+    await user.clear(field('Apellidos'))
+    await user.type(field('Apellidos'), 'Rojas Pérez')
+    await save(user)
+
+    expect(updateSupplier).toHaveBeenCalledWith(
+      'supplier-2',
+      { person: { lastName: 'Rojas Pérez' } },
+      'test-token',
+    )
+  })
+
+  it('does not call the api when nothing changed', async () => {
+    const { user } = await renderForm()
+
+    await save(user)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No hay cambios por guardar.')
+    expect(updateSupplier).not.toHaveBeenCalled()
+  })
+})
+
+describe('EditSupplierForm validation', () => {
+  it('uses the same rules as the registration', async () => {
+    const { user } = await renderForm()
+
+    await user.clear(field('Razón social'))
+    await user.clear(field('Dirección'))
+    await user.clear(field('Teléfono'))
+    await user.type(field('Teléfono'), '300 abc')
+    await user.clear(field('Número de documento'))
+    await user.type(field('Número de documento'), '9001')
+    await save(user)
+
+    expect(await screen.findByText('Ingresa la razón social')).toBeInTheDocument()
+    expect(screen.getByText('Ingresa la dirección')).toBeInTheDocument()
     expect(
-      screen.getByText(/Solo se pueden editar el nombre comercial, el teléfono y la dirección de/),
+      screen.getByText('El teléfono solo lleva números, entre 7 y 15 dígitos'),
     ).toBeInTheDocument()
-  })
-
-  it('loads the current values of the editable fields', () => {
-    renderForm()
-
-    expect(screen.getByLabelText('Nombre comercial')).toHaveValue('Suplementos Norte')
-    expect(screen.getByLabelText('Teléfono')).toHaveValue('3001112222')
-    expect(screen.getByLabelText('Dirección')).toHaveValue('Calle 10 # 20-30')
-  })
-
-  it('sends only the changed fields and calls onUpdated on success', async () => {
-    const user = userEvent.setup()
-    renderForm()
-
-    await user.clear(screen.getByLabelText('Teléfono'))
-    await user.type(screen.getByLabelText('Teléfono'), '3009998888')
-    await save(user)
-
-    await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1))
-    expect(mocks.update).toHaveBeenCalledWith('supplier-1', { phone: '3009998888' }, mocks.token)
-    const payload = mocks.update.mock.calls[0][1] as Record<string, unknown>
-    expect(payload).not.toHaveProperty('documentNumber')
-    expect(payload).not.toHaveProperty('documentTypeId')
-    await waitFor(() => expect(mocks.onUpdated).toHaveBeenCalledTimes(1))
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-  })
-
-  it('does not call the service when there are no changes', async () => {
-    const user = userEvent.setup()
-    renderForm()
-
-    await save(user)
-
-    expect(await screen.findByText('No hay cambios por guardar.')).toBeInTheDocument()
-    expect(mocks.update).not.toHaveBeenCalled()
-    expect(mocks.onUpdated).not.toHaveBeenCalled()
-  })
-
-  it('shows an inline error when a field is emptied', async () => {
-    const user = userEvent.setup()
-    renderForm()
-
-    await user.clear(screen.getByLabelText('Teléfono'))
-    await save(user)
-
-    expect(await screen.findByText('Ingresa el teléfono')).toBeInTheDocument()
-    expect(mocks.update).not.toHaveBeenCalled()
-  })
-
-  it('rejects a phone with letters and does not save', async () => {
-    const user = userEvent.setup()
-    renderForm()
-
-    await user.clear(screen.getByLabelText('Teléfono'))
-    await user.type(screen.getByLabelText('Teléfono'), '300abc')
-    await save(user)
-
     expect(
-      await screen.findByText('El teléfono solo puede contener números, sin espacios ni símbolos'),
+      screen.getByText(
+        'Escribe el NIT con números y, si aplica, el dígito de verificación (900123456-7)',
+      ),
     ).toBeInTheDocument()
-    expect(mocks.update).not.toHaveBeenCalled()
+    expect(updateSupplier).not.toHaveBeenCalled()
   })
 
-  it('shows the permission message when the API responds 403', async () => {
-    mocks.update.mockRejectedValue(new ApiError('Forbidden', 403))
-    const user = userEvent.setup()
-    renderForm()
+  it('asks for both names of a natural person', async () => {
+    const { user } = await renderForm(naturalPerson)
 
-    await user.clear(screen.getByLabelText('Teléfono'))
-    await user.type(screen.getByLabelText('Teléfono'), '3009998888')
+    await user.clear(field('Nombres'))
     await save(user)
 
-    expect(
-      await screen.findByText('No tienes permiso para editar proveedores.'),
-    ).toBeInTheDocument()
-    expect(mocks.onUpdated).not.toHaveBeenCalled()
+    expect(await screen.findByText('Ingresa los nombres')).toBeInTheDocument()
+    expect(updateSupplier).not.toHaveBeenCalled()
   })
+})
 
-  it('shows the missing supplier message when the API responds 404', async () => {
-    mocks.update.mockRejectedValue(new ApiError('Not Found', 404))
-    const user = userEvent.setup()
-    renderForm()
+describe('EditSupplierForm api errors', () => {
+  it.each([
+    [
+      new ApiError('Doc', 409, {}, 'DOCUMENT_ALREADY_IN_USE'),
+      'Ese documento ya pertenece a otra persona registrada.',
+    ],
+    [
+      new ApiError('Email', 409, {}, 'EMAIL_ALREADY_IN_USE'),
+      'Ese correo ya pertenece a otra persona registrada.',
+    ],
+    [new ApiError('Forbidden', 403), 'No tienes permiso para editar proveedores.'],
+    [new ApiError('Not found', 404), 'Este proveedor ya no existe. Recarga el listado.'],
+    [new Error('boom'), 'No fue posible guardar los cambios. Intenta de nuevo.'],
+  ])('shows the error (%s)', async (error, message) => {
+    updateSupplier.mockRejectedValue(error)
+    const { user, onUpdated } = await renderForm()
 
-    await user.clear(screen.getByLabelText('Teléfono'))
-    await user.type(screen.getByLabelText('Teléfono'), '3009998888')
+    await user.clear(field('Teléfono'))
+    await user.type(field('Teléfono'), '3009998888')
     await save(user)
 
-    expect(
-      await screen.findByText('Este proveedor ya no existe. Recarga el listado.'),
-    ).toBeInTheDocument()
-    expect(mocks.onUpdated).not.toHaveBeenCalled()
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+    expect(onUpdated).not.toHaveBeenCalled()
   })
 
-  it('shows a generic message for an unexpected error', async () => {
-    mocks.update.mockRejectedValue(new Error('network down'))
-    const user = userEvent.setup()
-    renderForm()
-
-    await user.clear(screen.getByLabelText('Teléfono'))
-    await user.type(screen.getByLabelText('Teléfono'), '3009998888')
-    await save(user)
-
-    expect(
-      await screen.findByText('No fue posible guardar los cambios. Intenta de nuevo.'),
-    ).toBeInTheDocument()
-    expect(mocks.onUpdated).not.toHaveBeenCalled()
-  })
-
-  it('calls onCancel without saving when the user cancels', async () => {
-    const user = userEvent.setup()
-    renderForm()
+  it('cancels without saving', async () => {
+    const { user, onCancel } = await renderForm()
 
     await user.click(screen.getByRole('button', { name: 'Cancelar' }))
 
-    expect(mocks.onCancel).toHaveBeenCalledTimes(1)
-    expect(mocks.update).not.toHaveBeenCalled()
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(updateSupplier).not.toHaveBeenCalled()
   })
 })

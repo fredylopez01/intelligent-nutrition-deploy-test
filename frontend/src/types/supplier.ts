@@ -60,8 +60,18 @@ export interface SuppliersListResponse {
   meta: PaginationMeta
 }
 
-export interface UpdateSupplierPayload {
-  commercialName?: string
+export interface UpdateSupplierPersonPayload {
+  documentTypeId?: string
+  documentNumber?: string
+  firstName?: string
+  lastName?: string
+  businessName?: string
+  email?: string
   phone?: string
   address?: string
+}
+
+export interface UpdateSupplierPayload {
+  person?: UpdateSupplierPersonPayload
+  commercialName?: string
 }
