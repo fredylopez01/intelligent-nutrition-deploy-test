@@ -5,6 +5,7 @@ import { ActivateAccountPage } from '../pages/activation/ActivateAccountPage'
 import { AuditLogsPage } from '../pages/audit-logs/AuditLogsPage'
 import { BranchesPage } from '../pages/branches/BranchesPage'
 import { CategoriesPage } from '../pages/catalog/CategoriesPage'
+import { UnitsPage } from '../pages/catalog/UnitsPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
 import { CustomerDetailPage } from '../pages/customers/CustomerDetailPage'
 import { CustomersPage } from '../pages/customers/CustomersPage'
@@ -66,6 +67,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={ROUTE_ROLES['/catalogo/categorias']}>
             <CategoriesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/catalogo/unidades"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/catalogo/unidades']}>
+            <UnitsPage />
           </ProtectedRoute>
         }
       />
