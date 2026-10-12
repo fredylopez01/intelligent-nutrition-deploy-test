@@ -1,6 +1,7 @@
 import { jest, describe, beforeEach, it, expect } from "@jest/globals";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import type { CreateCustomerDto } from "./dto/create-customer.dto.js";
+import type { UpdateCustomerDto } from "./dto/update-customer.dto.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
 type TransactionOperation = (client: unknown) => Promise<unknown>;
@@ -22,13 +23,18 @@ interface PersonRecord {
 
 const prismaMock = {
   person: { findUnique: jest.fn<AsyncMock>() },
-  customer: { findUnique: jest.fn<AsyncMock>(), create: jest.fn<AsyncMock>() },
+  customer: {
+    findUnique: jest.fn<AsyncMock>(),
+    create: jest.fn<AsyncMock>(),
+    update: jest.fn<AsyncMock>(),
+  },
   $transaction:
     jest.fn<(operation: TransactionOperation) => Promise<unknown>>(),
 };
 
 const personsServiceMock = {
   findOrCreateByDocument: jest.fn<AsyncMock>(),
+  updateProfile: jest.fn<AsyncMock>(),
 };
 
 const auditMock = {
@@ -40,7 +46,7 @@ jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
 }));
 
 const { Test } = await import("@nestjs/testing");
-const { BadRequestException, NotFoundException } =
+const { BadRequestException, ConflictException, NotFoundException } =
   await import("@nestjs/common");
 const { CustomersService } = await import("./customers.service.js");
 const { PrismaService } =
@@ -105,6 +111,18 @@ function buildCustomerRecord(person: PersonRecord, fullName: string) {
   };
 }
 
+async function compileService() {
+  const module = await Test.createTestingModule({
+    providers: [
+      CustomersService,
+      { provide: PrismaService, useValue: prismaMock },
+      { provide: PersonsService, useValue: personsServiceMock },
+      { provide: AuditService, useValue: auditMock },
+    ],
+  }).compile();
+  return module.get(CustomersService);
+}
+
 describe("CustomersService.create", () => {
   let service: InstanceType<typeof CustomersService>;
 
@@ -121,15 +139,7 @@ describe("CustomersService.create", () => {
     );
     auditMock.createAuditLog.mockResolvedValue({});
 
-    const module = await Test.createTestingModule({
-      providers: [
-        CustomersService,
-        { provide: PrismaService, useValue: prismaMock },
-        { provide: PersonsService, useValue: personsServiceMock },
-        { provide: AuditService, useValue: auditMock },
-      ],
-    }).compile();
-    service = module.get(CustomersService);
+    service = await compileService();
   });
 
   describe("when the customer is created from a person block", () => {
@@ -448,6 +458,241 @@ describe("CustomersService.create", () => {
       );
 
       await expect(service.create({ personId }, currentUser)).rejects.toThrow(
+        "audit unavailable",
+      );
+    });
+  });
+});
+
+describe("CustomersService.update", () => {
+  let service: InstanceType<typeof CustomersService>;
+
+  const existingPerson = buildPerson();
+  const existingCustomer = buildCustomerRecord(existingPerson, "Carlos Gómez");
+
+  const updateOf = (changes: UpdateCustomerDto["person"]) =>
+    service.update(personId, { person: changes }, currentUser, "127.0.0.1");
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    prismaMock.$transaction.mockImplementation((operation) =>
+      operation(prismaMock),
+    );
+    prismaMock.customer.findUnique.mockResolvedValue(existingCustomer);
+    personsServiceMock.updateProfile.mockResolvedValue(existingPerson);
+    prismaMock.customer.update.mockResolvedValue({
+      personId,
+      fullName: "Carlos Gómez",
+      active: true,
+      createdAt,
+      updatedAt: createdAt,
+    });
+    auditMock.createAuditLog.mockResolvedValue({});
+
+    service = await compileService();
+  });
+
+  describe("when a partial update is requested", () => {
+    it("updates only the contact data and audits the change", async () => {
+      const updatedPerson = buildPerson({ phone: "3111111111" });
+      personsServiceMock.updateProfile.mockResolvedValue(updatedPerson);
+
+      const result = await updateOf({ phone: "3111111111" });
+
+      expect(prismaMock.customer.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { personId } }),
+      );
+      expect(personsServiceMock.updateProfile).toHaveBeenCalledWith(
+        prismaMock,
+        personId,
+        { phone: "3111111111" },
+      );
+      expect(prismaMock.customer.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { personId },
+          data: { fullName: "Carlos Gómez" },
+        }),
+      );
+      expect(result).toEqual({
+        id: personId,
+        fullName: "Carlos Gómez",
+        active: true,
+        createdAt,
+        updatedAt: createdAt,
+        person: updatedPerson,
+      });
+      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+        {
+          userId: "admin-user-id",
+          action: "UPDATE",
+          entity: "CUSTOMER",
+          entityId: personId,
+          oldData: { fullName: "Carlos Gómez", person: existingPerson },
+          newData: { fullName: "Carlos Gómez", person: updatedPerson },
+          reason: `Actualización de datos del cliente ${personId}`,
+          ipAddress: "127.0.0.1",
+        },
+        prismaMock,
+      );
+    });
+
+    it("recalculates the full name when the names change", async () => {
+      const updatedPerson = buildPerson({ firstName: "Carlos Andrés" });
+      personsServiceMock.updateProfile.mockResolvedValue(updatedPerson);
+      prismaMock.customer.update.mockResolvedValue({
+        personId,
+        fullName: "Carlos Andrés Gómez",
+        active: true,
+        createdAt,
+        updatedAt: createdAt,
+      });
+
+      const result = await updateOf({ firstName: "Carlos Andrés" });
+
+      expect(prismaMock.customer.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { fullName: "Carlos Andrés Gómez" } }),
+      );
+      expect(result.fullName).toBe("Carlos Andrés Gómez");
+      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          oldData: expect.objectContaining({ fullName: "Carlos Gómez" }),
+          newData: expect.objectContaining({ fullName: "Carlos Andrés Gómez" }),
+        }),
+        prismaMock,
+      );
+    });
+
+    it("uses the trimmed business name as the full name of a company", async () => {
+      personsServiceMock.updateProfile.mockResolvedValue(
+        buildPerson({
+          firstName: null,
+          lastName: null,
+          businessName: "  Nutrición Total SAS  ",
+        }),
+      );
+
+      await updateOf({ businessName: "  Nutrición Total SAS  " });
+
+      expect(prismaMock.customer.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { fullName: "Nutrición Total SAS" } }),
+      );
+    });
+  });
+
+  describe("when the document is part of the change", () => {
+    it("delegates the document change to the persons service", async () => {
+      const updatedPerson = buildPerson({ documentNumber: "9998887776" });
+      personsServiceMock.updateProfile.mockResolvedValue(updatedPerson);
+
+      const result = await updateOf({
+        documentTypeId,
+        documentNumber: "9998887776",
+      });
+
+      expect(personsServiceMock.updateProfile).toHaveBeenCalledWith(
+        prismaMock,
+        personId,
+        { documentTypeId, documentNumber: "9998887776" },
+      );
+      expect(result.person).toBe(updatedPerson);
+    });
+
+    it.each(["DOCUMENT_ALREADY_IN_USE", "EMAIL_ALREADY_IN_USE"])(
+      "propagates %s from the persons service and writes nothing",
+      async (code) => {
+        personsServiceMock.updateProfile.mockRejectedValue(
+          new ConflictException({
+            code,
+            message: "Already in use",
+            details: {},
+          }),
+        );
+
+        await expect(updateOf({ phone: "3111111111" })).rejects.toMatchObject({
+          status: 409,
+          response: { code },
+        });
+        expect(prismaMock.customer.update).not.toHaveBeenCalled();
+        expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe("when the request cannot be applied", () => {
+    it.each([
+      ["no person block", undefined],
+      ["an empty person block", {}],
+      ["only undefined fields", { phone: undefined, address: undefined }],
+    ])("rejects an update with %s", async (_label, changes) => {
+      await expect(updateOf(changes)).rejects.toMatchObject({
+        status: 400,
+        message: "At least one person field must be provided",
+      });
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(personsServiceMock.updateProfile).not.toHaveBeenCalled();
+    });
+
+    it("returns not found when the customer does not exist", async () => {
+      prismaMock.customer.findUnique.mockResolvedValue(null);
+
+      await expect(updateOf({ phone: "3111111111" })).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(personsServiceMock.updateProfile).not.toHaveBeenCalled();
+      expect(prismaMock.customer.update).not.toHaveBeenCalled();
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+    });
+
+    it("rejects an update that leaves the person without a name", async () => {
+      personsServiceMock.updateProfile.mockResolvedValue(
+        buildPerson({ businessName: "   ", firstName: null, lastName: null }),
+      );
+
+      await expect(updateOf({ businessName: "   " })).rejects.toMatchObject({
+        status: 400,
+        message: "Person must have a businessName or a firstName and lastName",
+      });
+      expect(prismaMock.customer.update).not.toHaveBeenCalled();
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+    });
+
+    it("rejects a full name longer than 200 characters", async () => {
+      personsServiceMock.updateProfile.mockResolvedValue(
+        buildPerson({
+          businessName: "A".repeat(201),
+          firstName: null,
+          lastName: null,
+        }),
+      );
+
+      await expect(
+        updateOf({ businessName: "A".repeat(201) }),
+      ).rejects.toMatchObject({
+        status: 400,
+        message: "Customer full name cannot exceed 200 characters",
+      });
+      expect(prismaMock.customer.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("when the database or the audit log fails", () => {
+    it("does not hide unexpected errors from the customer update", async () => {
+      prismaMock.customer.update.mockRejectedValue(
+        new Error("connection lost"),
+      );
+
+      await expect(updateOf({ phone: "3111111111" })).rejects.toThrow(
+        "connection lost",
+      );
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+    });
+
+    it("propagates the error when the audit log cannot be written", async () => {
+      auditMock.createAuditLog.mockRejectedValue(
+        new Error("audit unavailable"),
+      );
+
+      await expect(updateOf({ phone: "3111111111" })).rejects.toThrow(
         "audit unavailable",
       );
     });
