@@ -66,6 +66,16 @@ const personDto: PersonDto = {
   address: "Calle 10 # 20-30",
 };
 
+const naturalPersonDto: PersonDto = {
+  documentTypeId: "document-type-uuid",
+  documentNumber: "1020304050",
+  firstName: "Carlos",
+  lastName: "Gómez",
+  email: "carlos@proveedor.test",
+  phone: "3107654321",
+  address: "Carrera 15 # 25-35",
+};
+
 describe("SuppliersService.create", () => {
   let service: InstanceType<typeof SuppliersService>;
 
@@ -161,6 +171,53 @@ describe("SuppliersService.create", () => {
     expect(result.id).toBe("person-uuid-1");
   });
 
+  it("creates the supplier for a natural person", async () => {
+    const naturalPerson = {
+      ...supplierRecord.person,
+      id: "natural-person-uuid",
+      documentNumber: naturalPersonDto.documentNumber,
+      firstName: naturalPersonDto.firstName,
+      lastName: naturalPersonDto.lastName,
+      businessName: null,
+      email: naturalPersonDto.email,
+      phone: naturalPersonDto.phone,
+      address: naturalPersonDto.address,
+    };
+    personsServiceMock.findOrCreateByDocument.mockResolvedValue({
+      id: naturalPerson.id,
+      active: true,
+    });
+    prismaMock.supplier.create.mockResolvedValue({
+      ...supplierRecord,
+      personId: naturalPerson.id,
+      commercialName: "Proveedor Carlos",
+      person: naturalPerson,
+    });
+
+    const result = await service.create(
+      { person: naturalPersonDto, commercialName: "Proveedor Carlos" },
+      currentUser,
+    );
+
+    expect(personsServiceMock.findOrCreateByDocument).toHaveBeenCalledWith(
+      prismaMock,
+      naturalPersonDto,
+    );
+    expect(prismaMock.supplier.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          personId: naturalPerson.id,
+          commercialName: "Proveedor Carlos",
+        },
+      }),
+    );
+    expect(result).toEqual({
+      id: naturalPerson.id,
+      person: naturalPerson,
+      commercialName: "Proveedor Carlos",
+    });
+  });
+
   it("links the supplier to the person already registered for the document", async () => {
     personsServiceMock.findOrCreateByDocument.mockResolvedValue({
       id: "person-uuid-1",
@@ -223,6 +280,62 @@ describe("SuppliersService.create", () => {
     });
     expect(auditMock.createAuditLog).not.toHaveBeenCalled();
   });
+
+  const invalidPersonDetails: Array<[string, PersonDto, string]> = [
+    [
+      "no name",
+      {
+        ...naturalPersonDto,
+        firstName: undefined,
+        lastName: undefined,
+      },
+      "Provide businessName or both firstName and lastName",
+    ],
+    [
+      "only a first name",
+      { ...naturalPersonDto, lastName: undefined },
+      "Provide businessName or both firstName and lastName",
+    ],
+    [
+      "only a last name",
+      { ...naturalPersonDto, firstName: undefined },
+      "Provide businessName or both firstName and lastName",
+    ],
+    [
+      "a business name and only a first name",
+      { ...personDto, firstName: "Carlos" },
+      "firstName and lastName must be provided together",
+    ],
+    [
+      "a business name and only a last name",
+      { ...personDto, lastName: "Rojas" },
+      "firstName and lastName must be provided together",
+    ],
+  ];
+
+  it.each(invalidPersonDetails)(
+    "propagates the validation error for person data with %s",
+    async (_label, invalidPerson, message) => {
+      personsServiceMock.findOrCreateByDocument.mockRejectedValue(
+        new BadRequestException(message),
+      );
+
+      await expect(
+        service.create(
+          { person: invalidPerson, commercialName: "Distribuidora Salud SAS" },
+          currentUser,
+        ),
+      ).rejects.toMatchObject({ status: 400, message });
+
+      expect(personsServiceMock.findOrCreateByDocument).toHaveBeenCalledWith(
+        prismaMock,
+        invalidPerson,
+      );
+      expect(prismaMock.supplier.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.supplier.create).not.toHaveBeenCalled();
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+    },
+  );
 
   const invalidSources: Array<[string, PersonSource]> = [
     [
