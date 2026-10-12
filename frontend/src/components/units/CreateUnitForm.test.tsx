@@ -168,6 +168,27 @@ describe('CreateUnitForm', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(message)
   })
 
+  it('still registers when the duplicate check cannot be done', async () => {
+    listUnits.mockRejectedValue(new Error('offline'))
+    const { user, onCreated } = renderForm()
+
+    await fill(user, 'Gramo', 'g')
+    await submit(user)
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(gram))
+  })
+
+  it('disables both buttons and shows "Registrando..." while submitting', async () => {
+    createUnit.mockReturnValue(new Promise(() => {}))
+    const { user } = renderForm()
+
+    await fill(user, 'Gramo', 'g')
+    await submit(user)
+
+    expect(await screen.findByRole('button', { name: 'Registrando...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+  })
+
   it('cancels without saving', async () => {
     const { user, onCancel } = renderForm()
 
