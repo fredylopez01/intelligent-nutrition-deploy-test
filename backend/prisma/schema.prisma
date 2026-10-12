@@ -165,3 +165,14 @@ model Category {
 
   @@map("category")
 }
+
+model UnitMeasure {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique @db.VarChar(50)
+  abreviation String @unique @db.VarChar(10)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@map("unit_measure")
+}

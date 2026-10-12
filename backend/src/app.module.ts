@@ -13,6 +13,7 @@ import { BranchesModule } from "./modules/branches/branches.module.js";
 import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
 import { CustomersModule } from "./modules/customers/customers.module.js";
 import { CategoriesModule } from "./modules/categories/categories.module.js";
+import { UnitMeasureModule } from "./modules/unit-measure/unit-measure.module.js";
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { CategoriesModule } from "./modules/categories/categories.module.js";
     AuditModule,
     HealthModule,
     CategoriesModule,
+    UnitMeasureModule,
   ],
   controllers: [AppController],
   providers: [AppService],
