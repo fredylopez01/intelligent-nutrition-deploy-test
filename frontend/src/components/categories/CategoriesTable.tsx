@@ -1,13 +1,39 @@
 import type { Category } from '../../types/category'
+import { RowActions, type RowAction } from '../ui/RowActions'
 
 import '../users/StatusBadge.css'
 import './CategoriesTable.css'
 
 interface CategoriesTableProps {
   categories: Category[]
+  canEdit: boolean
+  canChangeStatus: boolean
+  onEdit: (category: Category) => void
+  onToggleStatus: (category: Category) => void
 }
 
-export function CategoriesTable({ categories }: CategoriesTableProps) {
+export function CategoriesTable({
+  categories,
+  canEdit,
+  canChangeStatus,
+  onEdit,
+  onToggleStatus,
+}: CategoriesTableProps) {
+  const hasActions = canEdit || canChangeStatus
+
+  const buildActions = (category: Category): RowAction[] => {
+    const actions: RowAction[] = []
+    if (canEdit) actions.push({ label: 'Editar', onSelect: () => onEdit(category) })
+    if (canChangeStatus) {
+      actions.push({
+        label: category.active ? 'Desactivar' : 'Activar',
+        tone: category.active ? 'danger' : undefined,
+        onSelect: () => onToggleStatus(category),
+      })
+    }
+    return actions
+  }
+
   return (
     <table className="categories-table">
       <caption className="sr-only">Categorías del catálogo de productos</caption>
@@ -18,6 +44,11 @@ export function CategoriesTable({ categories }: CategoriesTableProps) {
           <th scope="col" className="categories-table__col-status">
             Estado
           </th>
+          {hasActions && (
+            <th scope="col" className="categories-table__col-actions">
+              <span className="sr-only">Acciones</span>
+            </th>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -30,6 +61,14 @@ export function CategoriesTable({ categories }: CategoriesTableProps) {
                 {category.active ? 'Activa' : 'Inactiva'}
               </span>
             </td>
+            {hasActions && (
+              <td className="categories-table__col-actions">
+                <RowActions
+                  label={`Acciones para ${category.name}`}
+                  actions={buildActions(category)}
+                />
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

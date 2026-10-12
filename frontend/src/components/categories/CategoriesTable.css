@@ -28,6 +28,14 @@
   padding-right: 1rem;
 }
 
+.categories-table th.categories-table__col-actions,
+.categories-table td.categories-table__col-actions {
+  width: 4rem;
+  padding-left: 0.5rem;
+  padding-right: 1rem;
+  text-align: center;
+}
+
 .categories-table td {
   padding: 0.75rem 1.125rem;
   border-bottom: 1px solid var(--color-border);
