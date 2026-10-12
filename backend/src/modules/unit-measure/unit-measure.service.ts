@@ -1,8 +1,13 @@
-import { ConflictException, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from "@nestjs/common";
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import { CreateUnitMeasureDto } from "./dto/create-unit-measure.dto.js";
 import { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
+import { ListUnitMeasureQueryDto } from "./dto/list-unit-measure-query.dto.js";
 
 @Injectable()
 export class UnitMeasureService {
@@ -61,5 +66,54 @@ export class UnitMeasureService {
 
       return unitMeasure;
     });
+  }
+
+  async findAll(query: ListUnitMeasureQueryDto) {
+    const { page, limit, active, search } = query;
+
+    if (search !== undefined && search.length < 2) {
+      throw new BadRequestException({
+        code: "SEARCH_TOO_SHORT",
+        message: "Search must contain at least 2 characters.",
+        details: { minLength: 2 },
+      });
+    }
+
+    const where = {
+      ...(active === undefined ? {} : { active }),
+      ...(search
+        ? { name: { contains: search, mode: "insensitive" as const } }
+        : {}),
+    };
+
+    const skip = (page - 1) * limit;
+
+    const [total, unitsMeasure] = await this.prisma.$transaction([
+      this.prisma.unitMeasure.count({ where }),
+      this.prisma.unitMeasure.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          abreviation: true,
+          active: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+    ]);
+
+    return {
+      data: unitsMeasure,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
   }
 }
