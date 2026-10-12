@@ -54,6 +54,8 @@ export interface CreateCustomerWithPersonPayload {
 
 export interface UpdateCustomerPayload {
   person: Partial<{
+    documentTypeId: string
+    documentNumber: string
     firstName: string
     lastName: string
     businessName: string
