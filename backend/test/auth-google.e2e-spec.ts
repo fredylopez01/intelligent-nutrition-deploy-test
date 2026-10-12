@@ -10,6 +10,10 @@ import { PrismaService } from "../src/database/prisma/prisma.service.js";
 import { GoogleAuthGuard } from "../src/modules/auth/guards/google-auth.guard.js";
 
 const runId = Date.now().toString(36);
+const DOCUMENT_CODE = "CC-GOOGL-E2E";
+let documentTypeId: string;
+let documentSequence = 0;
+const nextDocumentNumber = () => `${runId}${(documentSequence += 1)}`;
 const frontendUrl = "http://localhost:5173";
 
 interface JwtPayload {
@@ -63,6 +67,13 @@ describe("GET /api/v1/auth/google/callback (e2e)", () => {
     await app.init();
 
     prisma = app.get(PrismaService);
+    documentTypeId = (
+      await prisma.documentType.upsert({
+        where: { code: DOCUMENT_CODE },
+        update: { active: true },
+        create: { code: DOCUMENT_CODE, name: "Documento (e2e)" },
+      })
+    ).id;
     jwtService = app.get(JwtService);
 
     const activeRole = await prisma.role.upsert({
@@ -85,6 +96,10 @@ describe("GET /api/v1/auth/google/callback (e2e)", () => {
 
     const active = await prisma.person.create({
       data: {
+        documentTypeId,
+        documentNumber: nextDocumentNumber(),
+        phone: "3000000000",
+        address: "Calle 1 # 2-3",
         firstName: "Google",
         lastName: "Activo",
         email: emails.active,
@@ -101,6 +116,10 @@ describe("GET /api/v1/auth/google/callback (e2e)", () => {
 
     const inactiveAccount = await prisma.person.create({
       data: {
+        documentTypeId,
+        documentNumber: nextDocumentNumber(),
+        phone: "3000000000",
+        address: "Calle 1 # 2-3",
         firstName: "Google",
         lastName: "CuentaOff",
         email: emails.inactiveAccount,
@@ -117,6 +136,10 @@ describe("GET /api/v1/auth/google/callback (e2e)", () => {
 
     const inactivePerson = await prisma.person.create({
       data: {
+        documentTypeId,
+        documentNumber: nextDocumentNumber(),
+        phone: "3000000000",
+        address: "Calle 1 # 2-3",
         firstName: "Google",
         lastName: "PersonaOff",
         email: emails.inactivePerson,
@@ -134,6 +157,10 @@ describe("GET /api/v1/auth/google/callback (e2e)", () => {
 
     const inactiveRoleUser = await prisma.person.create({
       data: {
+        documentTypeId,
+        documentNumber: nextDocumentNumber(),
+        phone: "3000000000",
+        address: "Calle 1 # 2-3",
         firstName: "Google",
         lastName: "RolOff",
         email: emails.inactiveRole,
@@ -157,6 +184,9 @@ describe("GET /api/v1/auth/google/callback (e2e)", () => {
     await prisma.person.deleteMany({ where: { id: { in: userIds } } });
     await prisma.role.deleteMany({
       where: { id: { in: [activeRoleId.current, inactiveRoleId.current] } },
+    });
+    await prisma.documentType.deleteMany({
+      where: { code: DOCUMENT_CODE },
     });
     await app.close();
   });
