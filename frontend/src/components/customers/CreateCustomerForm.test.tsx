@@ -135,6 +135,23 @@ describe('CreateCustomerForm person lookup', () => {
     expect(onCreated).not.toHaveBeenCalled()
   })
 
+  it('clears the previous error when the existing person is registered again', async () => {
+    searchPersons.mockResolvedValue(searchResponse([buildPerson()]))
+    createCustomer
+      .mockRejectedValueOnce(new ApiError('Already customer', 409, {}, 'ALREADY_CUSTOMER'))
+      .mockResolvedValueOnce(buildNaturalCustomer())
+    const { user, onCreated } = renderForm()
+    await searchPerson(user, 'laura')
+    await user.click(await screen.findByRole('button', { name: /Registrar a Laura Pérez/ }))
+    await submit(user)
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+
+    await submit(user)
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(buildNaturalCustomer(), false))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('goes back to the search from the selected person', async () => {
     searchPersons.mockResolvedValue(searchResponse([buildPerson()]))
     const { user } = renderForm()
@@ -190,6 +207,30 @@ describe('CreateCustomerForm person type', () => {
   })
 })
 
+describe('CreateCustomerForm document types', () => {
+  it('hides the inactive document types', async () => {
+    listDocumentTypes.mockResolvedValue([
+      ...DOCUMENT_TYPES,
+      { id: 'doc-old', code: 'CC', name: 'Cédula antigua', active: false },
+    ])
+    await renderNewForm()
+
+    await waitForDocumentTypes()
+
+    expect(optionLabels()).toEqual(['Cédula de Ciudadanía', 'Cédula de Extranjería', 'Pasaporte'])
+  })
+
+  it('explains the failure and blocks the submission when the types cannot be loaded', async () => {
+    listDocumentTypes.mockRejectedValue(new Error('Network down'))
+    await renderNewForm()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No fue posible cargar los tipos de documento. Cierra e intenta de nuevo.',
+    )
+    expect(screen.getByRole('button', { name: 'Registrar cliente' })).toBeDisabled()
+  })
+})
+
 describe('CreateCustomerForm validation', () => {
   it('asks for every required field before calling the api', async () => {
     const { user } = await renderNewForm()
@@ -230,6 +271,31 @@ describe('CreateCustomerForm validation', () => {
     await submit(user)
 
     expect(await screen.findByText(message)).toBeInTheDocument()
+  })
+
+  it.each([
+    [
+      'Número de documento',
+      'A'.repeat(51),
+      'El número de documento no puede superar 50 caracteres',
+      'natural',
+    ],
+    ['Nombres', 'N'.repeat(101), 'Los nombres no pueden superar 100 caracteres', 'natural'],
+    ['Apellidos', 'A'.repeat(101), 'Los apellidos no pueden superar 100 caracteres', 'natural'],
+    ['Razón social', 'R'.repeat(201), 'La razón social no puede superar 200 caracteres', 'empresa'],
+  ])('rejects a %s longer than the allowed length', async (label, value, message, kind) => {
+    const { user } = await renderNewForm()
+    await waitForDocumentTypes()
+    if (kind === 'empresa') {
+      await user.click(screen.getByRole('radio', { name: /Empresa/ }))
+    }
+
+    await user.click(screen.getByLabelText(label))
+    await user.paste(value)
+    await submit(user)
+
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(createCustomer).not.toHaveBeenCalled()
   })
 
   it('checks the NIT format, phone digits and email', async () => {
@@ -317,6 +383,34 @@ describe('CreateCustomerForm saving', () => {
     await submit(user)
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(existing, true))
+  })
+
+  it('tells when the document already belonged to a person with another email', async () => {
+    const existing = buildNaturalCustomer({
+      person: { ...buildNaturalCustomer().person, email: 'otro@correo.com' },
+    })
+    createCustomer.mockResolvedValue(existing)
+    const { user, onCreated } = await renderNewForm()
+    await fillNatural(user)
+
+    await submit(user)
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(existing, true))
+  })
+
+  it('clears the previous error when the registration is retried', async () => {
+    createCustomer
+      .mockRejectedValueOnce(new ApiError('Forbidden', 403))
+      .mockResolvedValueOnce(buildNaturalCustomer())
+    const { user, onCreated } = await renderNewForm()
+    await fillNatural(user)
+    await submit(user)
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+
+    await submit(user)
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('shows the saving state while the request is pending', async () => {
