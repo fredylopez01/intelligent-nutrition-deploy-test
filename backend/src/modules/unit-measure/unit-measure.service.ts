@@ -9,6 +9,7 @@ import { AuditService } from "../audit/audit.service.js";
 import { CreateUnitMeasureDto } from "./dto/create-unit-measure.dto.js";
 import { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { ListUnitMeasureQueryDto } from "./dto/list-unit-measure-query.dto.js";
+import { UpdateUnitMeasureDto } from "./dto/update-unit-measure.dto.js";
 
 @Injectable()
 export class UnitMeasureService {
@@ -127,5 +128,97 @@ export class UnitMeasureService {
     }
 
     return unitMeasure;
+  }
+
+  async update(
+    unitMeasureId: string,
+    updateUnitMeasureDto: UpdateUnitMeasureDto,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    if (
+      Object.values(updateUnitMeasureDto).every((value) => value === undefined)
+    ) {
+      throw new BadRequestException("At least one field must be provided");
+    }
+
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        const existingUnitMeasure = await transaction.unitMeasure.findUnique({
+          where: { id: unitMeasureId },
+        });
+
+        if (!existingUnitMeasure) {
+          throw new NotFoundException("Unit measure not found");
+        }
+
+        const { name, abreviation } = updateUnitMeasureDto;
+        if (name !== undefined && name !== existingUnitMeasure.name) {
+          const unitMeasureWithSame = await transaction.unitMeasure.findFirst({
+            where: {
+              OR: [{ name }, { abreviation }],
+            },
+            select: { id: true, name: true, abreviation: true },
+          });
+
+          if (name !== undefined && unitMeasureWithSame?.name === name) {
+            throw new ConflictException("Unit measure name already exists");
+          } else if (
+            abreviation !== undefined &&
+            unitMeasureWithSame?.abreviation === abreviation
+          ) {
+            throw new ConflictException(
+              "Unit measure abreviation already exists",
+            );
+          }
+        }
+
+        const updatedUnitMeasure = await transaction.unitMeasure.update({
+          where: { id: unitMeasureId },
+          data: {
+            ...(name === undefined ? {} : { name }),
+            ...(abreviation === undefined ? {} : { abreviation }),
+          },
+          select: {
+            id: true,
+            name: true,
+            abreviation: true,
+            active: true,
+          },
+        });
+
+        if (
+          existingUnitMeasure.name !== name &&
+          existingUnitMeasure.abreviation !== abreviation
+        ) {
+          await this.auditService.createAuditLog(
+            {
+              userId: currentUser.id,
+              action: "UPDATE",
+              entity: "UNIT_MEASURE",
+              entityId: unitMeasureId,
+              oldData: existingUnitMeasure,
+              newData: updatedUnitMeasure,
+              reason: `Actualización de la unidad de medida ${updatedUnitMeasure.name}`,
+              ipAddress,
+            },
+            transaction,
+          );
+        }
+
+        return updatedUnitMeasure;
+      });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2002"
+      ) {
+        throw new ConflictException("Unit measure name already exists");
+      }
+
+      throw error;
+    }
   }
 }
