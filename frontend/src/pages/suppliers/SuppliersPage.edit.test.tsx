@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { documentTypesService } from '../../services/document-types.service'
 import { ApiError } from '../../services/http'
 import { suppliersService } from '../../services/suppliers.service'
 import type { Supplier, SuppliersListResponse } from '../../types/supplier'
@@ -16,6 +17,10 @@ vi.mock('../../services/suppliers.service', () => ({
     create: vi.fn(),
     update: vi.fn(),
   },
+}))
+
+vi.mock('../../services/document-types.service', () => ({
+  documentTypesService: { list: vi.fn() },
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
@@ -38,6 +43,9 @@ const norte: Supplier = {
   id: 'supplier-1',
   commercialName: 'Suplementos Norte',
   person: {
+    documentTypeId: 'doc-nit',
+    firstName: null,
+    lastName: null,
     businessName: 'Suplementos Norte SAS',
     documentNumber: '900123456',
     documentType: { code: 'NIT', name: 'NIT' },
@@ -66,6 +74,11 @@ async function openEditDialog() {
   await user.click(await screen.findByRole('button', { name: 'Editar Suplementos Norte SAS' }))
 
   const dialog = screen.getByRole('dialog', { name: 'Editar proveedor' })
+  await waitFor(() =>
+    expect(within(dialog).getByRole('combobox', { name: 'Tipo de documento' })).toHaveValue(
+      'doc-nit',
+    ),
+  )
   return { user, dialog: within(dialog) }
 }
 
@@ -73,15 +86,23 @@ describe('SuppliersPage edit flow', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     listSuppliers.mockResolvedValue(pageOf([norte]))
+    vi.mocked(documentTypesService.list).mockResolvedValue([
+      { id: 'doc-nit', code: 'NIT', name: 'Número de Identificación Tributaria', active: true },
+    ])
   })
 
-  it('opens the edit dialog with the supplier ready to edit and no document field', async () => {
+  it('opens the edit dialog with every person field ready to edit', async () => {
     const { dialog } = await openEditDialog()
 
+    await waitFor(() =>
+      expect(dialog.getByRole('combobox', { name: 'Tipo de documento' })).toHaveValue('doc-nit'),
+    )
+    expect(dialog.getByLabelText('Número de documento')).toHaveValue('900123456')
+    expect(dialog.getByLabelText('Razón social')).toHaveValue('Suplementos Norte SAS')
+    expect(dialog.getByLabelText('Correo electrónico')).toHaveValue('contacto@norte.test')
     expect(dialog.getByLabelText('Nombre comercial')).toHaveValue('Suplementos Norte')
     expect(dialog.getByLabelText('Teléfono')).toHaveValue('3001112222')
     expect(dialog.getByLabelText('Dirección')).toHaveValue('Calle 10 # 20-30')
-    expect(dialog.queryByLabelText(/documento/i)).not.toBeInTheDocument()
   })
 
   it('closes the dialog, confirms the change and reloads the list after saving', async () => {

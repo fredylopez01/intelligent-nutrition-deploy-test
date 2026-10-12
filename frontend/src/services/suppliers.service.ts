@@ -90,8 +90,7 @@ export const suppliersService = {
       const target = MOCK_SUPPLIERS.find((s) => s.id === id)
       if (!target) throw new Error('Proveedor no encontrado')
       if (payload.commercialName !== undefined) target.commercialName = payload.commercialName
-      if (payload.phone !== undefined) target.person.phone = payload.phone
-      if (payload.address !== undefined) target.person.address = payload.address
+      Object.assign(target.person, payload.person ?? {})
       return target
     }
     return http.patch<Supplier>(`/suppliers/${id}`, payload, { token })
