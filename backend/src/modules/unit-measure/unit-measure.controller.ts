@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Ip, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Ip,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from "@nestjs/common";
 import { UnitMeasureService } from "./unit-measure.service.js";
 import { Roles } from "../../common/decorators/roles.decorator.js";
 import { CreateUnitMeasureDto } from "./dto/create-unit-measure.dto.js";
@@ -28,5 +37,11 @@ export class UnitMeasureController {
   @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   findAll(@Query() query: ListUnitMeasureQueryDto) {
     return this.unitMeasureService.findAll(query);
+  }
+
+  @Get(":categoryId")
+  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  findOne(@Param("categoryId", new ParseUUIDPipe()) unitMeasureId: string) {
+    return this.unitMeasureService.findOne(unitMeasureId);
   }
 }

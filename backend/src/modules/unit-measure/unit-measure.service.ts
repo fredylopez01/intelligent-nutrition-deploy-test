@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  NotFoundException,
 } from "@nestjs/common";
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
@@ -115,5 +116,16 @@ export class UnitMeasureService {
         totalPages: total === 0 ? 0 : Math.ceil(total / limit),
       },
     };
+  }
+
+  async findOne(unitMeasureId: string) {
+    const unitMeasure = await this.prisma.unitMeasure.findUnique({
+      where: { id: unitMeasureId },
+    });
+    if (!unitMeasure) {
+      throw new NotFoundException("Unit measure not found");
+    }
+
+    return unitMeasure;
   }
 }
