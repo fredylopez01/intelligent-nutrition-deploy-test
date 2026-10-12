@@ -13,7 +13,7 @@ import {
   contactFields,
   validateDocumentNumber,
 } from '../../utils/persons'
-import { getSupplierKind, getSupplierName } from '../../utils/suppliers'
+import { getSupplierKind } from '../../utils/suppliers'
 import type { SupplierKind } from '../../utils/suppliers'
 import { Alert } from '../ui/Alert'
 import { Button } from '../ui/Button'
@@ -72,10 +72,11 @@ type EditSupplierValues = z.infer<ReturnType<typeof buildSchema>>
 
 const CONTACT_FIELDS = ['email', 'phone', 'address'] as const
 
-interface EditSupplierFormProps {
+type Feedback = { tone: 'success' | 'error'; text: string } | null
+
+interface SupplierDataFormProps {
   supplier: Supplier
-  onUpdated: () => void
-  onCancel: () => void
+  onSaved: (supplier: Supplier) => void
 }
 
 function resolveErrorMessage(error: unknown): string {
@@ -110,10 +111,11 @@ function toValues(supplier: Supplier): EditSupplierValues {
   }
 }
 
-export function EditSupplierForm({ supplier, onUpdated, onCancel }: EditSupplierFormProps) {
+export function SupplierDataForm({ supplier, onSaved }: SupplierDataFormProps) {
   const { token } = useAuth()
   const { documentTypes, isLoading: docTypesLoading, error: docTypesError } = useDocumentTypes()
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [feedback, setFeedback] = useState<Feedback>(null)
 
   const kind = getSupplierKind(supplier)
   const kindDocumentTypes = useMemo(
@@ -135,14 +137,29 @@ export function EditSupplierForm({ supplier, onUpdated, onCancel }: EditSupplier
   const {
     register,
     handleSubmit,
+    reset,
+    setFocus,
     formState: { errors, isSubmitting },
   } = useForm<EditSupplierValues>({
     resolver: zodResolver(schema),
     values: current,
   })
 
+  const startEditing = () => {
+    setFeedback(null)
+    setIsEditing(true)
+    setTimeout(() => setFocus(kind === 'empresa' ? 'businessName' : 'firstName'), 0)
+  }
+
+  const cancelEditing = () => {
+    reset(current)
+    setIsEditing(false)
+    setFeedback(null)
+  }
+
   const onSubmit = async (values: EditSupplierValues) => {
-    setSubmitError(null)
+    if (!isEditing) return
+    setFeedback(null)
     const person: UpdateSupplierPersonPayload = {}
 
     const documentNumber = values.documentNumber.trim()
@@ -172,12 +189,12 @@ export function EditSupplierForm({ supplier, onUpdated, onCancel }: EditSupplier
     const hasCommercialChange = commercialName !== current.commercialName
 
     if (!hasPersonChanges && !hasCommercialChange) {
-      setSubmitError('No hay cambios por guardar.')
+      setFeedback({ tone: 'error', text: 'No hay cambios por guardar.' })
       return
     }
 
     try {
-      await suppliersService.update(
+      const updated = await suppliersService.update(
         supplier.id,
         {
           ...(hasPersonChanges ? { person } : {}),
@@ -185,11 +202,15 @@ export function EditSupplierForm({ supplier, onUpdated, onCancel }: EditSupplier
         },
         token,
       )
-      onUpdated()
+      setIsEditing(false)
+      setFeedback({ tone: 'success', text: 'Proveedor actualizado exitosamente.' })
+      onSaved(updated)
     } catch (error) {
-      setSubmitError(resolveErrorMessage(error))
+      setFeedback({ tone: 'error', text: resolveErrorMessage(error) })
     }
   }
+
+  const readOnly = !isEditing
 
   const docTypeOptions = kindDocumentTypes.map((documentType) => ({
     value: documentType.id,
@@ -197,23 +218,29 @@ export function EditSupplierForm({ supplier, onUpdated, onCancel }: EditSupplier
   }))
 
   return (
-    <form className="supplier-form" onSubmit={handleSubmit(onSubmit)} noValidate>
-      {submitError && <Alert tone="error">{submitError}</Alert>}
-
-      <p className="supplier-form__note">
-        Editas los datos de <strong>{getSupplierName(supplier)}</strong> (
-        {kind === 'empresa' ? 'empresa' : 'persona natural'}). Si esta persona también es cliente o
-        usuario, los cambios de identificación y contacto se reflejan allí.
-      </p>
+    <form
+      className={`supplier-form${readOnly ? ' supplier-form--readonly' : ''}`}
+      onSubmit={handleSubmit(onSubmit)}
+      noValidate
+    >
+      {feedback && <Alert tone={feedback.tone}>{feedback.text}</Alert>}
 
       <p className="supplier-form__section-title">Identificación</p>
 
       <div className="supplier-form__row">
-        {docTypesError ? (
+        {readOnly ? (
+          <TextField
+            id="supplier-documentType"
+            label="Tipo de documento"
+            value={supplier.person.documentType?.name ?? '—'}
+            readOnly
+            aria-readonly
+          />
+        ) : docTypesError ? (
           <Alert tone="error">No fue posible cargar los tipos de documento.</Alert>
         ) : (
           <SelectField
-            id="edit-supplier-documentTypeId"
+            id="supplier-documentTypeId"
             label="Tipo de documento"
             placeholder={docTypesLoading ? 'Cargando...' : 'Selecciona'}
             options={docTypeOptions}
@@ -223,18 +250,25 @@ export function EditSupplierForm({ supplier, onUpdated, onCancel }: EditSupplier
           />
         )}
         <TextField
-          id="edit-supplier-documentNumber"
+          id="supplier-documentNumber"
           label="Número de documento"
+          readOnly={readOnly}
           autoComplete="off"
           error={errors.documentNumber?.message}
+          hint={
+            readOnly
+              ? undefined
+              : 'Se verifica que el documento no pertenezca a otra persona. Si esta persona también es cliente o usuario, el cambio se refleja allí.'
+          }
           {...register('documentNumber')}
         />
       </div>
 
       {kind === 'empresa' ? (
         <TextField
-          id="edit-supplier-businessName"
+          id="supplier-businessName"
           label="Razón social"
+          readOnly={readOnly}
           autoComplete="organization"
           error={errors.businessName?.message}
           {...register('businessName')}
@@ -242,15 +276,17 @@ export function EditSupplierForm({ supplier, onUpdated, onCancel }: EditSupplier
       ) : (
         <div className="supplier-form__row">
           <TextField
-            id="edit-supplier-firstName"
+            id="supplier-firstName"
             label="Nombres"
+            readOnly={readOnly}
             autoComplete="off"
             error={errors.firstName?.message}
             {...register('firstName')}
           />
           <TextField
-            id="edit-supplier-lastName"
+            id="supplier-lastName"
             label="Apellidos"
+            readOnly={readOnly}
             autoComplete="off"
             error={errors.lastName?.message}
             {...register('lastName')}
@@ -260,50 +296,62 @@ export function EditSupplierForm({ supplier, onUpdated, onCancel }: EditSupplier
 
       <p className="supplier-form__section-title">Contacto</p>
 
+      <TextField
+        id="supplier-email"
+        label="Correo electrónico"
+        type="email"
+        readOnly={readOnly}
+        autoComplete="email"
+        error={errors.email?.message}
+        {...register('email')}
+      />
+
       <div className="supplier-form__row">
         <TextField
-          id="edit-supplier-email"
-          label="Correo electrónico"
-          type="email"
-          autoComplete="email"
-          error={errors.email?.message}
-          {...register('email')}
-        />
-        <TextField
-          id="edit-supplier-phone"
+          id="supplier-phone"
           label="Teléfono"
+          readOnly={readOnly}
           autoComplete="tel"
           inputMode="numeric"
           error={errors.phone?.message}
           {...register('phone')}
         />
+        <TextField
+          id="supplier-address"
+          label="Dirección"
+          readOnly={readOnly}
+          autoComplete="street-address"
+          error={errors.address?.message}
+          {...register('address')}
+        />
       </div>
-
-      <TextField
-        id="edit-supplier-address"
-        label="Dirección"
-        autoComplete="street-address"
-        error={errors.address?.message}
-        {...register('address')}
-      />
 
       <p className="supplier-form__section-title">Datos del proveedor</p>
 
       <TextField
-        id="edit-supplier-commercialName"
+        id="supplier-commercialName"
         label="Nombre comercial"
+        readOnly={readOnly}
         autoComplete="off"
         error={errors.commercialName?.message}
         {...register('commercialName')}
       />
 
       <div className="supplier-form__actions">
-        <Button variant="outline" type="button" onClick={onCancel} disabled={isSubmitting}>
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={isSubmitting || docTypesLoading}>
-          {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
-        </Button>
+        {isEditing ? (
+          <>
+            <Button variant="outline" onClick={cancelEditing} disabled={isSubmitting}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isSubmitting || docTypesLoading}>
+              {isSubmitting ? 'Guardando...' : 'Guardar cambios'}
+            </Button>
+          </>
+        ) : (
+          <Button variant="outline" onClick={startEditing}>
+            Actualizar información
+          </Button>
+        )}
       </div>
     </form>
   )

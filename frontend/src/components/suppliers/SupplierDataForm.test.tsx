@@ -7,7 +7,7 @@ import { ApiError } from '../../services/http'
 import { suppliersService } from '../../services/suppliers.service'
 import type { Supplier } from '../../types/supplier'
 
-import { EditSupplierForm } from './EditSupplierForm'
+import { SupplierDataForm } from './SupplierDataForm'
 
 vi.mock('../../services/suppliers.service', () => ({
   suppliersService: { update: vi.fn() },
@@ -65,16 +65,16 @@ const naturalPerson: Supplier = {
 }
 
 async function renderForm(supplier: Supplier = company) {
-  const onUpdated = vi.fn()
-  const onCancel = vi.fn()
+  const onSaved = vi.fn()
   const user = userEvent.setup()
-  render(<EditSupplierForm supplier={supplier} onUpdated={onUpdated} onCancel={onCancel} />)
+  render(<SupplierDataForm supplier={supplier} onSaved={onSaved} />)
+  await user.click(screen.getByRole('button', { name: 'Actualizar información' }))
   await waitFor(() =>
     expect(screen.getByRole('combobox', { name: 'Tipo de documento' })).toHaveValue(
       supplier.person.documentTypeId,
     ),
   )
-  return { user, onUpdated, onCancel }
+  return { user, onSaved }
 }
 
 function field(label: string) {
@@ -91,7 +91,20 @@ beforeEach(() => {
   updateSupplier.mockResolvedValue(company)
 })
 
-describe('EditSupplierForm preloaded fields', () => {
+describe('SupplierDataForm read only', () => {
+  it('shows every person field read only until the user decides to edit', () => {
+    render(<SupplierDataForm supplier={company} onSaved={vi.fn()} />)
+
+    expect(field('Tipo de documento')).toHaveValue('Número de Identificación Tributaria')
+    expect(field('Número de documento')).toHaveAttribute('readonly')
+    expect(field('Razón social')).toHaveAttribute('readonly')
+    expect(field('Nombre comercial')).toHaveValue('Suplementos Norte')
+    expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument()
+    expect(documentTypesService.list).toHaveBeenCalled()
+  })
+})
+
+describe('SupplierDataForm preloaded fields', () => {
   it('preloads every person field of a company', async () => {
     await renderForm()
 
@@ -123,9 +136,9 @@ describe('EditSupplierForm preloaded fields', () => {
   })
 })
 
-describe('EditSupplierForm saving', () => {
+describe('SupplierDataForm saving', () => {
   it('sends only the changed person fields inside person', async () => {
-    const { user, onUpdated } = await renderForm()
+    const { user, onSaved } = await renderForm()
 
     await user.clear(field('Teléfono'))
     await user.type(field('Teléfono'), '3009998888')
@@ -138,7 +151,9 @@ describe('EditSupplierForm saving', () => {
       { person: { email: 'ventas@norte.test', phone: '3009998888' } },
       'test-token',
     )
-    await waitFor(() => expect(onUpdated).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(company))
+    expect(screen.getByRole('status')).toHaveTextContent('Proveedor actualizado exitosamente.')
+    expect(screen.getByRole('button', { name: 'Actualizar información' })).toBeInTheDocument()
   })
 
   it('sends the commercial name outside person', async () => {
@@ -193,7 +208,7 @@ describe('EditSupplierForm saving', () => {
   })
 })
 
-describe('EditSupplierForm validation', () => {
+describe('SupplierDataForm validation', () => {
   it('uses the same rules as the registration', async () => {
     const { user } = await renderForm()
 
@@ -229,7 +244,7 @@ describe('EditSupplierForm validation', () => {
   })
 })
 
-describe('EditSupplierForm api errors', () => {
+describe('SupplierDataForm api errors', () => {
   it.each([
     [
       new ApiError('Doc', 409, {}, 'DOCUMENT_ALREADY_IN_USE'),
@@ -244,22 +259,25 @@ describe('EditSupplierForm api errors', () => {
     [new Error('boom'), 'No fue posible guardar los cambios. Intenta de nuevo.'],
   ])('shows the error (%s)', async (error, message) => {
     updateSupplier.mockRejectedValue(error)
-    const { user, onUpdated } = await renderForm()
+    const { user, onSaved } = await renderForm()
 
     await user.clear(field('Teléfono'))
     await user.type(field('Teléfono'), '3009998888')
     await save(user)
 
     expect(await screen.findByRole('alert')).toHaveTextContent(message)
-    expect(onUpdated).not.toHaveBeenCalled()
+    expect(onSaved).not.toHaveBeenCalled()
   })
 
-  it('cancels without saving', async () => {
-    const { user, onCancel } = await renderForm()
+  it('cancels the edition and restores the saved data', async () => {
+    const { user } = await renderForm()
 
+    await user.clear(field('Teléfono'))
+    await user.type(field('Teléfono'), '3009998888')
     await user.click(screen.getByRole('button', { name: 'Cancelar' }))
 
-    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(field('Teléfono')).toHaveValue('3001112222')
+    expect(field('Teléfono')).toHaveAttribute('readonly')
     expect(updateSupplier).not.toHaveBeenCalled()
   })
 })

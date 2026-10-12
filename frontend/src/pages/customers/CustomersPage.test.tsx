@@ -308,6 +308,22 @@ describe('CustomersPage search and filters', () => {
     expect(reload).toHaveAttribute('aria-busy', 'true')
     expect(screen.queryByRole('navigation', { name: 'Paginación de clientes' })).toBeNull()
   })
+
+  it('changes the page size from the pagination and saves it in the URL', async () => {
+    listCustomers.mockImplementation((params) =>
+      Promise.resolve({
+        data: [laura],
+        meta: { page: params.page ?? 1, limit: params.limit ?? 10, total: 25, totalPages: 3 },
+      }),
+    )
+    const { user } = renderPage()
+    await waitForRows()
+
+    await user.selectOptions(screen.getByLabelText('Filas por página'), '20')
+
+    await waitFor(() => expect(lastListCall()).toMatchObject({ page: 1, limit: 20 }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/clientes?porPagina=20')
+  })
 })
 
 describe('CustomersPage register', () => {

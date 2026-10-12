@@ -16,6 +16,7 @@ import { LoginPage } from '../pages/LoginPage'
 import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
 import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
 import { SettingsPage } from '../pages/settings/SettingsPage'
+import { SupplierDetailPage } from '../pages/suppliers/SupplierDetailPage'
 import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
 import { UserDetailPage } from '../pages/users/UserDetailPage'
 import { UsersPage } from '../pages/users/UsersPage'
@@ -64,6 +65,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={ROUTE_ROLES['/proveedores']}>
             <SuppliersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/proveedores/:supplierId"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/proveedores']}>
+            <SupplierDetailPage />
           </ProtectedRoute>
         }
       />

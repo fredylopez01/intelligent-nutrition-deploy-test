@@ -6,7 +6,7 @@ import type {
   UpdateSupplierPayload,
 } from '../types/supplier'
 
-import { http } from './http'
+import { ApiError, http } from './http'
 import { MOCK_SUPPLIERS } from './mocks/suppliers.mock'
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true'
@@ -58,6 +58,16 @@ export const suppliersService = {
   list: (params: SuppliersListParams, token: string | null): Promise<SuppliersListResponse> => {
     if (USE_MOCKS) return listMock(params)
     return http.get<SuppliersListResponse>(`/suppliers${buildSuppliersQuery(params)}`, { token })
+  },
+
+  getById: async (id: string, token: string | null): Promise<Supplier> => {
+    if (USE_MOCKS) {
+      await delay()
+      const target = MOCK_SUPPLIERS.find((s) => s.id === id)
+      if (!target) throw new ApiError('Supplier not found', 404)
+      return target
+    }
+    return http.get<Supplier>(`/suppliers/${id}`, { token })
   },
 
   create: async (payload: CreateSupplierPayload, token: string | null): Promise<Supplier> => {

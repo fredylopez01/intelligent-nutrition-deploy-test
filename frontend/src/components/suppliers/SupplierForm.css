@@ -132,6 +132,18 @@
   border-color: var(--color-border-outline);
 }
 
+.supplier-form .ui-field__control[readonly] {
+  background: var(--color-surface-muted);
+  border-color: transparent;
+  color: var(--color-text-secondary);
+  cursor: default;
+}
+
+.supplier-form .ui-field__control[readonly]:focus {
+  border-color: var(--color-border-strong);
+  box-shadow: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .supplier-form__kind {
     transition: none;
