@@ -1,0 +1,21 @@
+.ui-reload {
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.ui-reload__icon {
+  width: 16px;
+  height: 16px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ui-reload--loading .ui-reload__icon {
+    animation: ui-reload-spin 0.9s linear infinite;
+  }
+}
+
+@keyframes ui-reload-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
