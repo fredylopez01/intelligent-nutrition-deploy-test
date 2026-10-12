@@ -307,3 +307,73 @@ describe('SuppliersPage search bar, reload and empty state', () => {
     expect(screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' })).toHaveValue('')
   })
 })
+
+describe('SuppliersPage search with the magnifier and reload', () => {
+  const searchBox = () => screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' })
+
+  beforeEach(() => {
+    listSuppliers.mockResolvedValue(pageOf([norte]))
+  })
+
+  it('searches when the magnifier is pressed', async () => {
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+
+    await user.type(searchBox(), 'Norte')
+    await user.click(screen.getByRole('button', { name: 'Buscar' }))
+
+    await waitFor(() => expect(lastListParams()).toMatchObject({ search: 'Norte', page: 1 }))
+  })
+
+  it('asks for two characters before searching', async () => {
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    const requests = listSuppliers.mock.calls.length
+
+    await user.type(searchBox(), 'n{Enter}')
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Escribe al menos 2 caracteres para buscar.',
+    )
+    expect(listSuppliers).toHaveBeenCalledTimes(requests)
+  })
+
+  it('asks the server again when the same search is repeated', async () => {
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await user.type(searchBox(), 'Norte{Enter}')
+    await waitFor(() => expect(lastListParams()).toMatchObject({ search: 'Norte' }))
+    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    const requests = listSuppliers.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'Buscar' }))
+
+    await waitFor(() => expect(listSuppliers).toHaveBeenCalledTimes(requests + 1))
+    expect(lastListParams()).toMatchObject({ search: 'Norte', page: 1 })
+  })
+
+  it('disables the reload button while the list loads', () => {
+    listSuppliers.mockReturnValue(new Promise(() => {}))
+    renderPage()
+
+    expect(screen.getByRole('button', { name: 'Cargando...' })).toBeDisabled()
+  })
+
+  it('reloads keeping the search and the page', async () => {
+    listSuppliers.mockImplementation((params) =>
+      Promise.resolve(pageOf([norte], { page: params.page ?? 1, total: 30, totalPages: 3 })),
+    )
+    const { user } = renderPage()
+    await screen.findByText('Página 1 de 3')
+    await user.type(searchBox(), 'Norte{Enter}')
+    await waitFor(() => expect(lastListParams()).toMatchObject({ search: 'Norte' }))
+    await user.click(await screen.findByRole('button', { name: 'Siguiente' }))
+    await screen.findByText('Página 2 de 3')
+    const requests = listSuppliers.mock.calls.length
+
+    await user.click(await screen.findByRole('button', { name: 'Recargar' }))
+
+    await waitFor(() => expect(listSuppliers).toHaveBeenCalledTimes(requests + 1))
+    expect(lastListParams()).toMatchObject({ page: 2, search: 'Norte' })
+  })
+})
