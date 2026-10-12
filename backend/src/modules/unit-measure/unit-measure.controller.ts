@@ -1,9 +1,19 @@
-import { Body, Controller, Ip, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Ip,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from "@nestjs/common";
 import { UnitMeasureService } from "./unit-measure.service.js";
 import { Roles } from "../../common/decorators/roles.decorator.js";
 import { CreateUnitMeasureDto } from "./dto/create-unit-measure.dto.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
+import { ListUnitMeasureQueryDto } from "./dto/list-unit-measure-query.dto.js";
 
 @Controller("unit-measure")
 export class UnitMeasureController {
@@ -21,5 +31,17 @@ export class UnitMeasureController {
       currentUser,
       ipAddress,
     );
+  }
+
+  @Get()
+  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  findAll(@Query() query: ListUnitMeasureQueryDto) {
+    return this.unitMeasureService.findAll(query);
+  }
+
+  @Get(":categoryId")
+  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  findOne(@Param("categoryId", new ParseUUIDPipe()) unitMeasureId: string) {
+    return this.unitMeasureService.findOne(unitMeasureId);
   }
 }
