@@ -376,3 +376,34 @@ describe('CustomersPage state', () => {
     },
   )
 })
+
+describe('CustomersPage clear filters from the empty state', () => {
+  it('does not offer to clear filters when there are no customers and no filters', async () => {
+    listCustomers.mockResolvedValue(page([]))
+    renderPage()
+
+    expect(await screen.findByText('Todavía no hay clientes registrados')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Limpiar filtros' })).not.toBeInTheDocument()
+  })
+
+  it('offers to clear the filters when only the state filter is applied', async () => {
+    listCustomers.mockResolvedValue(page([]))
+    renderPage('/clientes?estado=inactivos')
+
+    expect(await screen.findByText('Ningún cliente coincide con los filtros')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Limpiar filtros' })).toBeInTheDocument()
+  })
+
+  it('goes back to the first page and leaves the address without filters', async () => {
+    listCustomers.mockResolvedValue(page([]))
+    const { user } = renderPage('/clientes?q=zzz&estado=inactivos&pagina=3')
+    await screen.findByText('Ningún cliente coincide con los filtros')
+    expect(lastListCall()).toEqual({ page: 3, limit: 10, search: 'zzz', active: false })
+    listCustomers.mockResolvedValue(page([laura]))
+
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+
+    await waitFor(() => expect(lastListCall()).toEqual({ page: 1, limit: 10 }))
+    expect(screen.getByTestId('location').textContent).toBe('/clientes')
+  })
+})
