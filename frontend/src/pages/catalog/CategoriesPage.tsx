@@ -1,14 +1,21 @@
+import { useState } from 'react'
+
 import { CategoriesTable } from '../../components/categories/CategoriesTable'
+import { CreateCategoryForm } from '../../components/categories/CreateCategoryForm'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { Modal } from '../../components/ui/Modal'
 import { Pagination } from '../../components/ui/Pagination'
 import { ReloadButton } from '../../components/ui/ReloadButton'
 import { SearchBar } from '../../components/ui/SearchBar'
 import { TableSkeleton } from '../../components/ui/TableSkeleton'
+import { useAuth } from '../../hooks/useAuth'
 import { useCategories } from '../../hooks/useCategories'
 import { usePagination } from '../../hooks/usePagination'
 import { AppLayout } from '../../layouts/AppLayout'
+import type { Category } from '../../types/category'
+import { CATEGORY_MANAGE_ROLES, hasRole } from '../../utils/categories'
 
 import './CatalogPage.css'
 
@@ -22,7 +29,11 @@ const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
 const FILTER_DEFAULTS = { estado: 'todos' }
 
 export function CategoriesPage() {
+  const { user } = useAuth()
+  const canManage = hasRole(CATEGORY_MANAGE_ROLES, user?.role.name)
+
   const {
+    page,
     search,
     filters,
     hasFilters,
@@ -34,6 +45,8 @@ export function CategoriesPage() {
     setFilter,
     clearFilters,
   } = usePagination({ filters: FILTER_DEFAULTS })
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, categories, meta, error, refetch } = useCategories({
     ...params,
@@ -43,6 +56,18 @@ export function CategoriesPage() {
   const handleSearch = (term: string) => {
     if (term === search) refetch()
     else applySearch(term)
+  }
+
+  const handleOpenCreate = () => {
+    setFeedbackMessage(null)
+    setIsCreateOpen(true)
+  }
+
+  const handleCreated = (category: Category) => {
+    setIsCreateOpen(false)
+    setFeedbackMessage(`La categoría ${category.name} quedó registrada y activa.`)
+    if (page === 1) refetch()
+    else setPage(1)
   }
 
   const renderList = () => {
@@ -73,7 +98,9 @@ export function CategoriesPage() {
           variant="sin-registros"
           title="Todavía no hay categorías registradas"
           description="Las categorías agrupan los productos del catálogo, por ejemplo Proteínas o Vitaminas."
-        />
+        >
+          {canManage && <Button onClick={handleOpenCreate}>Registrar categoría</Button>}
+        </EmptyState>
       )
     }
 
@@ -104,7 +131,18 @@ export function CategoriesPage() {
           <option value="inactivas">Inactivas</option>
         </select>
         <ReloadButton onReload={refetch} loading={status === 'loading'} />
+        {canManage && (
+          <Button className="catalog-page__primary" onClick={handleOpenCreate}>
+            Registrar categoría
+          </Button>
+        )}
       </div>
+
+      {feedbackMessage && (
+        <div className="catalog-page__feedback">
+          <Alert tone="success">{feedbackMessage}</Alert>
+        </div>
+      )}
 
       <div className="catalog-page__card">{renderList()}</div>
 
@@ -126,6 +164,15 @@ export function CategoriesPage() {
           productos que ya la usan la conservan y siguen en el catálogo.
         </p>
       </div>
+
+      <Modal
+        open={isCreateOpen}
+        title="Registrar categoría"
+        description="Agrupa los productos del catálogo. El nombre no puede repetirse."
+        onClose={() => setIsCreateOpen(false)}
+      >
+        <CreateCategoryForm onCreated={handleCreated} onCancel={() => setIsCreateOpen(false)} />
+      </Modal>
     </AppLayout>
   )
 }

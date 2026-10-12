@@ -20,3 +20,8 @@ export interface CategoriesListResponse {
   data: Category[]
   meta: PaginationMeta
 }
+
+export interface CreateCategoryPayload {
+  name: string
+  description: string
+}

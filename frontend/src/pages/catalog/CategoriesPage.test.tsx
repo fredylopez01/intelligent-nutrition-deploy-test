@@ -10,12 +10,14 @@ import type { CategoriesListParams, Category } from '../../types/category'
 
 import { CategoriesPage } from './CategoriesPage'
 
+const auth = vi.hoisted(() => ({ role: 'SUPERADMIN' }))
+
 vi.mock('../../services/categories.service', () => ({
-  categoriesService: { list: vi.fn() },
+  categoriesService: { list: vi.fn(), create: vi.fn() },
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => ({ token: 'test-token', user: { id: 'me', role: { name: auth.role } } }),
 }))
 
 vi.mock('../../layouts/AppLayout', () => ({
@@ -28,6 +30,7 @@ vi.mock('../../layouts/AppLayout', () => ({
 }))
 
 const listCategories = vi.mocked(categoriesService.list)
+const createCategory = vi.mocked(categoriesService.create)
 
 const proteins: Category = {
   id: 'cat-1',
@@ -80,6 +83,7 @@ function searchBox() {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  auth.role = 'SUPERADMIN'
   listCategories.mockResolvedValue(pageOf([proteins, snacks]))
 })
 
@@ -169,5 +173,42 @@ describe('CategoriesPage list', () => {
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
 
     expect(await screen.findByText('Proteínas')).toBeInTheDocument()
+  })
+})
+
+describe('CategoriesPage register', () => {
+  it('registers a category and shows it in the list', async () => {
+    createCategory.mockResolvedValue({ ...proteins, id: 'cat-3', name: 'Vitaminas' })
+    const { user } = renderPage()
+    await screen.findByText('Proteínas')
+    listCategories.mockResolvedValue(pageOf([proteins]))
+
+    await user.click(screen.getByRole('button', { name: 'Registrar categoría' }))
+    const dialog = within(screen.getByRole('dialog'))
+    await user.type(dialog.getByLabelText('Nombre'), 'Vitaminas')
+    await user.type(dialog.getByLabelText('Descripción'), 'Multivitamínicos')
+    await user.click(dialog.getByRole('button', { name: 'Registrar categoría' }))
+
+    expect(
+      await screen.findByText('La categoría Vitaminas quedó registrada y activa.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('offers to register to the branch leader but not to the branch assistant', async () => {
+    auth.role = 'BRANCH_LEADER'
+    const { unmount } = render(
+      <MemoryRouter>
+        <CategoriesPage />
+      </MemoryRouter>,
+    )
+    await screen.findByText('Proteínas')
+    expect(screen.getByRole('button', { name: 'Registrar categoría' })).toBeInTheDocument()
+    unmount()
+
+    auth.role = 'BRANCH_ASSISTANT'
+    renderPage()
+    await screen.findByText('Proteínas')
+    expect(screen.queryByRole('button', { name: 'Registrar categoría' })).not.toBeInTheDocument()
   })
 })
