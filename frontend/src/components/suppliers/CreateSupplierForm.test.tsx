@@ -144,6 +144,31 @@ describe('CreateSupplierForm flow', () => {
     expect(documentTypeSelect()).toHaveValue('doc-nit')
   })
 
+  it('switches conditional fields and document types when changing supplier kind', async () => {
+    const { user } = renderForm()
+    await chooseKind(user, /Persona natural/)
+
+    expect(optionLabels()).toEqual(['Cédula de Ciudadanía', 'Cédula de Extranjería', 'Pasaporte'])
+    expect(screen.getByLabelText('Nombres')).toBeInTheDocument()
+    expect(screen.getByLabelText('Apellidos')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: /Empresa/ }))
+    await waitFor(() => expect(documentTypeSelect()).toHaveValue('doc-nit'))
+
+    expect(optionLabels()).toEqual(['Número de Identificación Tributaria'])
+    expect(screen.getByLabelText('Razón social')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Nombres')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Apellidos')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: /Persona natural/ }))
+    await waitFor(() => expect(optionLabels()).toHaveLength(3))
+
+    expect(documentTypeSelect()).toHaveValue('')
+    expect(screen.getByLabelText('Nombres')).toBeInTheDocument()
+    expect(screen.getByLabelText('Apellidos')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Razón social')).not.toBeInTheDocument()
+  })
+
   it('goes back to the search', async () => {
     const { user } = renderForm()
     await startFromScratch(user)
