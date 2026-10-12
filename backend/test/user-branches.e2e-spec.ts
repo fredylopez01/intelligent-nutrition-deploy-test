@@ -20,6 +20,10 @@ interface AssignmentItem {
 }
 
 const runId = Date.now().toString(36);
+const DOCUMENT_CODE = "CC-USRBR-E2E";
+let documentTypeId: string;
+let documentSequence = 0;
+const nextDocumentNumber = () => `${runId}${(documentSequence += 1)}`;
 const branchName = (label: string) => `${runId} ${label}`;
 
 function todayUtc(): string {
@@ -67,6 +71,10 @@ describe("User branch assignment endpoints (e2e)", () => {
   const createEmployee = async (label: string) => {
     const person = await prisma.person.create({
       data: {
+        documentTypeId,
+        documentNumber: nextDocumentNumber(),
+        phone: "3000000000",
+        address: "Calle 1 # 2-3",
         firstName: label,
         lastName: "E2E",
         email: `${label.toLowerCase()}.employee.${runId}@e2e.test`,
@@ -102,6 +110,13 @@ describe("User branch assignment endpoints (e2e)", () => {
     await app.init();
 
     prisma = app.get(PrismaService);
+    documentTypeId = (
+      await prisma.documentType.upsert({
+        where: { code: DOCUMENT_CODE },
+        update: { active: true },
+        create: { code: DOCUMENT_CODE, name: "Documento (e2e)" },
+      })
+    ).id;
     const jwtService = app.get(JwtService);
     const roleNames: RoleName[] = [
       "SUPERADMIN",
@@ -119,6 +134,10 @@ describe("User branch assignment endpoints (e2e)", () => {
       roleIds = { ...roleIds, [roleName]: role.id };
       const person = await prisma.person.create({
         data: {
+          documentTypeId,
+          documentNumber: nextDocumentNumber(),
+          phone: "3000000000",
+          address: "Calle 1 # 2-3",
           firstName: roleName,
           lastName: "E2E",
           email: `${roleName.toLowerCase()}.assign.${runId}@e2e.test`,
@@ -149,6 +168,9 @@ describe("User branch assignment endpoints (e2e)", () => {
       where: { personId: { in: personIds } },
     });
     await prisma.person.deleteMany({ where: { id: { in: personIds } } });
+    await prisma.documentType.deleteMany({
+      where: { code: DOCUMENT_CODE },
+    });
     await app.close();
   });
 

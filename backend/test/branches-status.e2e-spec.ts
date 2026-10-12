@@ -12,6 +12,10 @@ import { PrismaService } from "../src/database/prisma/prisma.service.js";
 type RoleName = "SUPERADMIN" | "BRANCH_LEADER" | "BRANCH_ASSISTANT" | "DEV";
 
 const runId = Date.now().toString(36);
+const DOCUMENT_CODE = "CC-BRSTA-E2E";
+let documentTypeId: string;
+let documentSequence = 0;
+const nextDocumentNumber = () => `${runId}${(documentSequence += 1)}`;
 const branchName = (label: string) => `${runId} ${label}`;
 
 describe("PATCH /api/v1/branches/:id/status (e2e)", () => {
@@ -60,6 +64,13 @@ describe("PATCH /api/v1/branches/:id/status (e2e)", () => {
     await app.init();
 
     prisma = app.get(PrismaService);
+    documentTypeId = (
+      await prisma.documentType.upsert({
+        where: { code: DOCUMENT_CODE },
+        update: { active: true },
+        create: { code: DOCUMENT_CODE, name: "Documento (e2e)" },
+      })
+    ).id;
     const jwtService = app.get(JwtService);
     const roleNames: RoleName[] = [
       "SUPERADMIN",
@@ -76,6 +87,10 @@ describe("PATCH /api/v1/branches/:id/status (e2e)", () => {
       });
       const person = await prisma.person.create({
         data: {
+          documentTypeId,
+          documentNumber: nextDocumentNumber(),
+          phone: "3000000000",
+          address: "Calle 1 # 2-3",
           firstName: roleName,
           lastName: "E2E",
           email: `${roleName.toLowerCase()}.status.${runId}@e2e.test`,
@@ -101,6 +116,9 @@ describe("PATCH /api/v1/branches/:id/status (e2e)", () => {
       where: { personId: { in: userIds } },
     });
     await prisma.person.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.documentType.deleteMany({
+      where: { code: DOCUMENT_CODE },
+    });
     await app.close();
   });
 

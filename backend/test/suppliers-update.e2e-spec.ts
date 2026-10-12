@@ -33,6 +33,7 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
   const personIds: string[] = [];
   const userIds: string[] = [];
   let supplierId: string;
+  let documentTypeId: string;
 
   const patchSupplier = (
     id: string,
@@ -80,6 +81,7 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
       update: { active: true },
       create: { code: "NIT-E2E", name: "NIT (e2e)" },
     });
+    documentTypeId = documentType.id;
 
     const supplierPerson = await prisma.person.create({
       data: {
@@ -112,6 +114,10 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
       });
       const person = await prisma.person.create({
         data: {
+          documentTypeId: documentType.id,
+          documentNumber: `${runId}${roleName}`,
+          phone: "3000000000",
+          address: "Calle 1 # 2-3",
           firstName: roleName,
           lastName: "E2E",
           email: `${roleName.toLowerCase()}.update.${runId}@e2e.test`,
@@ -149,8 +155,7 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
     it("updates the commercial name, phone and address together", async () => {
       const response = await patchSupplier(supplierId, {
         commercialName: `${runId} Suplementos Andinos EDITADO`,
-        phone: "3001112233",
-        address: "Carrera 9 # 8-7",
+        person: { phone: "3001112233", address: "Carrera 9 # 8-7" },
       }).expect(200);
 
       const body = response.body as UpdateResponse;
@@ -221,7 +226,7 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
   describe("validation", () => {
     it("rejects a phone that is not made of digits", async () => {
       const response = await patchSupplier(supplierId, {
-        phone: "300abc",
+        person: { phone: "300abc" },
       }).expect(400);
 
       expect(response.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
@@ -229,7 +234,7 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
       expect(stored?.person.phone).toBe("3001112233");
     });
 
-    it("rejects a body that tries to change the email", async () => {
+    it("rejects an email sent outside the person block", async () => {
       const response = await patchSupplier(supplierId, {
         email: "nuevo@correo.test",
       }).expect(400);
@@ -241,7 +246,7 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
       );
     });
 
-    it("rejects a body that tries to change the NIT", async () => {
+    it("rejects a document number sent outside the person block", async () => {
       const response = await patchSupplier(supplierId, {
         documentNumber: `900${runId}999`,
       }).expect(400);
@@ -300,7 +305,7 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
         .expect(401);
     });
 
-    it.each<RoleName>(["SUPERADMIN", "BRANCH_LEADER", "DEV"])(
+    it.each<RoleName>(["SUPERADMIN", "BRANCH_LEADER"])(
       "allows the %s role to update a supplier",
       async (roleName) => {
         const response = await patchSupplier(
@@ -314,18 +319,85 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
       },
     );
 
-    it("denies the update to the BRANCH_ASSISTANT role", async () => {
-      const response = await patchSupplier(
-        supplierId,
-        { commercialName: "No debería pasar" },
-        tokens.BRANCH_ASSISTANT,
-      ).expect(403);
+    it.each<RoleName>(["BRANCH_ASSISTANT", "DEV"])(
+      "denies the update to the %s role",
+      async (roleName) => {
+        const before = await findSupplier(supplierId);
+
+        const response = await patchSupplier(
+          supplierId,
+          { commercialName: "No debería pasar" },
+          tokens[roleName],
+        ).expect(403);
+
+        expect(response.body).toMatchObject({
+          error: { code: "INSUFFICIENT_PERMISSIONS" },
+        });
+        expect(await findSupplier(supplierId)).toEqual(before);
+      },
+    );
+  });
+
+  describe("person block", () => {
+    const personOf = (id: string) =>
+      prisma.person.findUniqueOrThrow({
+        where: { id },
+        select: { email: true, documentTypeId: true, documentNumber: true },
+      });
+
+    it("rejects a document number without its document type", async () => {
+      const response = await patchSupplier(supplierId, {
+        person: { documentNumber: `${runId}123` },
+      }).expect(400);
 
       expect(response.body).toMatchObject({
-        error: { code: "INSUFFICIENT_PERMISSIONS" },
+        error: {
+          code: "BAD_REQUEST",
+          message:
+            "documentTypeId and documentNumber must be provided together",
+        },
       });
-      const stored = await findSupplier(supplierId);
-      expect(stored?.commercialName).toBe(`${runId} Rol DEV`);
+    });
+
+    it("rejects an email that belongs to another person", async () => {
+      const response = await patchSupplier(supplierId, {
+        person: { email: `superadmin.update.${runId}@e2e.test` },
+      }).expect(409);
+
+      expect(response.body).toMatchObject({
+        error: { code: "EMAIL_ALREADY_IN_USE" },
+      });
+    });
+
+    it("rejects a document that belongs to another person", async () => {
+      const response = await patchSupplier(supplierId, {
+        person: { documentTypeId, documentNumber: `${runId}SUPERADMIN` },
+      }).expect(409);
+
+      expect(response.body).toMatchObject({
+        error: { code: "DOCUMENT_ALREADY_IN_USE" },
+      });
+      expect((await personOf(supplierId)).documentNumber).toBe(
+        `900${runId}111`,
+      );
+    });
+
+    it("updates the email in lowercase and the document number", async () => {
+      const newDocument = `900${runId}222`;
+
+      await patchSupplier(supplierId, {
+        person: {
+          email: `Nuevo.${runId}@E2E.test`,
+          documentTypeId,
+          documentNumber: newDocument,
+        },
+      }).expect(200);
+
+      expect(await personOf(supplierId)).toEqual({
+        email: `nuevo.${runId}@e2e.test`,
+        documentTypeId,
+        documentNumber: newDocument,
+      });
     });
   });
 });
