@@ -130,6 +130,58 @@ describe("CategoriesService", () => {
       );
     });
 
+    it("creates a category without description", async () => {
+      const category = buildCategory({ description: null });
+      prismaMock.category.create.mockResolvedValue(category);
+
+      const result: unknown = await service.create(
+        { name: "Proteínas" },
+        currentUser,
+      );
+
+      expect(prismaMock.category.create).toHaveBeenCalledWith({
+        data: { name: "Proteínas", description: undefined },
+      });
+      expect(result).toBe(category);
+      expect(auditMock.createAuditLog).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves the active flag to the database default", async () => {
+      await service.create(
+        { name: "Proteínas", description: "Suplementos de proteína" },
+        currentUser,
+      );
+
+      const [{ data }] = prismaMock.category.create.mock.calls[0] as [
+        { data: Record<string, unknown> },
+      ];
+      expect(data).not.toHaveProperty("active");
+    });
+
+    it("creates and audits the category with the transaction client", async () => {
+      const category = buildCategory();
+      const transactionClient = {
+        category: { create: jest.fn<AsyncMock>().mockResolvedValue(category) },
+      };
+      prismaMock.$transaction.mockImplementation((operation) =>
+        Array.isArray(operation)
+          ? Promise.all(operation)
+          : operation(transactionClient),
+      );
+
+      await service.create(
+        { name: "Proteínas", description: "Suplementos de proteína" },
+        currentUser,
+      );
+
+      expect(transactionClient.category.create).toHaveBeenCalledTimes(1);
+      expect(prismaMock.category.create).not.toHaveBeenCalled();
+      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ entityId: categoryId }),
+        transactionClient,
+      );
+    });
+
     it("rejects a name that already exists", async () => {
       prismaMock.category.findUnique.mockResolvedValue(buildCategory());
 
@@ -140,41 +192,96 @@ describe("CategoriesService", () => {
         ),
       ).rejects.toMatchObject({
         status: 409,
-        response: { code: "CATEGORY_NAME_ALREADY_EXISTS" },
+        response: {
+          code: "CATEGORY_NAME_ALREADY_EXISTS",
+          message: "Category with this name already exists",
+        },
       });
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
       expect(prismaMock.category.create).not.toHaveBeenCalled();
       expect(auditMock.createAuditLog).not.toHaveBeenCalled();
     });
 
-    // Known defect (Contract API Sprint 4, §3.2): the name must be unique
-    // ignoring case and surrounding spaces, but the lookup is an exact match.
-    // The fake below behaves like the database: exact match for findUnique and
-    // a case-insensitive match for findFirst.
+    it("does not audit when the insert fails", async () => {
+      prismaMock.category.create.mockRejectedValue(
+        new Error("connection lost"),
+      );
+
+      await expect(
+        service.create(
+          { name: "Proteínas", description: "Suplementos de proteína" },
+          currentUser,
+        ),
+      ).rejects.toThrow("connection lost");
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+    });
+
+    it("fails the creation when the audit log cannot be written", async () => {
+      auditMock.createAuditLog.mockRejectedValue(new Error("audit down"));
+
+      await expect(
+        service.create(
+          { name: "Proteínas", description: "Suplementos de proteína" },
+          currentUser,
+        ),
+      ).rejects.toThrow("audit down");
+    });
+
+    // Known defect (Contract API Sprint 4, §3.2 and HS-067): the name must be
+    // unique ignoring case, but the lookup is an exact match. The fakes below
+    // behave like the database: exact match for findUnique and a
+    // case-insensitive match for a lookup done with findFirst or findMany.
+    it.failing("rejects a name that differs only by case", async () => {
+      const existing = buildCategory({ name: "Proteínas" });
+      prismaMock.category.findUnique.mockImplementation((args) => {
+        const { where } = args as NameLookup;
+        return Promise.resolve(where.name === existing.name ? existing : null);
+      });
+      const caseInsensitiveLookup = (args: unknown) => {
+        const { where } = args as { where: { name: { equals: string } } };
+        const matches =
+          where.name.equals.toLowerCase() === existing.name.toLowerCase();
+        return matches ? existing : null;
+      };
+      prismaMock.category.findFirst.mockImplementation((args) =>
+        Promise.resolve(caseInsensitiveLookup(args)),
+      );
+      prismaMock.category.findMany.mockImplementation((args) => {
+        const found = caseInsensitiveLookup(args);
+        return Promise.resolve(found ? [found] : []);
+      });
+
+      await expect(
+        service.create(
+          { name: "PROTEÍNAS", description: "Duplicada" },
+          currentUser,
+        ),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: { code: "CATEGORY_NAME_ALREADY_EXISTS" },
+      });
+      expect(prismaMock.category.create).not.toHaveBeenCalled();
+    });
+
+    // Known defect (Contract API Sprint 4, §3.2): two simultaneous requests
+    // with the same name both pass the lookup, and the second insert fails on
+    // the unique index. `update` maps that error to a conflict; `create`
+    // lets the raw database error escape as a 500.
     it.failing(
-      "rejects a name that differs only by case or spaces",
+      "maps a unique constraint violation to a name conflict",
       async () => {
-        const existing = buildCategory({ name: "Proteínas" });
-        prismaMock.category.findUnique.mockImplementation((args) => {
-          const { where } = args as NameLookup;
-          return Promise.resolve(
-            where.name === existing.name ? existing : null,
-          );
-        });
-        prismaMock.category.findFirst.mockImplementation((args) => {
-          const { where } = args as { where: { name: { equals: string } } };
-          const wanted = where.name.equals.trim().toLowerCase();
-          return Promise.resolve(
-            wanted === existing.name.toLowerCase() ? existing : null,
-          );
-        });
+        prismaMock.category.create.mockRejectedValue({ code: "P2002" });
 
         await expect(
           service.create(
-            { name: " proteínas ", description: "Duplicada" },
+            { name: "Proteínas", description: "Suplementos de proteína" },
             currentUser,
           ),
-        ).rejects.toMatchObject({ status: 409 });
-        expect(prismaMock.category.create).not.toHaveBeenCalled();
+        ).rejects.toMatchObject({
+          status: 409,
+          response: { code: "CATEGORY_NAME_ALREADY_EXISTS" },
+        });
+        expect(auditMock.createAuditLog).not.toHaveBeenCalled();
       },
     );
   });
@@ -518,23 +625,20 @@ describe("CategoriesService", () => {
       );
     });
 
-    // Known defect (Contract API Sprint 4, §2.9): the status audit is recorded
-    // against the CUSTOMER entity instead of CATEGORY.
-    it.failing(
-      "audits the status change against the CATEGORY entity",
-      async () => {
-        prismaMock.category.findUnique.mockResolvedValue(
-          buildCategory({ active: true }),
-        );
+    // Regression guard (Contract API Sprint 4, §2.9): the status audit used to
+    // be recorded against the CUSTOMER entity instead of CATEGORY.
+    it("audits the status change against the CATEGORY entity", async () => {
+      prismaMock.category.findUnique.mockResolvedValue(
+        buildCategory({ active: true }),
+      );
 
-        await service.updateStatus(categoryId, false, currentUser);
+      await service.updateStatus(categoryId, false, currentUser);
 
-        expect(auditMock.createAuditLog).toHaveBeenCalledWith(
-          expect.objectContaining({ entity: "CATEGORY" }),
-          prismaMock,
-        );
-      },
-    );
+      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({ entity: "CATEGORY" }),
+        prismaMock,
+      );
+    });
 
     it("rejects the request when the category is already in that state", async () => {
       prismaMock.category.findUnique.mockResolvedValue(

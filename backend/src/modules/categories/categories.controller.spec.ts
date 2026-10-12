@@ -210,8 +210,8 @@ describe("CategoriesController (HTTP)", () => {
     const invalidPayloads: Array<[string, Record<string, unknown>, string]> = [
       ["the name is missing", { description: "Sin nombre" }, "name"],
       [
-        "the name is shorter than 3 characters",
-        { ...validPayload, name: "ab" },
+        "the name is shorter than 2 characters",
+        { ...validPayload, name: "a" },
         "name",
       ],
       [
