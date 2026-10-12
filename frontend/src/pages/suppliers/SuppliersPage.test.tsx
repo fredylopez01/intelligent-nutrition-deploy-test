@@ -157,7 +157,7 @@ describe('SuppliersPage filters', () => {
     listSuppliers.mockResolvedValue(pageOf([norte], { total: 15, totalPages: 2 }))
     const { user } = renderPage()
 
-    await user.click(await screen.findByRole('button', { name: 'Siguiente' }))
+    await user.click(await screen.findByRole('button', { name: 'Página siguiente' }))
     await waitFor(() => expect(lastListParams().page).toBe(2))
 
     await user.selectOptions(
@@ -229,9 +229,11 @@ describe('SuppliersPage pagination', () => {
     listSuppliers.mockResolvedValue(pageOf([norte], { page: 1, total: 30, totalPages: 3 }))
     renderPage()
 
-    expect(await screen.findByText('Página 1 de 3')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Siguiente' })).toBeEnabled()
+    expect(
+      await screen.findByRole('button', { name: 'Página 1 de 3', current: 'page' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Página anterior' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Página siguiente' })).toBeEnabled()
   })
 
   it('requests the next page and enables going back', async () => {
@@ -239,12 +241,14 @@ describe('SuppliersPage pagination', () => {
       Promise.resolve(pageOf([norte], { page: params.page ?? 1, total: 30, totalPages: 3 })),
     )
     const { user } = renderPage()
-    await screen.findByText('Página 1 de 3')
+    await screen.findByRole('button', { name: 'Página 1 de 3', current: 'page' })
 
-    await user.click(screen.getByRole('button', { name: 'Siguiente' }))
+    await user.click(screen.getByRole('button', { name: 'Página siguiente' }))
 
-    expect(await screen.findByText('Página 2 de 3')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Anterior' })).toBeEnabled()
+    expect(
+      await screen.findByRole('button', { name: 'Página 2 de 3', current: 'page' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Página anterior' })).toBeEnabled()
     expect(lastListParams().page).toBe(2)
   })
 
@@ -364,11 +368,11 @@ describe('SuppliersPage search with the magnifier and reload', () => {
       Promise.resolve(pageOf([norte], { page: params.page ?? 1, total: 30, totalPages: 3 })),
     )
     const { user } = renderPage()
-    await screen.findByText('Página 1 de 3')
+    await screen.findByRole('button', { name: 'Página 1 de 3', current: 'page' })
     await user.type(searchBox(), 'Norte{Enter}')
     await waitFor(() => expect(lastListParams()).toMatchObject({ search: 'Norte' }))
-    await user.click(await screen.findByRole('button', { name: 'Siguiente' }))
-    await screen.findByText('Página 2 de 3')
+    await user.click(await screen.findByRole('button', { name: 'Página siguiente' }))
+    await screen.findByRole('button', { name: 'Página 2 de 3', current: 'page' })
     const requests = listSuppliers.mock.calls.length
 
     await user.click(await screen.findByRole('button', { name: 'Recargar' }))
