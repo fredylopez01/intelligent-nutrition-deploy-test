@@ -14,8 +14,10 @@ interface UpdateResponse {
   data: {
     id: string;
     person: {
+      documentTypeId: string;
       businessName: string | null;
       documentNumber: string | null;
+      email: string | null;
       phone: string | null;
       address: string | null;
       active: boolean;
@@ -54,8 +56,10 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
         commercialName: true,
         person: {
           select: {
+            documentTypeId: true,
             businessName: true,
             documentNumber: true,
+            email: true,
             phone: true,
             address: true,
             active: true,
@@ -152,10 +156,17 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
   }, 30000);
 
   describe("successful update", () => {
-    it("updates the commercial name, phone and address together", async () => {
+    it("updates the supplier and all company person fields together", async () => {
       const response = await patchSupplier(supplierId, {
         commercialName: `${runId} Suplementos Andinos EDITADO`,
-        person: { phone: "3001112233", address: "Carrera 9 # 8-7" },
+        person: {
+          documentTypeId,
+          documentNumber: `900${runId}333`,
+          businessName: `${runId} Alimentos Andinos SAS`,
+          email: `Actualizado.${runId}@E2E.test`,
+          phone: "3001112233",
+          address: "Carrera 9 # 8-7",
+        },
       }).expect(200);
 
       const body = response.body as UpdateResponse;
@@ -164,18 +175,23 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
         `${runId} Suplementos Andinos EDITADO`,
       );
       expect(body.data.person).toMatchObject({
+        businessName: `${runId} Alimentos Andinos SAS`,
+        documentNumber: `900${runId}333`,
+        email: `actualizado.${runId}@e2e.test`,
         phone: "3001112233",
         address: "Carrera 9 # 8-7",
-        documentNumber: `900${runId}111`,
       });
 
       const stored = await findSupplier(supplierId);
       expect(stored).toMatchObject({
         commercialName: `${runId} Suplementos Andinos EDITADO`,
         person: {
+          documentTypeId,
+          businessName: `${runId} Alimentos Andinos SAS`,
+          documentNumber: `900${runId}333`,
+          email: `actualizado.${runId}@e2e.test`,
           phone: "3001112233",
           address: "Carrera 9 # 8-7",
-          documentNumber: `900${runId}111`,
           active: true,
         },
       });
@@ -194,11 +210,23 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
         userId: userIds[0],
         oldData: {
           commercialName: `${runId} Suplementos Andinos`,
-          person: { phone: "6017000000", address: "Calle 1 # 2-3" },
+          person: {
+            businessName: `${runId} Suplementos Andinos SAS`,
+            documentNumber: `900${runId}111`,
+            email: `contacto.${runId}@e2e.test`,
+            phone: "6017000000",
+            address: "Calle 1 # 2-3",
+          },
         },
         newData: {
           commercialName: `${runId} Suplementos Andinos EDITADO`,
-          person: { phone: "3001112233", address: "Carrera 9 # 8-7" },
+          person: {
+            businessName: `${runId} Alimentos Andinos SAS`,
+            documentNumber: `900${runId}333`,
+            email: `actualizado.${runId}@e2e.test`,
+            phone: "3001112233",
+            address: "Carrera 9 # 8-7",
+          },
         },
       });
       expect(auditLog?.reason).toContain("Suplementos Andinos EDITADO");
@@ -212,13 +240,22 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
       const body = response.body as UpdateResponse;
       expect(body.data.commercialName).toBe(`${runId} Suplementos Parcial`);
       expect(body.data.person).toMatchObject({
+        businessName: `${runId} Alimentos Andinos SAS`,
+        documentNumber: `900${runId}333`,
+        email: `actualizado.${runId}@e2e.test`,
         phone: "3001112233",
         address: "Carrera 9 # 8-7",
       });
 
       const stored = await findSupplier(supplierId);
       expect(stored).toMatchObject({
-        person: { phone: "3001112233", address: "Carrera 9 # 8-7" },
+        person: {
+          businessName: `${runId} Alimentos Andinos SAS`,
+          documentNumber: `900${runId}333`,
+          email: `actualizado.${runId}@e2e.test`,
+          phone: "3001112233",
+          address: "Carrera 9 # 8-7",
+        },
       });
     });
   });
@@ -242,7 +279,7 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
       expect(response.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
       const stored = await findSupplier(supplierId);
       expect(stored?.person.businessName).toBe(
-        `${runId} Suplementos Andinos SAS`,
+        `${runId} Alimentos Andinos SAS`,
       );
     });
 
@@ -253,7 +290,7 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
 
       expect(response.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
       const stored = await findSupplier(supplierId);
-      expect(stored?.person.documentNumber).toBe(`900${runId}111`);
+      expect(stored?.person.documentNumber).toBe(`900${runId}333`);
     });
 
     it("rejects an empty body", async () => {
@@ -378,7 +415,7 @@ describe("PATCH /api/v1/suppliers/:supplierId (e2e)", () => {
         error: { code: "DOCUMENT_ALREADY_IN_USE" },
       });
       expect((await personOf(supplierId)).documentNumber).toBe(
-        `900${runId}111`,
+        `900${runId}333`,
       );
     });
 
