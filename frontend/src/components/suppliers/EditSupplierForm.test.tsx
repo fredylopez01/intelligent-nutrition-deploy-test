@@ -107,8 +107,13 @@ describe('EditSupplierForm preloaded fields', () => {
   it('preloads names and only offers personal documents to a natural person', async () => {
     await renderForm(naturalPerson)
 
+    expect(field('Número de documento')).toHaveValue('1049555666')
     expect(field('Nombres')).toHaveValue('Marcela')
     expect(field('Apellidos')).toHaveValue('Rojas')
+    expect(field('Correo electrónico')).toHaveValue('marcela@correo.com')
+    expect(field('Teléfono')).toHaveValue('3205557788')
+    expect(field('Dirección')).toHaveValue('Calle 15 # 9-30')
+    expect(field('Nombre comercial')).toHaveValue('Distribuciones Marcela')
     expect(screen.queryByLabelText('Razón social')).not.toBeInTheDocument()
     const options = within(screen.getByRole('combobox', { name: 'Tipo de documento' }))
       .getAllByRole('option')
