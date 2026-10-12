@@ -2,6 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 
 import { useAuth } from '../hooks/useAuth'
 import { useBrandAssets } from '../hooks/useBrandAssets'
+import { canAccess } from '../routes/access'
 import { getRoleLabel } from '../utils/format'
 
 import { ThemeMenu } from './ThemeMenu'
@@ -13,7 +14,6 @@ import './Sidebar.css'
 interface NavItem {
   label: string
   to: string
-  allowedRoles?: string[]
   subs?: { label: string; to: string }[]
 }
 
@@ -41,7 +41,6 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: 'Clientes',
     to: '/clientes',
-    allowedRoles: ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
   },
   {
     label: 'Proveedores',
@@ -54,7 +53,6 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: 'Usuarios',
     to: '/usuarios',
-    allowedRoles: ['SUPERADMIN', 'DEV'],
   },
   {
     label: 'Reportes',
@@ -67,7 +65,6 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: 'Auditoría',
     to: '/auditoria',
-    allowedRoles: ['SUPERADMIN', 'DEV'],
   },
 ]
 export function Sidebar() {
@@ -91,16 +88,7 @@ export function Sidebar() {
         </UserMenu>
       )}
       <nav className="sidebar__nav" aria-label="Navegación principal">
-        {NAV_ITEMS.map((item) => {
-          const denied = item.allowedRoles && !item.allowedRoles.includes(roleName)
-          if (denied) {
-            return (
-              <span key={item.to} className="sidebar__link sidebar__link--denied" aria-disabled>
-                {item.label}
-              </span>
-            )
-          }
-
+        {NAV_ITEMS.filter((item) => canAccess(item.to, roleName)).map((item) => {
           const isSectionActive = pathname === item.to || pathname.startsWith(`${item.to}/`)
           return (
             <div key={item.to}>
