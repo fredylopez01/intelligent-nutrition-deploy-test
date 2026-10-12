@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { suppliersService } from '../../services/suppliers.service'
@@ -60,7 +61,11 @@ function lastListParams(): SuppliersListParams {
 
 function renderPage() {
   const user = userEvent.setup()
-  const { container } = render(<SuppliersPage />)
+  const { container } = render(
+    <MemoryRouter>
+      <SuppliersPage />
+    </MemoryRouter>,
+  )
   return { user, container }
 }
 
@@ -88,8 +93,8 @@ describe('SuppliersPage filters', () => {
     await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
 
     await user.type(
-      screen.getByRole('searchbox', { name: 'Buscar por nombre, correo o documento' }),
-      '  Norte ',
+      screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' }),
+      '  Norte {Enter}',
     )
 
     await waitFor(() => expect(lastListParams()).toMatchObject({ search: 'Norte', page: 1 }))
@@ -100,8 +105,8 @@ describe('SuppliersPage filters', () => {
     await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
 
     await user.type(
-      screen.getByRole('searchbox', { name: 'Buscar por nombre, correo o documento' }),
-      '   ',
+      screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' }),
+      '   {Enter}',
     )
 
     expect(lastListParams().search).toBeUndefined()
@@ -135,8 +140,8 @@ describe('SuppliersPage filters', () => {
     await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
 
     await user.type(
-      screen.getByRole('searchbox', { name: 'Buscar por nombre, correo o documento' }),
-      'Norte',
+      screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' }),
+      'Norte{Enter}',
     )
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Filtrar por estado' }),
@@ -181,8 +186,8 @@ describe('SuppliersPage empty list', () => {
     await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
 
     await user.type(
-      screen.getByRole('searchbox', { name: 'Buscar por nombre, correo o documento' }),
-      'NoExiste',
+      screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' }),
+      'NoExiste{Enter}',
     )
 
     expect(await screen.findByText('Ningún proveedor coincide con los filtros')).toBeInTheDocument()
@@ -249,5 +254,38 @@ describe('SuppliersPage pagination', () => {
 
     expect(await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'Paginación de proveedores' })).toBeNull()
+  })
+})
+
+describe('SuppliersPage search bar and reload', () => {
+  it('does not query while typing', async () => {
+    listSuppliers.mockResolvedValue(pageOf([norte]))
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    const requests = listSuppliers.mock.calls.length
+
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' }),
+      'algo',
+    )
+
+    expect(listSuppliers).toHaveBeenCalledTimes(requests)
+  })
+
+  it('reloads the current query with the same filters', async () => {
+    listSuppliers.mockResolvedValue(pageOf([norte]))
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Filtrar por estado' }),
+      'Activos',
+    )
+    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    const requests = listSuppliers.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'Recargar' }))
+
+    await waitFor(() => expect(listSuppliers).toHaveBeenCalledTimes(requests + 1))
+    expect(lastListParams()).toMatchObject({ page: 1, active: true })
   })
 })

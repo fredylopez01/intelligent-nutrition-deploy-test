@@ -8,6 +8,10 @@ import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
+import { Pagination } from '../../components/ui/Pagination'
+import { ReloadButton } from '../../components/ui/ReloadButton'
+import { SearchBar } from '../../components/ui/SearchBar'
+import { usePagination } from '../../hooks/usePagination'
 import { useSuppliers } from '../../hooks/useSuppliers'
 import { AppLayout } from '../../layouts/AppLayout'
 import type { Supplier } from '../../types/supplier'
@@ -16,18 +20,17 @@ import './SuppliersPage.css'
 
 const PAGE_SIZE = 10
 
-type ActiveFilter = 'todos' | 'activos' | 'inactivos'
-
-const ACTIVE_FILTER_VALUES: Record<ActiveFilter, boolean | undefined> = {
-  todos: undefined,
+const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
   activos: true,
   inactivos: false,
 }
 
+const FILTER_DEFAULTS = { estado: 'todos' }
+
 export function SuppliersPage() {
-  const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('todos')
+  const { page, search, filters, hasFilters, setPage, applySearch, setFilter } = usePagination({
+    filters: FILTER_DEFAULTS,
+  })
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [viewingSupplier, setViewingSupplier] = useState<Supplier | null>(null)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
@@ -36,20 +39,15 @@ export function SuppliersPage() {
   const { status, suppliers, meta, error, refetch } = useSuppliers({
     page,
     limit: PAGE_SIZE,
-    search: search.trim() || undefined,
-    active: ACTIVE_FILTER_VALUES[activeFilter],
+    search: search || undefined,
+    active: ACTIVE_FILTER_VALUES[filters.estado],
   })
 
   const totalPages = meta?.totalPages ?? 0
 
-  const handleSearchChange = (value: string) => {
-    setSearch(value)
-    setPage(1)
-  }
-
-  const handleActiveFilterChange = (value: ActiveFilter) => {
-    setActiveFilter(value)
-    setPage(1)
+  const handleSearch = (term: string) => {
+    if (term === search) void refetch()
+    else applySearch(term)
   }
 
   const handleOpenCreate = () => {
@@ -106,7 +104,6 @@ export function SuppliersPage() {
     }
 
     if (suppliers.length === 0) {
-      const hasFilters = search.trim() !== '' || activeFilter !== 'todos'
       return hasFilters ? (
         <EmptyState
           title="Ningún proveedor coincide con los filtros"
@@ -128,16 +125,12 @@ export function SuppliersPage() {
   return (
     <AppLayout title="Proveedores">
       <div className="suppliers-page__toolbar">
-        <label className="sr-only" htmlFor="suppliers-search">
-          Buscar por nombre, correo o documento
-        </label>
-        <input
+        <SearchBar
           id="suppliers-search"
-          type="search"
-          className="suppliers-page__search"
-          placeholder="Buscar por nombre, correo o documento"
+          label="Buscar por nombre o documento"
+          placeholder="Buscar por nombre, nombre comercial o documento"
           value={search}
-          onChange={(e) => handleSearchChange(e.target.value)}
+          onSearch={handleSearch}
         />
         <label className="sr-only" htmlFor="suppliers-active-filter">
           Filtrar por estado
@@ -145,13 +138,14 @@ export function SuppliersPage() {
         <select
           id="suppliers-active-filter"
           className="suppliers-page__filter"
-          value={activeFilter}
-          onChange={(e) => handleActiveFilterChange(e.target.value as ActiveFilter)}
+          value={filters.estado}
+          onChange={(e) => setFilter('estado', e.target.value)}
         >
           <option value="todos">Todos los estados</option>
           <option value="activos">Activos</option>
           <option value="inactivos">Inactivos</option>
         </select>
+        <ReloadButton onReload={() => void refetch()} loading={status === 'loading'} />
         <Button onClick={handleOpenCreate}>Registrar proveedor</Button>
       </div>
 
@@ -164,22 +158,13 @@ export function SuppliersPage() {
       <div className="suppliers-page__card">{renderList()}</div>
 
       <div className="suppliers-page__footer">
-        {status === 'success' && totalPages > 1 && (
-          <nav className="suppliers-page__pagination" aria-label="Paginación de proveedores">
-            <Button variant="outline" onClick={() => setPage((p) => p - 1)} disabled={page <= 1}>
-              Anterior
-            </Button>
-            <span className="suppliers-page__page-info">
-              Página {meta?.page ?? page} de {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= totalPages}
-            >
-              Siguiente
-            </Button>
-          </nav>
+        {status === 'success' && (
+          <Pagination
+            page={meta?.page ?? page}
+            totalPages={totalPages}
+            label="Paginación de proveedores"
+            onChange={setPage}
+          />
         )}
       </div>
 

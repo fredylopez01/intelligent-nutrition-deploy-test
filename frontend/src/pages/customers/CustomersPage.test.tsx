@@ -178,12 +178,25 @@ describe('CustomersPage search and filters', () => {
     await waitFor(() => expect(lastListCall()).toEqual({ page: 1, limit: 10 }))
   })
 
-  it('has no magnifier or reload buttons', async () => {
-    renderPage()
+  it('searches with the magnifier', async () => {
+    const { user } = renderPage()
     await waitForRows()
 
-    expect(screen.queryByRole('button', { name: 'Buscar' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Recargar' })).not.toBeInTheDocument()
+    await user.type(screen.getByRole('searchbox'), 'laura')
+    await user.click(screen.getByRole('button', { name: 'Buscar' }))
+
+    await waitFor(() => expect(lastListCall()).toEqual({ page: 1, limit: 10, search: 'laura' }))
+  })
+
+  it('reloads the list with the same filters', async () => {
+    const { user } = renderPage('/clientes?q=laura&estado=activos')
+    await waitForRows()
+    const requests = listCustomers.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'Recargar' }))
+
+    await waitFor(() => expect(listCustomers).toHaveBeenCalledTimes(requests + 1))
+    expect(lastListCall()).toEqual({ page: 1, limit: 10, search: 'laura', active: true })
   })
 
   it('does not search with a single character', async () => {

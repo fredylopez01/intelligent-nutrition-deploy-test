@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../../services/http'
@@ -56,7 +57,11 @@ function pageOf(data: Supplier[]): SuppliersListResponse {
 
 async function openEditDialog() {
   const user = userEvent.setup()
-  render(<SuppliersPage />)
+  render(
+    <MemoryRouter>
+      <SuppliersPage />
+    </MemoryRouter>,
+  )
 
   await user.click(await screen.findByRole('button', { name: 'Editar Suplementos Norte SAS' }))
 

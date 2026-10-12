@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import type userEvent from '@testing-library/user-event'
 
 import type { PersonSearchResult } from '../types/person'
@@ -32,7 +32,8 @@ export async function searchPerson(user: User, term: string) {
   const input = screen.getByRole('searchbox', { name: 'Buscar persona' })
   await user.clear(input)
   await user.type(input, term)
-  await user.click(screen.getByRole('button', { name: 'Buscar' }))
+  const form = input.closest('form') as HTMLElement
+  await user.click(within(form).getByRole('button', { name: 'Buscar' }))
 }
 
 export async function openNewForm(user: User, term = 'persona nueva') {
