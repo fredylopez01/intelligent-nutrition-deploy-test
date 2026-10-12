@@ -1,15 +1,14 @@
 import { ApiError } from '../services/http'
 import type { Customer, CustomerKind } from '../types/customer'
 
+import { PERSON_KIND_DOCUMENT_CODES } from './persons'
+
 export const CUSTOMER_KIND_LABELS: Record<CustomerKind, string> = {
   natural: 'Persona natural',
   empresa: 'Empresa',
 }
 
-export const DOCUMENT_CODES_BY_KIND: Record<CustomerKind, string[]> = {
-  natural: ['CC', 'CE', 'PAS'],
-  empresa: ['NIT'],
-}
+export const DOCUMENT_CODES_BY_KIND: Record<CustomerKind, string[]> = PERSON_KIND_DOCUMENT_CODES
 
 export const CUSTOMER_STATUS_ROLES = ['SUPERADMIN', 'BRANCH_LEADER']
 

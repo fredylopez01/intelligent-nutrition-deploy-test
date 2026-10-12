@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 
 import { useAuth } from '../../hooks/useAuth'
@@ -10,6 +9,7 @@ import type { PersonRole, PersonSearchResult } from '../../types/person'
 import { getPersonName, getRoleBlock } from '../../utils/persons'
 import { Alert } from '../ui/Alert'
 import { Button } from '../ui/Button'
+import { SearchBar } from '../ui/SearchBar'
 
 import { PersonTags } from './PersonTags'
 
@@ -33,29 +33,26 @@ type LookupState =
 interface PersonLookupProps {
   target: PersonRole
   onSelect: (person: PersonSearchResult) => void
-  onCreateNew: (term: string) => void
-  onCancel: () => void
+  onCreateNew?: (term: string) => void
+  onCancel?: () => void
 }
 
 export function PersonLookup({ target, onSelect, onCreateNew, onCancel }: PersonLookupProps) {
   const { token } = useAuth()
   const { documentTypes } = useDocumentTypes()
-  const [term, setTerm] = useState('')
-  const [termError, setTermError] = useState<string | null>(null)
   const [state, setState] = useState<LookupState>({ status: 'idle' })
+  const [appliedTerm, setAppliedTerm] = useState('')
 
   const codeById = new Map(
     documentTypes.map((documentType) => [documentType.id, documentType.code]),
   )
 
-  const handleSearch = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const value = term.trim()
-    if (value.length < MIN_SEARCH_LENGTH) {
-      setTermError(`Escribe al menos ${MIN_SEARCH_LENGTH} caracteres para buscar.`)
+  const handleSearch = async (value: string) => {
+    setAppliedTerm(value)
+    if (value === '') {
+      setState({ status: 'idle' })
       return
     }
-    setTermError(null)
     setState({ status: 'loading' })
     try {
       const response = await personsService.search(value, RESULT_LIMIT, token)
@@ -83,38 +80,27 @@ export function PersonLookup({ target, onSelect, onCreateNew, onCancel }: Person
 
   return (
     <div className="person-lookup">
-      <form className="person-lookup__search" role="search" onSubmit={handleSearch} noValidate>
-        <label className="person-lookup__label" htmlFor={`person-lookup-${target}`}>
+      <div className="person-lookup__search">
+        <p className="person-lookup__label" aria-hidden="true">
           Buscar persona
-        </label>
-        <p className="person-lookup__hint" id={`person-lookup-${target}-hint`}>
+        </p>
+        <p className="person-lookup__hint">
           Antes de registrar, revisa si la persona ya existe. Busca por documento, nombre o correo.
         </p>
-        <div className="person-lookup__controls">
-          <input
-            id={`person-lookup-${target}`}
-            type="search"
-            className={`person-lookup__input${termError ? ' person-lookup__input--invalid' : ''}`}
-            placeholder="Ej. 1049123456, Laura Pérez o laura@correo.com"
-            value={term}
-            autoComplete="off"
-            aria-invalid={!!termError}
-            aria-describedby={`person-lookup-${target}-hint${termError ? ` person-lookup-${target}-error` : ''}`}
-            onChange={(event) => {
-              setTerm(event.target.value)
-              if (termError) setTermError(null)
-            }}
-          />
-          <Button type="submit" variant="outline" disabled={state.status === 'loading'}>
-            {state.status === 'loading' ? 'Buscando...' : 'Buscar'}
-          </Button>
-        </div>
-        {termError && (
-          <span id={`person-lookup-${target}-error`} className="person-lookup__error" role="alert">
-            {termError}
-          </span>
+        <SearchBar
+          id={`person-lookup-${target}`}
+          label="Buscar persona"
+          placeholder="Ej. 1049123456, Laura Pérez o laura@correo.com"
+          value={appliedTerm}
+          minLength={MIN_SEARCH_LENGTH}
+          onSearch={(value) => void handleSearch(value)}
+        />
+        {state.status === 'loading' && (
+          <p className="person-lookup__hint" role="status">
+            Buscando...
+          </p>
         )}
-      </form>
+      </div>
 
       {state.status === 'error' && <Alert tone="error">{state.message}</Alert>}
 
@@ -174,14 +160,18 @@ export function PersonLookup({ target, onSelect, onCreateNew, onCancel }: Person
         </div>
       )}
 
-      <div className="person-lookup__actions">
-        <Button variant="outline" onClick={onCancel}>
-          Cancelar
-        </Button>
-        {state.status === 'success' && !exactDocumentMatch && (
-          <Button onClick={() => onCreateNew(state.term)}>Crear desde cero</Button>
-        )}
-      </div>
+      {(onCancel || onCreateNew) && (
+        <div className="person-lookup__actions">
+          {onCancel && (
+            <Button variant="outline" onClick={onCancel}>
+              Cancelar
+            </Button>
+          )}
+          {onCreateNew && state.status === 'success' && !exactDocumentMatch && (
+            <Button onClick={() => onCreateNew(state.term)}>Crear desde cero</Button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -134,7 +134,7 @@ describe("GET /api/v1/suppliers (e2e)", () => {
       "DEV",
     ];
 
-    for (const roleName of roleNames) {
+    for (const [index, roleName] of roleNames.entries()) {
       const role = await prisma.role.upsert({
         where: { name: roleName },
         update: { active: true },
@@ -144,7 +144,11 @@ describe("GET /api/v1/suppliers (e2e)", () => {
         data: {
           firstName: roleName,
           lastName: "E2E",
+          documentTypeId: documentType.id,
+          documentNumber: docNumber(`90${index}`),
           email: `${roleName.toLowerCase()}.suppliers.${runId}@e2e.test`,
+          phone: "6017000000",
+          address: "Calle 1 # 2-3",
           userAccount: {
             create: {
               roleId: role.id,
@@ -183,6 +187,9 @@ describe("GET /api/v1/suppliers (e2e)", () => {
         id: expect.any(String),
         person: {
           id: expect.any(String),
+          documentTypeId: expect.any(String),
+          firstName: null,
+          lastName: null,
           businessName: `${runId} Nutricion Total SAS`,
           documentNumber: docNumber("333"),
           email: `contacto.${docNumber("333")}@e2e.test`,
@@ -246,6 +253,47 @@ describe("GET /api/v1/suppliers (e2e)", () => {
 
       expect(page.data).toEqual([]);
       expect(page.meta).toMatchObject({ total: 0, totalPages: 0 });
+    });
+  });
+
+  describe("natural person suppliers", () => {
+    it("returns their names and finds them by first or last name", async () => {
+      const documentType = await prisma.documentType.findUniqueOrThrow({
+        where: { code: "NIT-E2E" },
+      });
+      const person = await prisma.person.create({
+        data: {
+          firstName: `Marcela ${runId}`,
+          lastName: `Proveedora ${runId}`,
+          documentTypeId: documentType.id,
+          documentNumber: docNumber("777"),
+          email: `marcela.${runId}@e2e.test`,
+          phone: "3001112233",
+          address: "Carrera 9 # 8-7",
+          supplier: {
+            create: { commercialName: `Distribuciones Marcela ${runId}` },
+          },
+        },
+      });
+      personIds.push(person.id);
+
+      const byFirstName = await listSuppliers({ search: `Marcela ${runId}` });
+      const byLastName = await listSuppliers({
+        search: `Proveedora ${runId}`,
+      });
+
+      expect(byFirstName.data).toEqual([
+        expect.objectContaining({
+          id: person.id,
+          person: expect.objectContaining({
+            documentTypeId: documentType.id,
+            firstName: `Marcela ${runId}`,
+            lastName: `Proveedora ${runId}`,
+            businessName: null,
+          }),
+        }),
+      ]);
+      expect(byLastName.data.map(({ id }) => id)).toEqual([person.id]);
     });
   });
 

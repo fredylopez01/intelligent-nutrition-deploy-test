@@ -1,4 +1,5 @@
 import type { Supplier } from '../../types/supplier'
+import { getSupplierName } from '../../utils/suppliers'
 
 import './SuppliersTable.css'
 
@@ -36,11 +37,11 @@ export function SuppliersTable({ suppliers, onView, onEdit }: SuppliersTableProp
       </thead>
       <tbody>
         {suppliers.map((supplier) => {
-          const name = supplier.person.businessName ?? 'proveedor'
+          const name = getSupplierName(supplier)
 
           return (
             <tr key={supplier.id} className="suppliers-table__row">
-              <td className="suppliers-table__name">{supplier.person.businessName ?? '—'}</td>
+              <td className="suppliers-table__name">{name}</td>
               <td className="suppliers-table__cell-muted">{supplier.commercialName ?? '—'}</td>
               <td className="suppliers-table__cell-muted suppliers-table__document">
                 {supplier.person.documentType
