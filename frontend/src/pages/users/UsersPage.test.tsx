@@ -183,3 +183,26 @@ describe('UsersPage pagination', () => {
     await waitFor(() => expect(lastListParams()).toMatchObject({ page: 2, active: true }))
   })
 })
+
+describe('UsersPage clear filters from the empty state', () => {
+  it('offers to clear the filters when only the status filter is applied', async () => {
+    listUsers.mockResolvedValue(pageOf([]))
+    renderPage('/usuarios?estado=inactivos')
+
+    expect(await screen.findByText('Ningún usuario coincide con los filtros')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Limpiar filtros' })).toBeInTheDocument()
+  })
+
+  it('goes back to the first page when the filters are cleared from a later page', async () => {
+    listUsers.mockResolvedValue(pageOf([]))
+    const { user } = renderPage('/usuarios?q=zzz&estado=inactivos&pagina=3')
+    await screen.findByText('Ningún usuario coincide con los filtros')
+    expect(lastListParams()).toMatchObject({ page: 3, search: 'zzz', active: false })
+    listUsers.mockResolvedValue(pageOf([laura]))
+
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+
+    expect(await screen.findByText('Laura Prueba')).toBeInTheDocument()
+    expect(lastListParams()).toMatchObject({ page: 1, search: undefined, active: undefined })
+  })
+})

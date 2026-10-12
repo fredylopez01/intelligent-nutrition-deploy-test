@@ -59,10 +59,10 @@ function lastListParams(): SuppliersListParams {
   return call[0]
 }
 
-function renderPage() {
+function renderPage(path = '/') {
   const user = userEvent.setup()
   const { container } = render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <SuppliersPage />
     </MemoryRouter>,
   )
@@ -375,5 +375,37 @@ describe('SuppliersPage search with the magnifier and reload', () => {
 
     await waitFor(() => expect(listSuppliers).toHaveBeenCalledTimes(requests + 1))
     expect(lastListParams()).toMatchObject({ page: 2, search: 'Norte' })
+  })
+})
+
+describe('SuppliersPage clear filters from the empty state', () => {
+  it('does not offer to clear filters when there are no suppliers and no filters', async () => {
+    listSuppliers.mockResolvedValue(pageOf([]))
+    renderPage()
+
+    expect(await screen.findByText('Todavía no hay proveedores registrados')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Limpiar filtros' })).not.toBeInTheDocument()
+  })
+
+  it('offers to clear the filters when only the status filter is applied', async () => {
+    listSuppliers.mockResolvedValue(pageOf([]))
+    renderPage('/?estado=inactivos')
+
+    expect(await screen.findByText('Ningún proveedor coincide con los filtros')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Limpiar filtros' })).toBeInTheDocument()
+  })
+
+  it('goes back to the first page when the filters are cleared from a later page', async () => {
+    listSuppliers.mockResolvedValue(pageOf([]))
+    const { user } = renderPage('/?q=zzz&estado=activos&pagina=3')
+    await screen.findByText('Ningún proveedor coincide con los filtros')
+    expect(lastListParams()).toMatchObject({ page: 3, search: 'zzz', active: true })
+    listSuppliers.mockResolvedValue(pageOf([norte]))
+
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+
+    expect(await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })).toBeInTheDocument()
+    expect(lastListParams()).toMatchObject({ page: 1, search: undefined, active: undefined })
+    expect(screen.getByRole('combobox', { name: 'Filtrar por estado' })).toHaveValue('todos')
   })
 })

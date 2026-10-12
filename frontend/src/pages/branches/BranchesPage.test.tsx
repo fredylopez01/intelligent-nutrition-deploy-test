@@ -55,10 +55,10 @@ function lastListParams(): BranchesListParams {
   return call[0]
 }
 
-function renderPage() {
+function renderPage(path = '/') {
   const user = userEvent.setup()
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[path]}>
       <BranchesPage />
     </MemoryRouter>,
   )
@@ -309,5 +309,37 @@ describe('BranchesPage search with the magnifier and reload', () => {
 
     await waitFor(() => expect(listBranches).toHaveBeenCalledTimes(requests + 1))
     expect(lastListParams()).toMatchObject({ page: 2, search: 'Makro' })
+  })
+})
+
+describe('BranchesPage clear filters from the empty state', () => {
+  it('does not offer to clear filters when there are no branches and no filters', async () => {
+    listBranches.mockResolvedValue(pageOf([]))
+    renderPage()
+
+    expect(await screen.findByText('Todavía no hay sedes registradas')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Limpiar filtros' })).not.toBeInTheDocument()
+  })
+
+  it('offers to clear the filters when only the status filter is applied', async () => {
+    listBranches.mockResolvedValue(pageOf([]))
+    renderPage('/?estado=inactivas')
+
+    expect(await screen.findByText('Ninguna sede coincide con la búsqueda')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Limpiar filtros' })).toBeInTheDocument()
+  })
+
+  it('goes back to the first page when the filters are cleared from a later page', async () => {
+    listBranches.mockResolvedValue(pageOf([]))
+    const { user } = renderPage('/?q=zzz&estado=activas&pagina=3')
+    await screen.findByText('Ninguna sede coincide con la búsqueda')
+    expect(lastListParams()).toMatchObject({ page: 3, search: 'zzz', active: true })
+    listBranches.mockResolvedValue(pageOf([makro]))
+
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+
+    expect(await screen.findByRole('cell', { name: 'Sede Makro' })).toBeInTheDocument()
+    expect(lastListParams()).toMatchObject({ page: 1, search: undefined, active: undefined })
+    expect(screen.getByRole('combobox', { name: 'Filtrar por estado' })).toHaveValue('todos')
   })
 })
