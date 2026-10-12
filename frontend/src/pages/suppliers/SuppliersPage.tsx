@@ -28,9 +28,8 @@ const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
 const FILTER_DEFAULTS = { estado: 'todos' }
 
 export function SuppliersPage() {
-  const { page, search, filters, hasFilters, setPage, applySearch, setFilter } = usePagination({
-    filters: FILTER_DEFAULTS,
-  })
+  const { page, search, filters, hasFilters, setPage, applySearch, setFilter, clearFilters } =
+    usePagination({ filters: FILTER_DEFAULTS })
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [viewingSupplier, setViewingSupplier] = useState<Supplier | null>(null)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
@@ -106,11 +105,14 @@ export function SuppliersPage() {
     if (suppliers.length === 0) {
       return hasFilters ? (
         <EmptyState
+          variant="sin-resultados"
           title="Ningún proveedor coincide con los filtros"
           description="Prueba con otro término de búsqueda o cambia el filtro de estado."
+          onClearFilters={clearFilters}
         />
       ) : (
         <EmptyState
+          variant="sin-registros"
           title="Todavía no hay proveedores registrados"
           description="Registra el primer proveedor para comenzar."
         >

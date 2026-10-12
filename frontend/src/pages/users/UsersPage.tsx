@@ -85,15 +85,14 @@ export function UsersPage() {
     if (users.length === 0) {
       return hasFilters ? (
         <EmptyState
+          variant="sin-resultados"
           title="Ningún usuario coincide con los filtros"
           description="Revisa el nombre o el correo, o quita los filtros de rol y estado."
-        >
-          <Button variant="outline" onClick={clearFilters}>
-            Quitar filtros
-          </Button>
-        </EmptyState>
+          onClearFilters={clearFilters}
+        />
       ) : (
         <EmptyState
+          variant="sin-registros"
           title="Todavía no hay usuarios registrados"
           description={
             emptyMessage ?? 'Registra la primera cuenta para que el equipo pueda entrar.'

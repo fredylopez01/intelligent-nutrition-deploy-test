@@ -158,7 +158,7 @@ describe('UsersPage empty states', () => {
     expect(await screen.findByText('Ningún usuario coincide con los filtros')).toBeInTheDocument()
     expect(searchBox()).toHaveValue('zzz')
     listUsers.mockResolvedValue(pageOf([laura]))
-    await user.click(screen.getByRole('button', { name: 'Quitar filtros' }))
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
 
     expect(await screen.findByText('Laura Prueba')).toBeInTheDocument()
     expect(lastListParams()).toMatchObject({

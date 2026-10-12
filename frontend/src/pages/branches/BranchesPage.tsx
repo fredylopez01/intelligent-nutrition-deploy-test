@@ -29,9 +29,8 @@ const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
 const FILTER_DEFAULTS = { estado: 'todos' }
 
 export function BranchesPage() {
-  const { page, search, filters, hasFilters, setPage, applySearch, setFilter } = usePagination({
-    filters: FILTER_DEFAULTS,
-  })
+  const { page, search, filters, hasFilters, setPage, applySearch, setFilter, clearFilters } =
+    usePagination({ filters: FILTER_DEFAULTS })
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null)
   const [statusBranch, setStatusBranch] = useState<Branch | null>(null)
@@ -97,11 +96,14 @@ export function BranchesPage() {
     if (branches.length === 0) {
       return hasFilters ? (
         <EmptyState
+          variant="sin-resultados"
           title="Ninguna sede coincide con la búsqueda"
           description="Revisa el nombre o cambia el filtro de estado."
+          onClearFilters={clearFilters}
         />
       ) : (
         <EmptyState
+          variant="sin-registros"
           title="Todavía no hay sedes registradas"
           description={emptyMessage ?? 'Registra la primera sede para empezar a operar.'}
         >

@@ -83,15 +83,14 @@ export function CustomersPage() {
     if (customers.length === 0) {
       return hasFilters ? (
         <EmptyState
+          variant="sin-resultados"
           title="Ningún cliente coincide con los filtros"
           description="Revisa el nombre, la razón social o el documento, o quita el filtro de estado."
-        >
-          <Button variant="outline" onClick={clearFilters}>
-            Limpiar filtros
-          </Button>
-        </EmptyState>
+          onClearFilters={clearFilters}
+        />
       ) : (
         <EmptyState
+          variant="sin-registros"
           title="Todavía no hay clientes registrados"
           description="Registra el primer cliente para asociarle sus compras en las sedes."
         >
