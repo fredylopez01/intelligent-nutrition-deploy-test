@@ -101,3 +101,33 @@ describe('Sidebar menu by role', () => {
     expect(screen.queryByText('Usuarios')).not.toBeInTheDocument()
   })
 })
+
+describe('Sidebar catalog submenu', () => {
+  function catalogSubs() {
+    const nav = screen.getByRole('navigation', { name: 'Navegación principal' })
+    return within(nav)
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('href')?.startsWith('/catalogo'))
+      .map((link) => link.textContent)
+  }
+
+  it('shows products and categories inside the catalog', () => {
+    renderSidebar('/catalogo/categorias')
+
+    expect(catalogSubs()).toEqual(['Catálogo', 'Productos', 'Categorías'])
+  })
+
+  it.each(['BRANCH_LEADER', 'BRANCH_ASSISTANT'])('shows the catalog submenu to the %s', (role) => {
+    auth.role = role
+    renderSidebar('/catalogo')
+
+    expect(catalogSubs()).toEqual(['Catálogo', 'Productos', 'Categorías'])
+  })
+
+  it('hides categories from DEV, as the contract does not include them', () => {
+    auth.role = 'DEV'
+    renderSidebar('/catalogo')
+
+    expect(catalogSubs()).toEqual(['Catálogo', 'Productos'])
+  })
+})

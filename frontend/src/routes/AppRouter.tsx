@@ -4,6 +4,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import { ActivateAccountPage } from '../pages/activation/ActivateAccountPage'
 import { AuditLogsPage } from '../pages/audit-logs/AuditLogsPage'
 import { BranchesPage } from '../pages/branches/BranchesPage'
+import { CategoriesPage } from '../pages/catalog/CategoriesPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
 import { CustomerDetailPage } from '../pages/customers/CustomerDetailPage'
 import { CustomersPage } from '../pages/customers/CustomersPage'
@@ -56,6 +57,15 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={ROUTE_ROLES['/sedes']}>
             <BranchesPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/catalogo/categorias"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/catalogo/categorias']}>
+            <CategoriesPage />
           </ProtectedRoute>
         }
       />

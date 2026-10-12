@@ -29,7 +29,14 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Cierre diario', to: '/inventario/cierre' },
     ],
   },
-  { label: 'Catálogo', to: '/catalogo' },
+  {
+    label: 'Catálogo',
+    to: '/catalogo',
+    subs: [
+      { label: 'Productos', to: '/catalogo' },
+      { label: 'Categorías', to: '/catalogo/categorias' },
+    ],
+  },
   {
     label: 'POS',
     to: '/pos',
@@ -101,18 +108,20 @@ export function Sidebar() {
               </NavLink>
               {item.subs && isSectionActive && (
                 <div className="sidebar__subs">
-                  {item.subs.map((sub) => (
-                    <NavLink
-                      key={sub.to}
-                      to={sub.to}
-                      end
-                      className={({ isActive }) =>
-                        `sidebar__sub${isActive ? ' sidebar__sub--active' : ''}`
-                      }
-                    >
-                      {sub.label}
-                    </NavLink>
-                  ))}
+                  {item.subs
+                    .filter((sub) => canAccess(sub.to, roleName))
+                    .map((sub) => (
+                      <NavLink
+                        key={sub.to}
+                        to={sub.to}
+                        end
+                        className={({ isActive }) =>
+                          `sidebar__sub${isActive ? ' sidebar__sub--active' : ''}`
+                        }
+                      >
+                        {sub.label}
+                      </NavLink>
+                    ))}
                 </div>
               )}
             </div>
