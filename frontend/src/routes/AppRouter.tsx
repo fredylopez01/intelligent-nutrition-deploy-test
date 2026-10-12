@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 
 import { ActivateAccountPage } from '../pages/activation/ActivateAccountPage'
 import { AuditLogsPage } from '../pages/audit-logs/AuditLogsPage'
@@ -6,6 +7,7 @@ import { BranchesPage } from '../pages/branches/BranchesPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
 import { CustomerDetailPage } from '../pages/customers/CustomerDetailPage'
 import { CustomersPage } from '../pages/customers/CustomersPage'
+import { ForbiddenPage } from '../pages/ForbiddenPage'
 import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
 import { LandingPage } from '../pages/LandingPage'
 import { PrivacyPolicyPage } from '../pages/legal/PrivacyPolicyPage'
@@ -17,14 +19,26 @@ import { SettingsPage } from '../pages/settings/SettingsPage'
 import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
 import { UserDetailPage } from '../pages/users/UserDetailPage'
 import { UsersPage } from '../pages/users/UsersPage'
-import type { RoleName } from '../types/auth'
+import { setForbiddenHandler } from '../services/http'
 
+import { ROUTE_ROLES } from './access'
 import { PENDING_MODULES } from './pendingModules'
 import { ProtectedRoute } from './ProtectedRoute'
 
-const CUSTOMER_ROLES: RoleName[] = ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT']
+const FORBIDDEN_PATH = '/sin-permiso'
 
 export function AppRouter() {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    setForbiddenHandler(() => {
+      if (pathname === FORBIDDEN_PATH) return
+      navigate(FORBIDDEN_PATH, { replace: true, state: { from: pathname } })
+    })
+    return () => setForbiddenHandler(null)
+  }, [navigate, pathname])
+
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
@@ -39,7 +53,7 @@ export function AppRouter() {
       <Route
         path="/sedes"
         element={
-          <ProtectedRoute allowedRoles={['SUPERADMIN']}>
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/sedes']}>
             <BranchesPage />
           </ProtectedRoute>
         }
@@ -48,7 +62,7 @@ export function AppRouter() {
       <Route
         path="/proveedores"
         element={
-          <ProtectedRoute allowedRoles={['SUPERADMIN', 'BRANCH_LEADER']}>
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/proveedores']}>
             <SuppliersPage />
           </ProtectedRoute>
         }
@@ -57,7 +71,7 @@ export function AppRouter() {
       <Route
         path="/clientes"
         element={
-          <ProtectedRoute allowedRoles={CUSTOMER_ROLES}>
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/clientes']}>
             <CustomersPage />
           </ProtectedRoute>
         }
@@ -65,7 +79,7 @@ export function AppRouter() {
       <Route
         path="/clientes/:customerId"
         element={
-          <ProtectedRoute allowedRoles={CUSTOMER_ROLES}>
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/clientes']}>
             <CustomerDetailPage />
           </ProtectedRoute>
         }
@@ -74,7 +88,7 @@ export function AppRouter() {
       <Route
         path="/usuarios"
         element={
-          <ProtectedRoute allowedRoles={['SUPERADMIN', 'DEV']}>
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/usuarios']}>
             <UsersPage />
           </ProtectedRoute>
         }
@@ -82,7 +96,7 @@ export function AppRouter() {
       <Route
         path="/usuarios/:userId"
         element={
-          <ProtectedRoute allowedRoles={['SUPERADMIN', 'DEV']}>
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/usuarios']}>
             <UserDetailPage />
           </ProtectedRoute>
         }
@@ -91,7 +105,7 @@ export function AppRouter() {
       <Route
         path="/auditoria"
         element={
-          <ProtectedRoute allowedRoles={['SUPERADMIN', 'DEV']}>
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/auditoria']}>
             <AuditLogsPage />
           </ProtectedRoute>
         }
@@ -118,7 +132,14 @@ export function AppRouter() {
         />
       ))}
 
-      <Route path="/sin-permiso" element={<div>No tienes permiso para ver esta página</div>} />
+      <Route
+        path={FORBIDDEN_PATH}
+        element={
+          <ProtectedRoute>
+            <ForbiddenPage />
+          </ProtectedRoute>
+        }
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

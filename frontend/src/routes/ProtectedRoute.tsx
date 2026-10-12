@@ -18,7 +18,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role.name)) {
-    return <Navigate to="/sin-permiso" replace />
+    return <Navigate to="/sin-permiso" replace state={{ from: location.pathname }} />
   }
 
   return <>{children}</>

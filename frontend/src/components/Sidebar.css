@@ -83,16 +83,6 @@
   background: var(--color-border);
 }
 
-.sidebar__link--denied {
-  color: var(--color-text-disabled);
-  cursor: not-allowed;
-}
-
-.sidebar__link--denied:hover {
-  color: var(--color-text-disabled);
-  background: transparent;
-}
-
 .sidebar__marker {
   display: block;
   width: 3px;

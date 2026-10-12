@@ -28,9 +28,14 @@ interface RequestOptions extends RequestInit {
 }
 
 let onUnauthorized: (() => void) | null = null
+let onForbidden: (() => void) | null = null
 
 export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler
+}
+
+export function setForbiddenHandler(handler: (() => void) | null) {
+  onForbidden = handler
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -52,6 +57,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   const isJson = response.headers.get('content-type')?.includes('application/json')
   const body = isJson ? await response.json() : null
+
+  if (response.status === 403 && (rest.method ?? 'GET') === 'GET') {
+    onForbidden?.()
+  }
 
   if (!response.ok) {
     const error = body?.error
