@@ -1,6 +1,7 @@
 import { jest, describe, beforeEach, it, expect } from "@jest/globals";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import type { CreateSupplierDto } from "./dto/create-supplier.dto.js";
+import type { UpdateSupplierDto } from "./dto/update-supplier.dto.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
 type TransactionOperation = (client: unknown) => Promise<unknown>;
@@ -9,13 +10,18 @@ type PersonSource = Pick<CreateSupplierDto, "person" | "personId">;
 
 const prismaMock = {
   person: { findUnique: jest.fn<AsyncMock>() },
-  supplier: { findUnique: jest.fn<AsyncMock>(), create: jest.fn<AsyncMock>() },
+  supplier: {
+    findUnique: jest.fn<AsyncMock>(),
+    create: jest.fn<AsyncMock>(),
+    update: jest.fn<AsyncMock>(),
+  },
   $transaction:
     jest.fn<(operation: TransactionOperation) => Promise<unknown>>(),
 };
 
 const personsServiceMock = {
   findOrCreateByDocument: jest.fn<AsyncMock>(),
+  updateProfile: jest.fn<AsyncMock>(),
 };
 
 const auditMock = {
@@ -441,6 +447,179 @@ describe("SuppliersService.create", () => {
         currentUser,
       ),
     ).rejects.toThrow("connection lost");
+    expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+  });
+});
+
+describe("SuppliersService.update", () => {
+  let service: InstanceType<typeof SuppliersService>;
+
+  const updatedPerson = {
+    ...supplierRecord.person,
+    email: "ventas@distribuidora.test",
+    phone: "3117654321",
+  };
+  const updatedSupplier = {
+    ...supplierRecord,
+    commercialName: "Distribuidora Salud Integral",
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    prismaMock.$transaction.mockImplementation((operation) =>
+      operation(prismaMock),
+    );
+    prismaMock.supplier.findUnique.mockResolvedValue(supplierRecord);
+    prismaMock.supplier.update.mockResolvedValue(updatedSupplier);
+    personsServiceMock.updateProfile.mockResolvedValue(updatedPerson);
+    auditMock.createAuditLog.mockResolvedValue({});
+
+    const module = await Test.createTestingModule({
+      providers: [
+        SuppliersService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: AuditService, useValue: auditMock },
+        { provide: PersonsService, useValue: personsServiceMock },
+      ],
+    }).compile();
+    service = module.get(SuppliersService);
+  });
+
+  it("updates person fields and records the change in the audit log", async () => {
+    const changes: UpdateSupplierDto["person"] = {
+      email: "ventas@distribuidora.test",
+      phone: "3117654321",
+    };
+
+    const result = await service.update(
+      "person-uuid-1",
+      { person: changes },
+      currentUser,
+      "127.0.0.1",
+    );
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.supplier.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { personId: "person-uuid-1" } }),
+    );
+    expect(personsServiceMock.updateProfile).toHaveBeenCalledWith(
+      prismaMock,
+      "person-uuid-1",
+      changes,
+    );
+    expect(prismaMock.supplier.update).not.toHaveBeenCalled();
+    expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: currentUser.id,
+        action: "UPDATE",
+        entity: "SUPPLIER",
+        entityId: "person-uuid-1",
+        oldData: {
+          commercialName: supplierRecord.commercialName,
+          person: supplierRecord.person,
+        },
+        newData: {
+          commercialName: supplierRecord.commercialName,
+          person: updatedPerson,
+        },
+        ipAddress: "127.0.0.1",
+      }),
+      prismaMock,
+    );
+    expect(result).toEqual({
+      id: "person-uuid-1",
+      person: updatedPerson,
+      commercialName: supplierRecord.commercialName,
+    });
+  });
+
+  it("propagates a 409 when the updated document is already in use", async () => {
+    const conflict = new ConflictException({
+      code: "DOCUMENT_ALREADY_IN_USE",
+      message: "This document is already associated with another person.",
+      details: {},
+    });
+    personsServiceMock.updateProfile.mockRejectedValue(conflict);
+
+    await expect(
+      service.update(
+        "person-uuid-1",
+        {
+          person: {
+            documentTypeId: "another-document-type",
+            documentNumber: "900987654",
+          },
+        },
+        currentUser,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: { code: "DOCUMENT_ALREADY_IN_USE" },
+    });
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.supplier.update).not.toHaveBeenCalled();
+    expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+  });
+
+  it("performs supplier, person, and audit operations with the transaction client", async () => {
+    const transactionClient = {
+      supplier: {
+        findUnique: prismaMock.supplier.findUnique,
+        update: prismaMock.supplier.update,
+      },
+    };
+    prismaMock.$transaction.mockImplementation((operation) =>
+      operation(transactionClient),
+    );
+
+    const result = await service.update(
+      "person-uuid-1",
+      {
+        person: { phone: "3117654321" },
+        commercialName: "Distribuidora Salud Integral",
+      },
+      currentUser,
+    );
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.supplier.findUnique).toHaveBeenCalledTimes(1);
+    expect(personsServiceMock.updateProfile).toHaveBeenCalledWith(
+      transactionClient,
+      "person-uuid-1",
+      { phone: "3117654321" },
+    );
+    expect(prismaMock.supplier.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { personId: "person-uuid-1" },
+        data: { commercialName: "Distribuidora Salud Integral" },
+      }),
+    );
+    expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+      expect.any(Object),
+      transactionClient,
+    );
+    expect(result).toEqual({
+      id: "person-uuid-1",
+      person: updatedPerson,
+      commercialName: "Distribuidora Salud Integral",
+    });
+  });
+
+  it("returns 404 and performs no updates when the supplier does not exist", async () => {
+    prismaMock.supplier.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.update(
+        "missing-supplier",
+        { person: { phone: "3117654321" } },
+        currentUser,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(personsServiceMock.updateProfile).not.toHaveBeenCalled();
+    expect(prismaMock.supplier.update).not.toHaveBeenCalled();
     expect(auditMock.createAuditLog).not.toHaveBeenCalled();
   });
 });
