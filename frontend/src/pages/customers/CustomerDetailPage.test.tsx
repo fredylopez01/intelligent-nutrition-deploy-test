@@ -5,8 +5,13 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { customersService } from '../../services/customers.service'
+import { documentTypesService } from '../../services/document-types.service'
 import { ApiError } from '../../services/http'
-import { buildCompanyCustomer, buildNaturalCustomer } from '../../test-utils/customers'
+import {
+  DOCUMENT_TYPES,
+  buildCompanyCustomer,
+  buildNaturalCustomer,
+} from '../../test-utils/customers'
 
 import { CustomerDetailPage } from './CustomerDetailPage'
 
@@ -14,6 +19,10 @@ const auth = vi.hoisted(() => ({ role: 'SUPERADMIN' }))
 
 vi.mock('../../services/customers.service', () => ({
   customersService: { getById: vi.fn(), update: vi.fn(), updateStatus: vi.fn() },
+}))
+
+vi.mock('../../services/document-types.service', () => ({
+  documentTypesService: { list: vi.fn() },
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
@@ -46,6 +55,7 @@ vi.mock('../../layouts/AppLayout', () => ({
 const getCustomer = vi.mocked(customersService.getById)
 const updateCustomer = vi.mocked(customersService.update)
 const updateStatus = vi.mocked(customersService.updateStatus)
+const listDocumentTypes = vi.mocked(documentTypesService.list)
 
 const laura = buildNaturalCustomer()
 
@@ -71,9 +81,27 @@ async function startEditing(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('button', { name: 'Actualizar información' }))
 }
 
+function documentTypeOptions() {
+  return within(field('Tipo de documento'))
+    .getAllByRole('option')
+    .filter((option) => (option as HTMLOptionElement).value !== '')
+    .map((option) => option.textContent)
+}
+
+async function startEditingDocument(user: ReturnType<typeof userEvent.setup>) {
+  await startEditing(user)
+  await waitFor(() => expect(documentTypeOptions().length).toBeGreaterThan(0))
+}
+
+async function replaceText(user: ReturnType<typeof userEvent.setup>, label: string, value: string) {
+  await user.clear(field(label))
+  await user.type(field(label), value)
+}
+
 beforeEach(() => {
   vi.resetAllMocks()
   auth.role = 'SUPERADMIN'
+  listDocumentTypes.mockResolvedValue(DOCUMENT_TYPES)
   getCustomer.mockResolvedValue(laura)
   updateCustomer.mockResolvedValue(laura)
   updateStatus.mockResolvedValue({ message: 'Customer status updated successfully.' })
@@ -121,7 +149,7 @@ describe('CustomerDetailPage view', () => {
 })
 
 describe('CustomerDetailPage update', () => {
-  it('loads the current data read only, with the document always locked', async () => {
+  it('loads the current data read only', async () => {
     renderPage()
     await screen.findByRole('button', { name: 'Actualizar información' })
 
@@ -143,18 +171,171 @@ describe('CustomerDetailPage update', () => {
     expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument()
   })
 
-  it('enables the editable fields but keeps the document read only', async () => {
+  it('enables every field, the document included', async () => {
     const { user } = renderPage()
 
-    await startEditing(user)
+    await startEditingDocument(user)
 
-    for (const label of ['Nombres', 'Apellidos', 'Correo electrónico', 'Teléfono', 'Dirección']) {
+    for (const label of [
+      'Número de documento',
+      'Nombres',
+      'Apellidos',
+      'Correo electrónico',
+      'Teléfono',
+      'Dirección',
+    ]) {
       expect(field(label)).not.toHaveAttribute('readonly')
     }
-    expect(field('Tipo de documento')).toHaveAttribute('readonly')
-    expect(field('Número de documento')).toHaveAttribute('readonly')
+    expect(field('Tipo de documento')).toBeEnabled()
+    expect(field('Tipo de documento')).toHaveValue('doc-cc')
     expect(field('Nombres')).toHaveFocus()
     expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeEnabled()
+  })
+
+  it('offers only the document types that match a natural person', async () => {
+    const { user } = renderPage()
+
+    await startEditingDocument(user)
+
+    expect(documentTypeOptions()).toEqual([
+      'Cédula de Ciudadanía',
+      'Cédula de Extranjería',
+      'Pasaporte',
+    ])
+  })
+
+  it('offers only the NIT to a company', async () => {
+    getCustomer.mockResolvedValue(buildCompanyCustomer())
+    const { user } = renderPage('customer-gym')
+
+    await startEditingDocument(user)
+
+    expect(documentTypeOptions()).toEqual(['Número de Identificación Tributaria'])
+  })
+
+  it('keeps the current document type available when it was deactivated', async () => {
+    listDocumentTypes.mockResolvedValue([
+      { id: 'doc-cc', code: 'CC', name: 'Cédula de Ciudadanía', active: false },
+      { id: 'doc-ce', code: 'CE', name: 'Cédula de Extranjería', active: true },
+      { id: 'doc-pas', code: 'PAS', name: 'Pasaporte', active: false },
+      { id: 'doc-nit', code: 'NIT', name: 'Número de Identificación Tributaria', active: true },
+    ])
+    const { user } = renderPage()
+
+    await startEditingDocument(user)
+
+    expect(documentTypeOptions()).toEqual(['Cédula de Ciudadanía', 'Cédula de Extranjería'])
+    expect(field('Tipo de documento')).toHaveValue('doc-cc')
+  })
+
+  it('sends the document type and number together when only the type changes', async () => {
+    const { user } = renderPage()
+    await startEditingDocument(user)
+
+    await user.selectOptions(field('Tipo de documento'), 'Pasaporte')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(updateCustomer).toHaveBeenCalledWith(
+      'customer-laura',
+      { person: { documentTypeId: 'doc-pas', documentNumber: '1049000111' } },
+      'test-token',
+    )
+  })
+
+  it('sends the document type and number together when only the number changes', async () => {
+    const { user } = renderPage()
+    await startEditingDocument(user)
+
+    await replaceText(user, 'Número de documento', ' 1049000999 ')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(updateCustomer).toHaveBeenCalledWith(
+      'customer-laura',
+      { person: { documentTypeId: 'doc-cc', documentNumber: '1049000999' } },
+      'test-token',
+    )
+    expect(await screen.findByText('Cliente actualizado exitosamente.')).toBeInTheDocument()
+  })
+
+  it('sends the new document type with its number', async () => {
+    const { user } = renderPage()
+    await startEditingDocument(user)
+
+    await user.selectOptions(field('Tipo de documento'), 'Pasaporte')
+    await replaceText(user, 'Número de documento', 'AB123456')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(updateCustomer).toHaveBeenCalledWith(
+      'customer-laura',
+      { person: { documentTypeId: 'doc-pas', documentNumber: 'AB123456' } },
+      'test-token',
+    )
+  })
+
+  it('does not send the document when it did not change', async () => {
+    const { user } = renderPage()
+    await startEditingDocument(user)
+
+    await replaceText(user, 'Teléfono', '3127778899')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(updateCustomer).toHaveBeenCalledWith(
+      'customer-laura',
+      { person: { phone: '3127778899' } },
+      'test-token',
+    )
+  })
+
+  it('checks the document number format of the selected type', async () => {
+    const { user } = renderPage()
+    await startEditingDocument(user)
+
+    await replaceText(user, 'Número de documento', '10A49')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(
+      await screen.findByText('La cédula solo lleva números (entre 3 y 15)'),
+    ).toBeInTheDocument()
+    expect(updateCustomer).not.toHaveBeenCalled()
+  })
+
+  it('asks for the document number when it is emptied', async () => {
+    const { user } = renderPage()
+    await startEditingDocument(user)
+
+    await user.clear(field('Número de documento'))
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(await screen.findByText('Ingresa el número de documento')).toBeInTheDocument()
+    expect(updateCustomer).not.toHaveBeenCalled()
+  })
+
+  it('tells when the document already belongs to another person', async () => {
+    updateCustomer.mockRejectedValue(
+      new ApiError('Document in use', 409, {}, 'DOCUMENT_ALREADY_IN_USE'),
+    )
+    const { user } = renderPage()
+    await startEditingDocument(user)
+
+    await replaceText(user, 'Número de documento', '1049000999')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Ese documento ya pertenece a otra persona registrada.',
+    )
+    expect(field('Número de documento')).not.toHaveAttribute('readonly')
+  })
+
+  it('restores the original document when the edition is cancelled', async () => {
+    const { user } = renderPage()
+    await startEditingDocument(user)
+
+    await replaceText(user, 'Número de documento', '1049000999')
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(field('Número de documento')).toHaveValue('1049000111')
+    expect(field('Número de documento')).toHaveAttribute('readonly')
+    expect(updateCustomer).not.toHaveBeenCalled()
   })
 
   it('sends only the changed fields and confirms', async () => {
