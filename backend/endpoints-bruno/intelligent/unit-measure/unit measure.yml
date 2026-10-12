@@ -10,8 +10,8 @@ http:
     type: json
     data: |-
       {
-        "name": "Gramos",
-        "abreviation": "g"
+        "name": "Kilogramos",
+        "abreviation": "Kg"
       }
   auth:
     type: bearer
