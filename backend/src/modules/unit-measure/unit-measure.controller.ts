@@ -16,6 +16,7 @@ import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUse
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import { ListUnitMeasureQueryDto } from "./dto/list-unit-measure-query.dto.js";
 import { UpdateUnitMeasureDto } from "./dto/update-unit-measure.dto.js";
+import { UpdateUnitMeasureStatusDto } from "./dto/update-unit-measure-status.dto.js";
 
 @Controller("unit-measure")
 export class UnitMeasureController {
@@ -41,9 +42,9 @@ export class UnitMeasureController {
     return this.unitMeasureService.findAll(query);
   }
 
-  @Get(":categoryId")
+  @Get(":unitMeasureId")
   @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
-  findOne(@Param("categoryId", new ParseUUIDPipe()) unitMeasureId: string) {
+  findOne(@Param("unitMeasureId", new ParseUUIDPipe()) unitMeasureId: string) {
     return this.unitMeasureService.findOne(unitMeasureId);
   }
 
@@ -58,6 +59,22 @@ export class UnitMeasureController {
     return this.unitMeasureService.update(
       unitMeasureId,
       updateUniteMeasureDto,
+      currentUser,
+      ipAddress,
+    );
+  }
+
+  @Patch(":unitMeasureId/status")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
+  updateStatus(
+    @Param("unitMeasureId", new ParseUUIDPipe()) unitMeasureId: string,
+    @Body() UpdateUnitMeasureStatusDto: UpdateUnitMeasureStatusDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.unitMeasureService.updateStatus(
+      unitMeasureId,
+      UpdateUnitMeasureStatusDto.active,
       currentUser,
       ipAddress,
     );

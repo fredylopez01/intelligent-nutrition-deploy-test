@@ -1,0 +1,24 @@
+info:
+  name: units measure status
+  type: http
+  seq: 5
+
+http:
+  method: PATCH
+  url: http://localhost:3000/api/v1/unit-measure/5a896154-e3a4-4a13-9edf-621d7228c6b0/status
+  body:
+    type: json
+    data: |-
+      {
+        "active": true
+      }
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

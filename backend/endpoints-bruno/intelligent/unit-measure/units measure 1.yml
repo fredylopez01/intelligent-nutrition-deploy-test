@@ -1,11 +1,18 @@
 info:
-  name: units measure by Id copy
+  name: units measure
   type: http
   seq: 4
 
 http:
-  method: GET
+  method: PATCH
   url: http://localhost:3000/api/v1/unit-measure/5a896154-e3a4-4a13-9edf-621d7228c6b0
+  body:
+    type: json
+    data: |-
+      {
+        "name": "Kilogramos",
+        "abreviation": "Kg"
+      }
   auth:
     type: bearer
     token: "{{json_web_token_15kq}}"

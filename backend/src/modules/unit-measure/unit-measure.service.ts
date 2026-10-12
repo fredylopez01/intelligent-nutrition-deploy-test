@@ -221,4 +221,48 @@ export class UnitMeasureService {
       throw error;
     }
   }
+
+  async updateStatus(
+    unitMeasureId: string,
+    active: boolean,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    return await this.prisma.$transaction(async (transaction) => {
+      const existingUnitMeasure = await this.prisma.unitMeasure.findUnique({
+        where: { id: unitMeasureId },
+        select: { name: true, abreviation: true, active: true },
+      });
+      if (!existingUnitMeasure) {
+        throw new NotFoundException("Unit measure not found");
+      }
+      if (existingUnitMeasure.active === active) {
+        throw new ConflictException({
+          code: "ALREADY_IN_STATE",
+          message: "Unit measure is already in the requested state.",
+        });
+      }
+
+      await transaction.unitMeasure.update({
+        where: { id: unitMeasureId, active: existingUnitMeasure.active },
+        data: { active },
+      });
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: active ? "ACTIVATE" : "DEACTIVATE",
+          entity: "UNIT_MEASURE",
+          entityId: unitMeasureId,
+          oldData: { active: existingUnitMeasure.active },
+          newData: { active },
+          reason: `${active ? "Activación" : "Desactivación"} de la unidad de medida ${existingUnitMeasure.name}`,
+          ipAddress,
+        },
+        transaction,
+      );
+
+      return { message: "Unit measure status updated successfully." };
+    });
+  }
 }

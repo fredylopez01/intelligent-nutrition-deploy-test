@@ -234,7 +234,7 @@ export class CategoriesService {
         {
           userId: currentUser.id,
           action: active ? "ACTIVATE" : "DEACTIVATE",
-          entity: "CUSTOMER",
+          entity: "CATEGORY",
           entityId: categoryId,
           oldData: { active: existingCategory.active },
           newData: { active },
