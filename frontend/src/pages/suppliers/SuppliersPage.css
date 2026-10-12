@@ -5,26 +5,9 @@
   margin-bottom: 1.25rem;
 }
 
-.suppliers-page__search {
+.suppliers-page__toolbar .ui-search {
   flex: 1;
   min-width: 0;
-  height: 42px;
-  padding: 0 0.875rem;
-  background: var(--color-surface-field);
-  border: 1px solid var(--color-border-soft);
-  border-radius: 10px;
-  color: var(--color-text);
-  font-size: 0.845rem;
-}
-
-.suppliers-page__search::placeholder {
-  color: var(--color-text-faint);
-}
-
-.suppliers-page__search:focus {
-  outline: none;
-  border-color: var(--color-primary-strong);
-  box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 
 .suppliers-page__filter {
@@ -100,25 +83,12 @@
   margin-top: 1rem;
 }
 
-.suppliers-page__pagination {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.suppliers-page__page-info {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
 @media (max-width: 767px) {
   .suppliers-page__toolbar {
     flex-wrap: wrap;
   }
 
-  .suppliers-page__search {
+  .suppliers-page__toolbar .ui-search {
     flex-basis: 100%;
   }
 }

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { branchesService } from '../../services/branches.service'
@@ -56,7 +57,11 @@ function lastListParams(): BranchesListParams {
 
 function renderPage() {
   const user = userEvent.setup()
-  render(<BranchesPage />)
+  render(
+    <MemoryRouter>
+      <BranchesPage />
+    </MemoryRouter>,
+  )
   return { user }
 }
 
@@ -83,7 +88,7 @@ describe('BranchesPage filters', () => {
     const { user } = renderPage()
     await screen.findByRole('cell', { name: 'Sede Makro' })
 
-    await user.type(screen.getByRole('searchbox', { name: 'Buscar por nombre' }), '  Makro ')
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar por nombre' }), '  Makro {Enter}')
 
     await waitFor(() => expect(lastListParams()).toMatchObject({ search: 'Makro', page: 1 }))
   })
@@ -92,7 +97,7 @@ describe('BranchesPage filters', () => {
     const { user } = renderPage()
     await screen.findByRole('cell', { name: 'Sede Makro' })
 
-    await user.type(screen.getByRole('searchbox', { name: 'Buscar por nombre' }), '   ')
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar por nombre' }), '   {Enter}')
 
     expect(lastListParams().search).toBeUndefined()
   })
@@ -124,7 +129,7 @@ describe('BranchesPage filters', () => {
     const { user } = renderPage()
     await screen.findByRole('cell', { name: 'Sede Makro' })
 
-    await user.type(screen.getByRole('searchbox', { name: 'Buscar por nombre' }), 'Sede')
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar por nombre' }), 'Sede{Enter}')
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Filtrar por estado' }),
       'Activas',
@@ -185,5 +190,35 @@ describe('BranchesPage empty list', () => {
     expect(await screen.findByText('Ninguna sede coincide con la búsqueda')).toBeInTheDocument()
     expect(screen.getByText('Revisa el nombre o cambia el filtro de estado.')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Registrar sede' })).toHaveLength(1)
+  })
+})
+
+describe('BranchesPage search bar and reload', () => {
+  it('does not query while typing', async () => {
+    listBranches.mockResolvedValue(pageOf([makro]))
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: 'Sede Makro' })
+    const requests = listBranches.mock.calls.length
+
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar por nombre' }), 'algo')
+
+    expect(listBranches).toHaveBeenCalledTimes(requests)
+  })
+
+  it('reloads the current query with the same filters', async () => {
+    listBranches.mockResolvedValue(pageOf([makro]))
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: 'Sede Makro' })
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Filtrar por estado' }),
+      'Activas',
+    )
+    await screen.findByRole('cell', { name: 'Sede Makro' })
+    const requests = listBranches.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'Recargar' }))
+
+    await waitFor(() => expect(listBranches).toHaveBeenCalledTimes(requests + 1))
+    expect(lastListParams()).toMatchObject({ page: 1, active: true })
   })
 })

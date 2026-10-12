@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import type { FormEvent } from 'react'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 
 import { CreateCustomerForm } from '../../components/customers/CreateCustomerForm'
 import { CustomersTable } from '../../components/customers/CustomersTable'
@@ -10,86 +9,45 @@ import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
 import { Pagination } from '../../components/ui/Pagination'
+import { ReloadButton } from '../../components/ui/ReloadButton'
+import { SearchBar } from '../../components/ui/SearchBar'
 import { useCustomers } from '../../hooks/useCustomers'
+import { usePagination } from '../../hooks/usePagination'
 import { AppLayout } from '../../layouts/AppLayout'
 import type { Customer } from '../../types/customer'
 
 import './CustomersPage.css'
 
 const PAGE_SIZE = 10
-const MIN_SEARCH_LENGTH = 2
 
-type ActiveFilter = 'todos' | 'activos' | 'inactivos'
-
-const ACTIVE_FILTER_VALUES: Record<ActiveFilter, boolean | undefined> = {
-  todos: undefined,
+const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
   activos: true,
   inactivos: false,
 }
 
-function parseActiveFilter(value: string | null): ActiveFilter {
-  return value === 'activos' || value === 'inactivos' ? value : 'todos'
-}
+const FILTER_DEFAULTS = { estado: 'todos' }
 
 export function CustomersPage() {
   const location = useLocation()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { page, search, filters, hasFilters, setPage, applySearch, setFilter, clearFilters } =
+    usePagination({ filters: FILTER_DEFAULTS })
 
-  const page = Math.max(1, Number(searchParams.get('pagina')) || 1)
-  const activeFilter = parseActiveFilter(searchParams.get('estado'))
-  const appliedSearch = searchParams.get('q') ?? ''
-
-  const [searchDraft, setSearchDraft] = useState(appliedSearch)
-  const [searchError, setSearchError] = useState<string | null>(null)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
 
   const { status, customers, meta, error, refetch } = useCustomers({
     page,
     limit: PAGE_SIZE,
-    search: appliedSearch || undefined,
-    active: ACTIVE_FILTER_VALUES[activeFilter],
+    search: search || undefined,
+    active: ACTIVE_FILTER_VALUES[filters.estado],
   })
 
   const totalPages = meta?.totalPages ?? 0
-  const hasFilters = appliedSearch !== '' || activeFilter !== 'todos'
   const returnTo = `${location.pathname}${location.search}`
 
-  const updateParams = (changes: Record<string, string | null>, resetPage = true) => {
-    setSearchParams(
-      (previous) => {
-        const next = new URLSearchParams(previous)
-        for (const [key, value] of Object.entries(changes)) {
-          if (value === null || value === '' || value === 'todos') next.delete(key)
-          else next.set(key, value)
-        }
-        if (resetPage) next.delete('pagina')
-        return next
-      },
-      { replace: true },
-    )
-  }
-
-  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const term = searchDraft.trim()
-    if (term.length > 0 && term.length < MIN_SEARCH_LENGTH) {
-      setSearchError(`Escribe al menos ${MIN_SEARCH_LENGTH} caracteres para buscar.`)
-      return
-    }
-    setSearchError(null)
-    if (term === appliedSearch) refetch()
-    else updateParams({ q: term || null })
-  }
-
-  const goToPage = (nextPage: number) => {
-    updateParams({ pagina: nextPage > 1 ? String(nextPage) : null }, false)
-  }
-
-  const clearFilters = () => {
-    setSearchDraft('')
-    setSearchError(null)
-    updateParams({ q: null, estado: null })
+  const handleSearch = (term: string) => {
+    if (term === search) refetch()
+    else applySearch(term)
   }
 
   const handleOpenCreate = () => {
@@ -105,7 +63,7 @@ export function CustomersPage() {
         : 'Cliente creado exitosamente.',
     )
     if (page === 1) refetch()
-    else goToPage(1)
+    else setPage(1)
   }
 
   const renderList = () => {
@@ -149,26 +107,13 @@ export function CustomersPage() {
     <AppLayout title="Clientes">
       <div className="customers-page__toolbar">
         <div className="customers-page__filters">
-          <form className="customers-page__search" role="search" onSubmit={handleSearch} noValidate>
-            <label className="sr-only" htmlFor="customers-search">
-              Buscar por nombre, razón social o documento
-            </label>
-            <input
-              id="customers-search"
-              type="search"
-              className={`customers-page__search-input${
-                searchError ? ' customers-page__search-input--invalid' : ''
-              }`}
-              placeholder="Buscar por nombre, razón social o documento"
-              value={searchDraft}
-              aria-invalid={!!searchError}
-              aria-describedby={searchError ? 'customers-search-error' : undefined}
-              onChange={(event) => {
-                setSearchDraft(event.target.value)
-                if (searchError) setSearchError(null)
-              }}
-            />
-          </form>
+          <SearchBar
+            id="customers-search"
+            label="Buscar por nombre, razón social o documento"
+            placeholder="Buscar por nombre, razón social o documento"
+            value={search}
+            onSearch={handleSearch}
+          />
 
           <label className="sr-only" htmlFor="customers-active-filter">
             Filtrar por estado
@@ -176,25 +121,21 @@ export function CustomersPage() {
           <select
             id="customers-active-filter"
             className="customers-page__filter"
-            value={activeFilter}
-            onChange={(event) => updateParams({ estado: event.target.value })}
+            value={filters.estado}
+            onChange={(event) => setFilter('estado', event.target.value)}
           >
             <option value="todos">Todos los estados</option>
             <option value="activos">Activos</option>
             <option value="inactivos">Inactivos</option>
           </select>
+
+          <ReloadButton onReload={refetch} loading={status === 'loading'} />
         </div>
 
         <div className="customers-page__actions">
           <Button onClick={handleOpenCreate}>Registrar cliente</Button>
         </div>
       </div>
-
-      {searchError && (
-        <p id="customers-search-error" className="customers-page__search-error" role="alert">
-          {searchError}
-        </p>
-      )}
 
       {feedback && (
         <div className="customers-page__alert">
@@ -215,7 +156,7 @@ export function CustomersPage() {
             page={meta?.page ?? page}
             totalPages={totalPages}
             label="Paginación de clientes"
-            onChange={goToPage}
+            onChange={setPage}
           />
         )}
       </div>
