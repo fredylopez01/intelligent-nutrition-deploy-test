@@ -74,6 +74,16 @@ describe('CategoryStatusConfirmation', () => {
     expect(onChanged).not.toHaveBeenCalled()
   })
 
+  it('disables both buttons and shows "Guardando..." while submitting', async () => {
+    updateStatus.mockReturnValue(new Promise(() => {}))
+    const { user } = renderConfirmation()
+
+    await user.click(screen.getByRole('button', { name: 'Sí, desactivar' }))
+
+    expect(await screen.findByRole('button', { name: 'Guardando...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+  })
+
   it('cancels without changing the state', async () => {
     const { user, onCancel } = renderConfirmation()
 

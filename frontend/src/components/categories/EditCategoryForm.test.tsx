@@ -188,6 +188,17 @@ describe('EditCategoryForm', () => {
     expect(onUpdated).not.toHaveBeenCalled()
   })
 
+  it('disables both buttons and shows "Guardando..." while submitting', async () => {
+    updateCategory.mockReturnValue(new Promise(() => {}))
+    const { user } = renderForm()
+
+    await replace(user, 'Descripción', 'Nueva descripción')
+    await save(user)
+
+    expect(await screen.findByRole('button', { name: 'Guardando...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+  })
+
   it('cancels without saving', async () => {
     const { user, onCancel } = renderForm()
 
