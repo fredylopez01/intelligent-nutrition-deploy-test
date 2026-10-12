@@ -1,8 +1,7 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import { CreateSupplierForm } from '../../components/suppliers/CreateSupplierForm'
-import { EditSupplierForm } from '../../components/suppliers/EditSupplierForm'
-import { SupplierDetail } from '../../components/suppliers/SupplierDetail'
 import { SuppliersTable } from '../../components/suppliers/SuppliersTable'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
@@ -14,11 +13,8 @@ import { SearchBar } from '../../components/ui/SearchBar'
 import { usePagination } from '../../hooks/usePagination'
 import { useSuppliers } from '../../hooks/useSuppliers'
 import { AppLayout } from '../../layouts/AppLayout'
-import type { Supplier } from '../../types/supplier'
 
 import './SuppliersPage.css'
-
-const PAGE_SIZE = 10
 
 const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
   activos: true,
@@ -28,21 +24,30 @@ const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
 const FILTER_DEFAULTS = { estado: 'todos' }
 
 export function SuppliersPage() {
-  const { page, search, filters, hasFilters, setPage, applySearch, setFilter, clearFilters } =
-    usePagination({ filters: FILTER_DEFAULTS })
+  const {
+    page,
+    search,
+    filters,
+    hasFilters,
+    params,
+    limitOptions,
+    setPage,
+    setLimit,
+    applySearch,
+    setFilter,
+    clearFilters,
+  } = usePagination({ filters: FILTER_DEFAULTS })
+  const location = useLocation()
   const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [viewingSupplier, setViewingSupplier] = useState<Supplier | null>(null)
-  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, suppliers, meta, error, refetch } = useSuppliers({
-    page,
-    limit: PAGE_SIZE,
-    search: search || undefined,
+    ...params,
     active: ACTIVE_FILTER_VALUES[filters.estado],
   })
 
   const totalPages = meta?.totalPages ?? 0
+  const returnTo = `${location.pathname}${location.search}`
 
   const handleSearch = (term: string) => {
     if (term === search) void refetch()
@@ -54,16 +59,6 @@ export function SuppliersPage() {
     setIsCreateOpen(true)
   }
 
-  const handleOpenView = (supplier: Supplier) => {
-    setFeedbackMessage(null)
-    setViewingSupplier(supplier)
-  }
-
-  const handleOpenEdit = (supplier: Supplier) => {
-    setFeedbackMessage(null)
-    setEditingSupplier(supplier)
-  }
-
   const handleSupplierCreated = () => {
     setIsCreateOpen(false)
     setFeedbackMessage('Proveedor creado exitosamente.')
@@ -72,12 +67,6 @@ export function SuppliersPage() {
     } else {
       setPage(1)
     }
-  }
-
-  const handleSupplierUpdated = () => {
-    setEditingSupplier(null)
-    setFeedbackMessage('Los cambios se guardaron correctamente.')
-    void refetch()
   }
 
   const renderList = () => {
@@ -121,7 +110,7 @@ export function SuppliersPage() {
       )
     }
 
-    return <SuppliersTable suppliers={suppliers} onView={handleOpenView} onEdit={handleOpenEdit} />
+    return <SuppliersTable suppliers={suppliers} returnTo={returnTo} />
   }
 
   return (
@@ -164,8 +153,12 @@ export function SuppliersPage() {
           <Pagination
             page={meta?.page ?? page}
             totalPages={totalPages}
+            total={meta?.total}
+            limit={params.limit}
+            limitOptions={limitOptions}
             label="Paginación de proveedores"
             onChange={setPage}
+            onLimitChange={setLimit}
           />
         )}
       </div>
@@ -180,28 +173,6 @@ export function SuppliersPage() {
           onCreated={handleSupplierCreated}
           onCancel={() => setIsCreateOpen(false)}
         />
-      </Modal>
-
-      <Modal
-        open={viewingSupplier !== null}
-        title="Detalle del proveedor"
-        onClose={() => setViewingSupplier(null)}
-      >
-        {viewingSupplier && <SupplierDetail supplier={viewingSupplier} />}
-      </Modal>
-
-      <Modal
-        open={editingSupplier !== null}
-        title="Editar proveedor"
-        onClose={() => setEditingSupplier(null)}
-      >
-        {editingSupplier && (
-          <EditSupplierForm
-            supplier={editingSupplier}
-            onUpdated={handleSupplierUpdated}
-            onCancel={() => setEditingSupplier(null)}
-          />
-        )}
       </Modal>
     </AppLayout>
   )

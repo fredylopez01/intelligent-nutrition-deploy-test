@@ -19,7 +19,7 @@ import type { Branch } from '../../types/branch'
 
 import './BranchesPage.css'
 
-const PAGE_SIZE = 10
+const SKELETON_ROWS = 10
 
 const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
   activas: true,
@@ -29,17 +29,26 @@ const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
 const FILTER_DEFAULTS = { estado: 'todos' }
 
 export function BranchesPage() {
-  const { page, search, filters, hasFilters, setPage, applySearch, setFilter, clearFilters } =
-    usePagination({ filters: FILTER_DEFAULTS })
+  const {
+    page,
+    search,
+    filters,
+    hasFilters,
+    params,
+    limitOptions,
+    setPage,
+    setLimit,
+    applySearch,
+    setFilter,
+    clearFilters,
+  } = usePagination({ filters: FILTER_DEFAULTS })
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null)
   const [statusBranch, setStatusBranch] = useState<Branch | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, branches, meta, emptyMessage, error, refetch } = useBranches({
-    page,
-    limit: PAGE_SIZE,
-    search: search || undefined,
+    ...params,
     active: ACTIVE_FILTER_VALUES[filters.estado],
   })
 
@@ -80,7 +89,7 @@ export function BranchesPage() {
   }
 
   const renderList = () => {
-    if (status === 'loading') return <BranchesTableSkeleton rows={PAGE_SIZE} />
+    if (status === 'loading') return <BranchesTableSkeleton rows={SKELETON_ROWS} />
 
     if (status === 'error') {
       return (
@@ -162,13 +171,17 @@ export function BranchesPage() {
 
       <div className="branches-page__card">{renderList()}</div>
 
-      {status === 'success' && totalPages > 1 && (
+      {status === 'success' && (
         <div className="branches-page__footer">
           <Pagination
             page={meta?.page ?? page}
             totalPages={totalPages}
+            total={meta?.total}
+            limit={params.limit}
+            limitOptions={limitOptions}
             label="Paginación de sedes"
             onChange={setPage}
+            onLimitChange={setLimit}
           />
         </div>
       )}

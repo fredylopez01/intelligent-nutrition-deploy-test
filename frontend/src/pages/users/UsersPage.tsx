@@ -20,7 +20,7 @@ import { getRoleLabel } from '../../utils/format'
 
 import './UsersPage.css'
 
-const PAGE_SIZE = 10
+const SKELETON_ROWS = 10
 
 const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
   activos: true,
@@ -31,8 +31,19 @@ const FILTER_DEFAULTS = { rol: 'todos', estado: 'todos' }
 
 export function UsersPage() {
   const location = useLocation()
-  const { page, search, filters, hasFilters, setPage, applySearch, setFilter, clearFilters } =
-    usePagination({ filters: FILTER_DEFAULTS })
+  const {
+    page,
+    search,
+    filters,
+    hasFilters,
+    params,
+    limitOptions,
+    setPage,
+    setLimit,
+    applySearch,
+    setFilter,
+    clearFilters,
+  } = usePagination({ filters: FILTER_DEFAULTS })
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isAssignOpen, setIsAssignOpen] = useState(false)
@@ -41,10 +52,8 @@ export function UsersPage() {
   const { roles } = useRoles()
 
   const { status, users, meta, emptyMessage, error, refetch } = useUsers({
-    page,
-    limit: PAGE_SIZE,
+    ...params,
     active: ACTIVE_FILTER_VALUES[filters.estado],
-    search: search || undefined,
     roleId: filters.rol === 'todos' ? undefined : filters.rol,
   })
 
@@ -69,7 +78,7 @@ export function UsersPage() {
   }
 
   const renderList = () => {
-    if (status === 'loading') return <UsersTableSkeleton rows={PAGE_SIZE} />
+    if (status === 'loading') return <UsersTableSkeleton rows={SKELETON_ROWS} />
 
     if (status === 'error') {
       return (
@@ -179,8 +188,12 @@ export function UsersPage() {
           <Pagination
             page={meta?.page ?? page}
             totalPages={totalPages}
+            total={meta?.total}
+            limit={params.limit}
+            limitOptions={limitOptions}
             label="Paginación de usuarios"
             onChange={setPage}
+            onLimitChange={setLimit}
           />
         )}
       </div>

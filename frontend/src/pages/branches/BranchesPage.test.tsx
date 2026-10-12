@@ -310,6 +310,24 @@ describe('BranchesPage search with the magnifier and reload', () => {
     await waitFor(() => expect(listBranches).toHaveBeenCalledTimes(requests + 1))
     expect(lastListParams()).toMatchObject({ page: 2, search: 'Makro' })
   })
+
+  it('keeps the search and the page size when the page size changes', async () => {
+    listBranches.mockImplementation((params) =>
+      Promise.resolve(
+        pageOf([makro], {
+          meta: { page: params.page ?? 1, limit: params.limit ?? 10, total: 30, totalPages: 3 },
+        }),
+      ),
+    )
+    const { user } = renderPage('/?q=Makro&pagina=3')
+    await screen.findByRole('button', { name: 'Página 3 de 3', current: 'page' })
+
+    await user.selectOptions(screen.getByLabelText('Filas por página'), '50')
+
+    await waitFor(() =>
+      expect(lastListParams()).toMatchObject({ page: 1, limit: 50, search: 'Makro' }),
+    )
+  })
 })
 
 describe('BranchesPage clear filters from the empty state', () => {

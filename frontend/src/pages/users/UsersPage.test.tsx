@@ -182,6 +182,18 @@ describe('UsersPage pagination', () => {
 
     await waitFor(() => expect(lastListParams()).toMatchObject({ page: 2, active: true }))
   })
+
+  it('requests the page size saved in the URL', async () => {
+    listUsers.mockResolvedValue({
+      data: [laura],
+      meta: { page: 1, limit: 50, total: 60, totalPages: 2 },
+    })
+    renderPage('/usuarios?porPagina=50')
+    await screen.findByText('Laura Prueba')
+
+    expect(lastListParams()).toMatchObject({ page: 1, limit: 50 })
+    expect(screen.getByLabelText('Filas por página')).toHaveValue('50')
+  })
 })
 
 describe('UsersPage clear filters from the empty state', () => {

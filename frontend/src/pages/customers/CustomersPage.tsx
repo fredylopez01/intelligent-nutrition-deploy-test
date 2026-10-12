@@ -18,7 +18,7 @@ import type { Customer } from '../../types/customer'
 
 import './CustomersPage.css'
 
-const PAGE_SIZE = 10
+const SKELETON_ROWS = 10
 
 const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
   activos: true,
@@ -29,16 +29,25 @@ const FILTER_DEFAULTS = { estado: 'todos' }
 
 export function CustomersPage() {
   const location = useLocation()
-  const { page, search, filters, hasFilters, setPage, applySearch, setFilter, clearFilters } =
-    usePagination({ filters: FILTER_DEFAULTS })
+  const {
+    page,
+    search,
+    filters,
+    hasFilters,
+    params,
+    limitOptions,
+    setPage,
+    setLimit,
+    applySearch,
+    setFilter,
+    clearFilters,
+  } = usePagination({ filters: FILTER_DEFAULTS })
 
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
 
   const { status, customers, meta, error, refetch } = useCustomers({
-    page,
-    limit: PAGE_SIZE,
-    search: search || undefined,
+    ...params,
     active: ACTIVE_FILTER_VALUES[filters.estado],
   })
 
@@ -67,7 +76,7 @@ export function CustomersPage() {
   }
 
   const renderList = () => {
-    if (status === 'loading') return <CustomersTableSkeleton rows={PAGE_SIZE} />
+    if (status === 'loading') return <CustomersTableSkeleton rows={SKELETON_ROWS} />
 
     if (status === 'error') {
       return (
@@ -154,8 +163,12 @@ export function CustomersPage() {
           <Pagination
             page={meta?.page ?? page}
             totalPages={totalPages}
+            total={meta?.total}
+            limit={params.limit}
+            limitOptions={limitOptions}
             label="Paginación de clientes"
             onChange={setPage}
+            onLimitChange={setLimit}
           />
         )}
       </div>

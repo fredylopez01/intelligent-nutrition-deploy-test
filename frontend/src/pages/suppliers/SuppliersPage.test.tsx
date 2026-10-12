@@ -81,7 +81,7 @@ describe('SuppliersPage filters', () => {
   it('loads the first page without filters', async () => {
     renderPage()
 
-    expect(await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })).toBeInTheDocument()
+    expect(await screen.findByText('Suplementos Norte SAS')).toBeInTheDocument()
     expect(listSuppliers).toHaveBeenCalledWith(
       { page: 1, limit: 10, search: undefined, active: undefined },
       'test-token',
@@ -90,7 +90,7 @@ describe('SuppliersPage filters', () => {
 
   it('applies the search filter with the trimmed text', async () => {
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
 
     await user.type(
       screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' }),
@@ -102,7 +102,7 @@ describe('SuppliersPage filters', () => {
 
   it('ignores a search made only of spaces', async () => {
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
 
     await user.type(
       screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' }),
@@ -117,7 +117,7 @@ describe('SuppliersPage filters', () => {
     ['Inactivos', false],
   ])('applies the "%s" status filter', async (label, active) => {
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Filtrar por estado' }), label)
 
@@ -126,7 +126,7 @@ describe('SuppliersPage filters', () => {
 
   it('removes the status filter when going back to every status', async () => {
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
     const statusFilter = screen.getByRole('combobox', { name: 'Filtrar por estado' })
 
     await user.selectOptions(statusFilter, 'Inactivos')
@@ -137,7 +137,7 @@ describe('SuppliersPage filters', () => {
 
   it('combines the search and status filters in the same request', async () => {
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
 
     await user.type(
       screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' }),
@@ -183,7 +183,7 @@ describe('SuppliersPage empty list', () => {
   it('explains that no supplier matches when a filter is applied', async () => {
     listSuppliers.mockResolvedValueOnce(pageOf([norte])).mockResolvedValue(pageOf([]))
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
 
     await user.type(
       screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' }),
@@ -219,7 +219,7 @@ describe('SuppliersPage loading and error states', () => {
 
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
 
-    expect(await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })).toBeInTheDocument()
+    expect(await screen.findByText('Suplementos Norte SAS')).toBeInTheDocument()
     expect(listSuppliers).toHaveBeenCalledTimes(2)
   })
 })
@@ -256,8 +256,32 @@ describe('SuppliersPage pagination', () => {
     listSuppliers.mockResolvedValue(pageOf([norte]))
     renderPage()
 
-    expect(await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })).toBeInTheDocument()
+    expect(await screen.findByText('Suplementos Norte SAS')).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'Paginación de proveedores' })).toBeNull()
+  })
+
+  it('changes the page size and requests the first page again', async () => {
+    listSuppliers.mockImplementation((params) => {
+      const limit = params.limit ?? 10
+      return Promise.resolve(
+        pageOf([norte], {
+          page: params.page ?? 1,
+          limit,
+          total: 30,
+          totalPages: Math.ceil(30 / limit),
+        }),
+      )
+    })
+    const { user } = renderPage('/?pagina=2')
+    await screen.findByRole('button', { name: 'Página 2 de 3', current: 'page' })
+
+    await user.selectOptions(screen.getByLabelText('Filas por página'), '20')
+
+    expect(
+      await screen.findByRole('button', { name: 'Página 1 de 2', current: 'page' }),
+    ).toBeInTheDocument()
+    expect(lastListParams()).toMatchObject({ page: 1, limit: 20 })
+    expect(screen.getByText('Mostrando 1–20 de 30')).toBeInTheDocument()
   })
 })
 
@@ -265,7 +289,7 @@ describe('SuppliersPage search bar, reload and empty state', () => {
   it('does not query while typing', async () => {
     listSuppliers.mockResolvedValue(pageOf([norte]))
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
     const requests = listSuppliers.mock.calls.length
 
     await user.type(
@@ -279,12 +303,12 @@ describe('SuppliersPage search bar, reload and empty state', () => {
   it('reloads the current query with the same filters', async () => {
     listSuppliers.mockResolvedValue(pageOf([norte]))
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Filtrar por estado' }),
       'Activos',
     )
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
     const requests = listSuppliers.mock.calls.length
 
     await user.click(screen.getByRole('button', { name: 'Recargar' }))
@@ -296,7 +320,7 @@ describe('SuppliersPage search bar, reload and empty state', () => {
   it('clears the search and filters from the empty state', async () => {
     listSuppliers.mockResolvedValueOnce(pageOf([norte])).mockResolvedValue(pageOf([]))
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
     await user.type(
       screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' }),
       'NoExiste{Enter}',
@@ -306,7 +330,7 @@ describe('SuppliersPage search bar, reload and empty state', () => {
     listSuppliers.mockResolvedValue(pageOf([norte]))
     await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
 
-    expect(await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })).toBeInTheDocument()
+    expect(await screen.findByText('Suplementos Norte SAS')).toBeInTheDocument()
     expect(lastListParams()).toMatchObject({ page: 1, search: undefined, active: undefined })
     expect(screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' })).toHaveValue('')
   })
@@ -321,7 +345,7 @@ describe('SuppliersPage search with the magnifier and reload', () => {
 
   it('searches when the magnifier is pressed', async () => {
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
 
     await user.type(searchBox(), 'Norte')
     await user.click(screen.getByRole('button', { name: 'Buscar' }))
@@ -331,7 +355,7 @@ describe('SuppliersPage search with the magnifier and reload', () => {
 
   it('asks for two characters before searching', async () => {
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
     const requests = listSuppliers.mock.calls.length
 
     await user.type(searchBox(), 'n{Enter}')
@@ -344,10 +368,10 @@ describe('SuppliersPage search with the magnifier and reload', () => {
 
   it('asks the server again when the same search is repeated', async () => {
     const { user } = renderPage()
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
     await user.type(searchBox(), 'Norte{Enter}')
     await waitFor(() => expect(lastListParams()).toMatchObject({ search: 'Norte' }))
-    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await screen.findByText('Suplementos Norte SAS')
     const requests = listSuppliers.mock.calls.length
 
     await user.click(screen.getByRole('button', { name: 'Buscar' }))
@@ -408,7 +432,7 @@ describe('SuppliersPage clear filters from the empty state', () => {
 
     await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
 
-    expect(await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })).toBeInTheDocument()
+    expect(await screen.findByText('Suplementos Norte SAS')).toBeInTheDocument()
     expect(lastListParams()).toMatchObject({ page: 1, search: undefined, active: undefined })
     expect(screen.getByRole('combobox', { name: 'Filtrar por estado' })).toHaveValue('todos')
   })
