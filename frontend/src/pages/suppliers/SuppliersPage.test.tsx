@@ -257,7 +257,7 @@ describe('SuppliersPage pagination', () => {
   })
 })
 
-describe('SuppliersPage search bar and reload', () => {
+describe('SuppliersPage search bar, reload and empty state', () => {
   it('does not query while typing', async () => {
     listSuppliers.mockResolvedValue(pageOf([norte]))
     const { user } = renderPage()
@@ -287,5 +287,23 @@ describe('SuppliersPage search bar and reload', () => {
 
     await waitFor(() => expect(listSuppliers).toHaveBeenCalledTimes(requests + 1))
     expect(lastListParams()).toMatchObject({ page: 1, active: true })
+  })
+
+  it('clears the search and filters from the empty state', async () => {
+    listSuppliers.mockResolvedValueOnce(pageOf([norte])).mockResolvedValue(pageOf([]))
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' }),
+      'NoExiste{Enter}',
+    )
+
+    expect(await screen.findByText('Ningún proveedor coincide con los filtros')).toBeInTheDocument()
+    listSuppliers.mockResolvedValue(pageOf([norte]))
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+
+    expect(await screen.findByRole('cell', { name: 'Suplementos Norte SAS' })).toBeInTheDocument()
+    expect(lastListParams()).toMatchObject({ page: 1, search: undefined, active: undefined })
+    expect(screen.getByRole('searchbox', { name: 'Buscar por nombre o documento' })).toHaveValue('')
   })
 })

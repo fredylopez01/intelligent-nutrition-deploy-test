@@ -193,7 +193,7 @@ describe('BranchesPage empty list', () => {
   })
 })
 
-describe('BranchesPage search bar and reload', () => {
+describe('BranchesPage search bar, reload and empty state', () => {
   it('does not query while typing', async () => {
     listBranches.mockResolvedValue(pageOf([makro]))
     const { user } = renderPage()
@@ -220,5 +220,20 @@ describe('BranchesPage search bar and reload', () => {
 
     await waitFor(() => expect(listBranches).toHaveBeenCalledTimes(requests + 1))
     expect(lastListParams()).toMatchObject({ page: 1, active: true })
+  })
+
+  it('clears the search and filters from the empty state', async () => {
+    listBranches.mockResolvedValueOnce(pageOf([makro])).mockResolvedValue(pageOf([]))
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: 'Sede Makro' })
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar por nombre' }), 'NoExiste{Enter}')
+
+    expect(await screen.findByText('Ninguna sede coincide con la búsqueda')).toBeInTheDocument()
+    listBranches.mockResolvedValue(pageOf([makro]))
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+
+    expect(await screen.findByRole('cell', { name: 'Sede Makro' })).toBeInTheDocument()
+    expect(lastListParams()).toMatchObject({ page: 1, search: undefined, active: undefined })
+    expect(screen.getByRole('searchbox', { name: 'Buscar por nombre' })).toHaveValue('')
   })
 })
