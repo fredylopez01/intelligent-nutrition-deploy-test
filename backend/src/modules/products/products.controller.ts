@@ -16,6 +16,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { ListProductsQueryDto } from "./dto/list-products-query.dto.js";
 import { UpdateProductDto } from "./dto/update-product.dto.js";
+import { UpdateProductStatusDto } from "./dto/update-product-status.dto.js";
 
 @Controller("products")
 export class ProductsController {
@@ -58,6 +59,22 @@ export class ProductsController {
     return this.productsService.update(
       productId,
       updateProductDto,
+      currentUser,
+      ipAddress,
+    );
+  }
+
+  @Patch(":productId/status")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
+  updateStatus(
+    @Param("productId", new ParseUUIDPipe()) productId: string,
+    @Body() updateProductStatusDto: UpdateProductStatusDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.productsService.updateStatus(
+      productId,
+      updateProductStatusDto.active,
       currentUser,
       ipAddress,
     );
