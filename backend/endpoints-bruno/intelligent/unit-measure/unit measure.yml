@@ -10,7 +10,7 @@ http:
     type: json
     data: |-
       {
-        "name": "Kilogramos",
+        "name": "Kilogramo",
         "abreviation": "Kg"
       }
   auth:

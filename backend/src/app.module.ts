@@ -14,6 +14,7 @@ import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
 import { CustomersModule } from "./modules/customers/customers.module.js";
 import { CategoriesModule } from "./modules/categories/categories.module.js";
 import { UnitMeasureModule } from "./modules/unit-measure/unit-measure.module.js";
+import { ProductsModule } from "./modules/products/products.module.js";
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { UnitMeasureModule } from "./modules/unit-measure/unit-measure.module.js
     HealthModule,
     CategoriesModule,
     UnitMeasureModule,
+    ProductsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
