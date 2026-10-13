@@ -82,13 +82,22 @@ describe('Sidebar menu by role', () => {
     }
   })
 
-  it('shows users and audit but not the branch modules to DEV', () => {
+  it('shows users and audit but not the branch modules nor the catalog to DEV', () => {
     auth.role = 'DEV'
     renderSidebar()
 
     const labels = menuLabels()
-    expect(labels).toEqual(expect.arrayContaining([...ALWAYS, 'Usuarios', 'Auditoría']))
-    for (const hidden of ['Sedes', 'Clientes', 'Proveedores']) {
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        'Dashboard',
+        'Inventario',
+        'POS',
+        'Reportes',
+        'Usuarios',
+        'Auditoría',
+      ]),
+    )
+    for (const hidden of ['Sedes', 'Catálogo', 'Clientes', 'Proveedores']) {
       expect(labels).not.toContain(hidden)
     }
   })
@@ -124,10 +133,10 @@ describe('Sidebar catalog submenu', () => {
     expect(catalogSubs()).toEqual(['Catálogo', 'Productos', 'Categorías', 'Unidades de medida'])
   })
 
-  it('hides categories and units from DEV, as the contract does not include them', () => {
+  it('hides the whole catalog from DEV, as the contract does not include it', () => {
     auth.role = 'DEV'
-    renderSidebar('/catalogo')
+    renderSidebar('/dashboard')
 
-    expect(catalogSubs()).toEqual(['Catálogo', 'Productos'])
+    expect(catalogSubs()).toEqual([])
   })
 })

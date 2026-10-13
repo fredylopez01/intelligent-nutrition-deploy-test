@@ -26,11 +26,6 @@ export const PENDING_MODULES: PendingModule[] = [
     description: 'Conteo ciego por sede y reporte de discrepancias contra el sistema.',
   },
   {
-    path: '/catalogo',
-    title: 'Catálogo',
-    description: 'Catálogo maestro de productos: se registran una vez y se asignan a las sedes.',
-  },
-  {
     path: '/pos',
     title: 'POS',
     description: 'Punto de venta en sede, con descuento automático de inventario.',

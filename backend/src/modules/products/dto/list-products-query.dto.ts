@@ -1,4 +1,4 @@
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   IsBoolean,
   IsEnum,
@@ -49,7 +49,11 @@ export class ListProductsQueryDto {
   unitOfMeasureId?: string;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === "true") return true;
+    if (value === "false") return false;
+    return value;
+  })
   @IsBoolean()
   active?: boolean;
 
