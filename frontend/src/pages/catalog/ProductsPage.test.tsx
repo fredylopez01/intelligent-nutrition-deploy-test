@@ -13,8 +13,10 @@ import type { Product, ProductsListParams } from '../../types/product'
 
 import { ProductsPage } from './ProductsPage'
 
+const auth = vi.hoisted(() => ({ role: 'SUPERADMIN' }))
+
 vi.mock('../../services/products.service', () => ({
-  productsService: { list: vi.fn() },
+  productsService: { list: vi.fn(), create: vi.fn() },
 }))
 
 vi.mock('../../services/categories.service', () => ({
@@ -26,7 +28,7 @@ vi.mock('../../services/units.service', () => ({
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => ({ token: 'test-token', user: { id: 'me', role: { name: auth.role } } }),
 }))
 
 vi.mock('../../layouts/AppLayout', () => ({
@@ -39,6 +41,7 @@ vi.mock('../../layouts/AppLayout', () => ({
 }))
 
 const listProducts = vi.mocked(productsService.list)
+const createProduct = vi.mocked(productsService.create)
 
 const whey = buildProduct()
 const creatine = buildProduct({
@@ -81,6 +84,7 @@ function renderPage(path = '/catalogo') {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  auth.role = 'SUPERADMIN'
   listProducts.mockResolvedValue(pageOf([whey, creatine]))
   vi.mocked(categoriesService.list).mockResolvedValue(optionsPage(CATEGORIES))
   vi.mocked(unitsService.list).mockResolvedValue(optionsPage(UNITS))
@@ -212,5 +216,47 @@ describe('ProductsPage list', () => {
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
 
     expect(await screen.findByText('Whey Protein 2 lb')).toBeInTheDocument()
+  })
+})
+
+describe('ProductsPage register', () => {
+  it('registers a product and confirms it', async () => {
+    createProduct.mockResolvedValue(
+      buildProduct({ id: 'product-new', name: 'Omega 3', referenceCode: 'OMEGA-3' }),
+    )
+    const { user } = renderPage()
+    await screen.findByText('Whey Protein 2 lb')
+
+    await user.click(screen.getByRole('button', { name: 'Registrar producto' }))
+    const dialog = within(screen.getByRole('dialog'))
+    await waitFor(() => expect(dialog.getByLabelText('Categoría')).toBeEnabled())
+    await user.type(dialog.getByLabelText('Nombre'), 'Omega 3')
+    await user.type(dialog.getByLabelText('Código de referencia'), 'OMEGA-3')
+    await user.selectOptions(dialog.getByLabelText('Categoría'), 'Vitaminas')
+    await user.selectOptions(dialog.getByLabelText('Unidad de medida'), 'Unidad (und)')
+    await user.type(dialog.getByLabelText('Precio de venta (COP)'), '52000')
+    await user.click(dialog.getByRole('button', { name: 'Registrar producto' }))
+
+    expect(
+      await screen.findByText('El producto Omega 3 (OMEGA-3) quedó registrado y activo.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('lets the branch leader register but not the branch assistant', async () => {
+    auth.role = 'BRANCH_LEADER'
+    const { unmount } = render(
+      <MemoryRouter>
+        <ProductsPage />
+      </MemoryRouter>,
+    )
+    await screen.findByText('Whey Protein 2 lb')
+    expect(screen.getByRole('button', { name: 'Registrar producto' })).toBeInTheDocument()
+    unmount()
+
+    auth.role = 'BRANCH_ASSISTANT'
+    renderPage()
+    await screen.findByText('Whey Protein 2 lb')
+    expect(screen.queryByRole('button', { name: 'Registrar producto' })).not.toBeInTheDocument()
   })
 })

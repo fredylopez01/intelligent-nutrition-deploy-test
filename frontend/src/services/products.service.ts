@@ -1,4 +1,9 @@
-import type { Product, ProductsListParams, ProductsListResponse } from '../types/product'
+import type {
+  CreateProductPayload,
+  Product,
+  ProductsListParams,
+  ProductsListResponse,
+} from '../types/product'
 
 import { http } from './http'
 
@@ -31,4 +36,7 @@ export const productsService = {
 
   getById: async (productId: string, token: string | null): Promise<Product> =>
     unwrapProduct(await http.get<Product | { data: Product }>(`/products/${productId}`, { token })),
+
+  create: (payload: CreateProductPayload, token: string | null) =>
+    http.post<Product>('/products', payload, { token }),
 }

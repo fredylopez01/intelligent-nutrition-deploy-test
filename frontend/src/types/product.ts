@@ -50,3 +50,12 @@ export interface ProductsListResponse {
   data: Product[]
   meta: PaginationMeta
 }
+
+export interface CreateProductPayload {
+  name: string
+  referenceCode: string
+  description?: string
+  categoryId: string
+  unitOfMeasureId: string
+  price: string
+}
