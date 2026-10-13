@@ -198,4 +198,67 @@ describe('ProductDataForm editing', () => {
     expect(field('Nombre')).toHaveAttribute('readonly')
     expect(updateProduct).not.toHaveBeenCalled()
   })
+
+  it('disables both buttons and shows "Guardando..." while saving', async () => {
+    updateProduct.mockReturnValue(new Promise(() => {}))
+    const { user } = renderForm()
+    await startEditing(user)
+
+    await user.clear(field('Nombre'))
+    await user.type(field('Nombre'), 'Nuevo nombre')
+    await save(user)
+
+    expect(await screen.findByRole('button', { name: 'Guardando...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled()
+  })
+
+  it('keeps an inactive current unit as an option without sending it', async () => {
+    const product = buildProduct({
+      unitOfMeasure: { id: 'unit-old', name: 'Onza', abbreviation: 'oz' },
+    })
+    const { user } = renderForm(product)
+    await startEditing(user)
+
+    expect(screen.getByRole('option', { name: 'Onza (oz) (inactiva)' })).toBeInTheDocument()
+    expect(field('Unidad de medida')).toHaveValue('unit-old')
+    await user.clear(field('Nombre'))
+    await user.type(field('Nombre'), 'Onza 100 g')
+    await save(user)
+
+    await waitFor(() =>
+      expect(updateProduct).toHaveBeenCalledWith(
+        'product-whey',
+        { name: 'Onza 100 g' },
+        'test-token',
+      ),
+    )
+  })
+
+  it('shows an inactive unit error on its field', async () => {
+    updateProduct.mockRejectedValue(new ApiError('Inactive', 422, {}, 'UNIT_INACTIVE'))
+    const { user } = renderForm()
+    await startEditing(user)
+
+    await user.selectOptions(field('Unidad de medida'), 'Kilogramo (kg)')
+    await save(user)
+
+    expect(
+      await screen.findByText('Esta unidad se desactivó. Elige otra unidad activa.'),
+    ).toBeInTheDocument()
+  })
+
+  it.each<[number, string]>([
+    [403, 'No tienes permiso para realizar esta acción.'],
+    [404, 'Este producto ya no existe. Recarga el listado.'],
+  ])('shows a status %i api error as a general alert', async (status, message) => {
+    updateProduct.mockRejectedValue(new ApiError('Error', status))
+    const { user } = renderForm()
+    await startEditing(user)
+
+    await user.clear(field('Nombre'))
+    await user.type(field('Nombre'), 'Nuevo nombre')
+    await save(user)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+  })
 })
