@@ -221,4 +221,35 @@ describe('ProductDetailPage state', () => {
 
     expect(screen.getByRole('button', { name: 'Desactivar producto' })).toBeInTheDocument()
   })
+
+  it('activates an inactive product', async () => {
+    updateStatus.mockResolvedValue({ message: 'ok' })
+    getProduct.mockResolvedValue(buildProduct({ active: false }))
+    const { user } = renderPage()
+    await waitForProduct()
+
+    await user.click(screen.getByRole('button', { name: 'Activar producto' }))
+    const dialog = screen.getByRole('dialog', { name: '¿Activar este producto?' })
+    expect(dialog).toHaveTextContent('volverá a estar disponible')
+    getProduct.mockResolvedValue(buildProduct({ active: true }))
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, activar' }))
+
+    expect(await screen.findByText('El producto ahora está activo.')).toBeInTheDocument()
+    expect(updateStatus).toHaveBeenCalledWith('product-whey', { active: true }, 'test-token')
+    expect(await screen.findByRole('button', { name: 'Desactivar producto' })).toBeInTheDocument()
+  })
+
+  it('keeps the confirmation open when the status change fails', async () => {
+    updateStatus.mockRejectedValue(new ApiError('State', 409, {}, 'ALREADY_IN_STATE'))
+    const { user } = renderPage()
+    await waitForProduct()
+
+    await user.click(screen.getByRole('button', { name: 'Desactivar producto' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, desactivar' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'El producto ya tenía ese estado. Recarga para ver su estado actual.',
+    )
+    expect(screen.getByRole('dialog', { name: '¿Desactivar este producto?' })).toBeInTheDocument()
+  })
 })
