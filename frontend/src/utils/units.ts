@@ -45,6 +45,11 @@ function normalize(value: string): string {
   return value.trim().toLocaleLowerCase('es')
 }
 
+export const UNIT_API_CONFLICT_MESSAGES: Record<UnitConflictField, string> = {
+  name: 'Ya existe una unidad con ese nombre. Usa uno diferente.',
+  abbreviation: 'Esa abreviatura ya la usa otra unidad. Usa una diferente.',
+}
+
 export function unitConflictMessage({ field, unit }: UnitConflict): string {
   return field === 'name'
     ? `Ya existe la unidad "${unit.name}". Usa un nombre diferente.`
@@ -54,6 +59,7 @@ export function unitConflictMessage({ field, unit }: UnitConflict): string {
 export async function findUnitConflict(
   values: UnitFormValues,
   token: string | null,
+  excludeId?: string,
 ): Promise<UnitConflict | null> {
   const name = normalize(values.name)
   const abbreviation = normalize(values.abbreviation)
@@ -61,6 +67,7 @@ export async function findUnitConflict(
     for (let page = 1; page <= CONFLICT_LOOKUP_MAX_PAGES; page += 1) {
       const response = await unitsService.list({ page, limit: CONFLICT_LOOKUP_LIMIT }, token)
       for (const unit of response.data) {
+        if (unit.id === excludeId) continue
         if (normalize(unit.name) === name) return { field: 'name', unit }
         if (normalize(unit.abbreviation) === abbreviation) return { field: 'abbreviation', unit }
       }
@@ -76,6 +83,9 @@ export function apiConflictField(error: unknown): UnitConflictField | null {
   if (!(error instanceof ApiError)) return null
   if (error.code === 'UNIT_NAME_ALREADY_EXISTS') return 'name'
   if (error.code === 'UNIT_ABBREVIATION_ALREADY_EXISTS') return 'abbreviation'
+  if (error.status === 409 && error.code !== 'ALREADY_IN_STATE') {
+    return /abreviation|abbreviation/i.test(error.message) ? 'abbreviation' : 'name'
+  }
   return null
 }
 
@@ -86,10 +96,13 @@ export function resolveUnitError(error: unknown, fallback: string): string {
       return 'Ya existe una unidad con ese nombre. Usa uno diferente.'
     case 'UNIT_ABBREVIATION_ALREADY_EXISTS':
       return 'Esa abreviatura ya la usa otra unidad. Usa una diferente.'
+    case 'ALREADY_IN_STATE':
+      return 'La unidad ya tenía ese estado. Recarga el listado para ver su estado actual.'
     case 'SEARCH_TOO_SHORT':
       return 'Escribe al menos 2 caracteres para buscar.'
   }
   if (error.status === 403) return 'No tienes permiso para realizar esta acción.'
+  if (error.status === 404) return 'Esta unidad ya no existe. Recarga el listado.'
   if (error.status === 400) return 'Revisa los datos: hay un campo que el servidor no aceptó.'
   return fallback
 }

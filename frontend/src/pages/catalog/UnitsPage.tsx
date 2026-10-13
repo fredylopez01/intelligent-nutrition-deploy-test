@@ -7,16 +7,19 @@ import { Modal } from '../../components/ui/Modal'
 import { Pagination } from '../../components/ui/Pagination'
 import { ReloadButton } from '../../components/ui/ReloadButton'
 import { SearchBar } from '../../components/ui/SearchBar'
+import { StatusConfirmation } from '../../components/ui/StatusConfirmation'
 import { TableSkeleton } from '../../components/ui/TableSkeleton'
 import { CreateUnitForm } from '../../components/units/CreateUnitForm'
+import { EditUnitForm } from '../../components/units/EditUnitForm'
 import { UnitsTable } from '../../components/units/UnitsTable'
 import { useAuth } from '../../hooks/useAuth'
 import { usePagination } from '../../hooks/usePagination'
 import { useUnits } from '../../hooks/useUnits'
 import { AppLayout } from '../../layouts/AppLayout'
+import { unitsService } from '../../services/units.service'
 import type { UnitOfMeasure } from '../../types/unit'
 import { hasRole } from '../../utils/categories'
-import { UNIT_MANAGE_ROLES } from '../../utils/units'
+import { UNIT_MANAGE_ROLES, resolveUnitError } from '../../utils/units'
 
 import './CatalogPage.css'
 
@@ -30,7 +33,7 @@ const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
 const FILTER_DEFAULTS = { estado: 'todos' }
 
 export function UnitsPage() {
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const canManage = hasRole(UNIT_MANAGE_ROLES, user?.role.name)
 
   const {
@@ -47,6 +50,8 @@ export function UnitsPage() {
     clearFilters,
   } = usePagination({ filters: FILTER_DEFAULTS })
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [editingUnit, setEditingUnit] = useState<UnitOfMeasure | null>(null)
+  const [statusUnit, setStatusUnit] = useState<UnitOfMeasure | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, units, meta, error, refetch } = useUnits({
@@ -69,6 +74,19 @@ export function UnitsPage() {
     setFeedbackMessage(`La unidad ${unit.name} (${unit.abbreviation}) quedó registrada y activa.`)
     if (page === 1) refetch()
     else setPage(1)
+  }
+
+  const handleUpdated = (unit: UnitOfMeasure) => {
+    setEditingUnit(null)
+    setFeedbackMessage(`Los cambios de la unidad ${unit.name} (${unit.abbreviation}) se guardaron.`)
+    refetch()
+  }
+
+  const handleChangeStatus = async (unit: UnitOfMeasure) => {
+    await unitsService.updateStatus(unit.id, { active: !unit.active }, token)
+    setStatusUnit(null)
+    setFeedbackMessage(`La unidad ${unit.name} ahora está ${unit.active ? 'inactiva' : 'activa'}.`)
+    refetch()
   }
 
   const renderList = () => {
@@ -106,7 +124,20 @@ export function UnitsPage() {
       )
     }
 
-    return <UnitsTable units={units} />
+    return (
+      <UnitsTable
+        units={units}
+        canManage={canManage}
+        onEdit={(unit) => {
+          setFeedbackMessage(null)
+          setEditingUnit(unit)
+        }}
+        onToggleStatus={(unit) => {
+          setFeedbackMessage(null)
+          setStatusUnit(unit)
+        }}
+      />
+    )
   }
 
   return (
@@ -170,6 +201,45 @@ export function UnitsPage() {
         onClose={() => setIsCreateOpen(false)}
       >
         <CreateUnitForm onCreated={handleCreated} onCancel={() => setIsCreateOpen(false)} />
+      </Modal>
+
+      <Modal
+        open={editingUnit !== null}
+        title="Editar unidad de medida"
+        onClose={() => setEditingUnit(null)}
+      >
+        {editingUnit && (
+          <EditUnitForm
+            unit={editingUnit}
+            onUpdated={handleUpdated}
+            onCancel={() => setEditingUnit(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={statusUnit !== null}
+        title={statusUnit?.active ? '¿Desactivar esta unidad?' : '¿Activar esta unidad?'}
+        description={
+          statusUnit?.active
+            ? `${statusUnit.name} (${statusUnit.abbreviation}) no se podrá asignar a productos nuevos. Los productos que ya la usan la conservan.`
+            : `${statusUnit?.name} volverá a estar disponible para asignarla a productos.`
+        }
+        onClose={() => setStatusUnit(null)}
+      >
+        {statusUnit && (
+          <StatusConfirmation
+            active={statusUnit.active}
+            onConfirm={() => handleChangeStatus(statusUnit)}
+            onCancel={() => setStatusUnit(null)}
+            resolveError={(error) =>
+              resolveUnitError(
+                error,
+                'No fue posible cambiar el estado de la unidad. Intenta de nuevo.',
+              )
+            }
+          />
+        )}
       </Modal>
     </AppLayout>
   )
