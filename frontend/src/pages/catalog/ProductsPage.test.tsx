@@ -218,6 +218,41 @@ describe('ProductsPage list', () => {
 
     expect(await screen.findByText('Whey Protein 2 lb')).toBeInTheDocument()
   })
+
+  it('offers inactive units in the filters, marked as such', async () => {
+    vi.mocked(unitsService.list).mockResolvedValue(
+      optionsPage([
+        ...UNITS,
+        { id: 'unit-old', name: 'Onza', abbreviation: 'oz', active: false },
+      ]),
+    )
+    renderPage()
+
+    expect(await screen.findByRole('option', { name: 'Onza (inactiva)' })).toBeInTheDocument()
+    expect(unitsService.list).toHaveBeenCalledWith(
+      { page: 1, limit: 100, active: undefined },
+      'test-token',
+    )
+  })
+
+  it('refetches when the same search term is submitted again', async () => {
+    const { user } = renderPage()
+    await screen.findByText('Whey Protein 2 lb')
+
+    const searchbox = screen.getByRole('searchbox', { name: 'Buscar por nombre o código' })
+    await user.type(searchbox, 'whey')
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(lastListParams()).toMatchObject({ search: 'whey' }))
+    const callsAfterFirstSearch = listProducts.mock.calls.length
+
+    // Submit the same term: triggers refetch instead of a new search
+    await user.keyboard('{Enter}')
+
+    await waitFor(() =>
+      expect(listProducts).toHaveBeenCalledTimes(callsAfterFirstSearch + 1),
+    )
+    expect(lastListParams()).toMatchObject({ search: 'whey' })
+  })
 })
 
 describe('ProductsPage register', () => {
