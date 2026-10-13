@@ -488,6 +488,55 @@ export class ProductsService {
     });
   }
 
+  async updateStatus(
+    productId: string,
+    active: boolean,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const existingProduct = await transaction.product.findUnique({
+        where: { id: productId },
+        select: { id: true, name: true, referenceCode: true, active: true },
+      });
+
+      if (!existingProduct) {
+        throw new NotFoundException({
+          code: "PRODUCT_NOT_FOUND",
+          message: "Product not found",
+        });
+      }
+
+      if (existingProduct.active === active) {
+        throw new ConflictException({
+          code: "ALREADY_IN_STATE",
+          message: "Product is already in the requested state.",
+        });
+      }
+
+      await transaction.product.update({
+        where: { id: productId },
+        data: { active },
+      });
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: active ? "ACTIVATE" : "DEACTIVATE",
+          entity: "PRODUCT",
+          entityId: productId,
+          oldData: { active: existingProduct.active },
+          newData: { active },
+          reason: `${active ? "Activación" : "Desactivación"} del producto ${existingProduct.name} (${existingProduct.referenceCode})`,
+          ipAddress,
+        },
+        transaction,
+      );
+
+      return { message: "Product status updated successfully." };
+    });
+  }
+
   private toListItem(product: {
     id: string;
     name: string;
