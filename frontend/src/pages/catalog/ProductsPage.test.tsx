@@ -16,7 +16,7 @@ import { ProductsPage } from './ProductsPage'
 const auth = vi.hoisted(() => ({ role: 'SUPERADMIN' }))
 
 vi.mock('../../services/products.service', () => ({
-  productsService: { list: vi.fn(), create: vi.fn() },
+  productsService: { list: vi.fn(), create: vi.fn(), updateStatus: vi.fn() },
 }))
 
 vi.mock('../../services/categories.service', () => ({
@@ -42,6 +42,7 @@ vi.mock('../../layouts/AppLayout', () => ({
 
 const listProducts = vi.mocked(productsService.list)
 const createProduct = vi.mocked(productsService.create)
+const updateStatus = vi.mocked(productsService.updateStatus)
 
 const whey = buildProduct()
 const creatine = buildProduct({
@@ -258,5 +259,61 @@ describe('ProductsPage register', () => {
     renderPage()
     await screen.findByText('Whey Protein 2 lb')
     expect(screen.queryByRole('button', { name: 'Registrar producto' })).not.toBeInTheDocument()
+  })
+})
+
+describe('ProductsPage state', () => {
+  it('asks for confirmation and explains what an inactive product cannot do', async () => {
+    updateStatus.mockResolvedValue({ message: 'ok' })
+    const { user } = renderPage()
+    await screen.findByText('Whey Protein 2 lb')
+
+    await user.click(screen.getByRole('button', { name: 'Acciones para Whey Protein 2 lb' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Desactivar' }))
+    const dialog = screen.getByRole('dialog', { name: '¿Desactivar este producto?' })
+    expect(dialog).toHaveTextContent('no se podrá asignar a sedes')
+    expect(dialog).toHaveTextContent('Su historial y existencias se conservan')
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, desactivar' }))
+
+    expect(
+      await screen.findByText('El producto Whey Protein 2 lb ahora está inactivo.'),
+    ).toBeInTheDocument()
+    expect(updateStatus).toHaveBeenCalledWith('product-whey', { active: false }, 'test-token')
+  })
+
+  it('activates an inactive product', async () => {
+    updateStatus.mockResolvedValue({ message: 'ok' })
+    const { user } = renderPage()
+    await screen.findByText('Creatina 300 g')
+
+    await user.click(screen.getByRole('button', { name: 'Acciones para Creatina 300 g' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Activar' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, activar' }))
+
+    expect(
+      await screen.findByText('El producto Creatina 300 g ahora está activo.'),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the confirmation open with the api error', async () => {
+    updateStatus.mockRejectedValue(new ApiError('State', 409, {}, 'ALREADY_IN_STATE'))
+    const { user } = renderPage()
+    await screen.findByText('Whey Protein 2 lb')
+
+    await user.click(screen.getByRole('button', { name: 'Acciones para Whey Protein 2 lb' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Desactivar' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, desactivar' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'El producto ya tenía ese estado. Recarga para ver su estado actual.',
+    )
+  })
+
+  it('hides the state actions from the branch assistant', async () => {
+    auth.role = 'BRANCH_ASSISTANT'
+    renderPage()
+    await screen.findByText('Whey Protein 2 lb')
+
+    expect(screen.queryByRole('button', { name: /Acciones para/ })).not.toBeInTheDocument()
   })
 })

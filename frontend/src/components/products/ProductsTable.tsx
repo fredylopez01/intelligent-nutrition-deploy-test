@@ -1,7 +1,8 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import type { Product } from '../../types/product'
 import { formatPrice, productPath } from '../../utils/products'
+import { RowActions } from '../ui/RowActions'
 import { StatusBadge } from '../users/StatusBadge'
 
 import { ProductThumb } from './ProductThumb'
@@ -11,9 +12,18 @@ import './ProductsTable.css'
 interface ProductsTableProps {
   products: Product[]
   returnTo: string
+  canManage: boolean
+  onToggleStatus: (product: Product) => void
 }
 
-export function ProductsTable({ products, returnTo }: ProductsTableProps) {
+export function ProductsTable({
+  products,
+  returnTo,
+  canManage,
+  onToggleStatus,
+}: ProductsTableProps) {
+  const navigate = useNavigate()
+
   return (
     <table className="products-table">
       <caption className="sr-only">Productos del catálogo maestro</caption>
@@ -28,6 +38,11 @@ export function ProductsTable({ products, returnTo }: ProductsTableProps) {
           <th scope="col" className="products-table__col-status">
             Estado
           </th>
+          {canManage && (
+            <th scope="col" className="products-table__col-actions">
+              <span className="sr-only">Acciones</span>
+            </th>
+          )}
           <th scope="col" className="products-table__col-open">
             <span className="sr-only">Abrir</span>
           </th>
@@ -68,6 +83,24 @@ export function ProductsTable({ products, returnTo }: ProductsTableProps) {
               <td className="products-table__col-status">
                 <StatusBadge status={product.active ? 'activo' : 'inactivo'} />
               </td>
+              {canManage && (
+                <td className="products-table__col-actions">
+                  <RowActions
+                    label={`Acciones para ${product.name}`}
+                    actions={[
+                      {
+                        label: 'Ver detalle',
+                        onSelect: () => void navigate(href, { state: { from: returnTo } }),
+                      },
+                      {
+                        label: product.active ? 'Desactivar' : 'Activar',
+                        tone: product.active ? 'danger' : undefined,
+                        onSelect: () => onToggleStatus(product),
+                      },
+                    ]}
+                  />
+                </td>
+              )}
               <td className="products-table__col-open">
                 <Link
                   to={href}

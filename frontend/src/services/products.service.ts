@@ -43,4 +43,7 @@ export const productsService = {
 
   update: (productId: string, payload: UpdateProductPayload, token: string | null) =>
     http.patch<Product>(`/products/${productId}`, payload, { token }),
+
+  updateStatus: (productId: string, payload: { active: boolean }, token: string | null) =>
+    http.patch<{ message: string }>(`/products/${productId}/status`, payload, { token }),
 }

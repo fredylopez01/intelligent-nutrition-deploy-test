@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 
 import { ProductDataForm } from '../../components/products/ProductDataForm'
@@ -5,13 +6,21 @@ import { ProductGallery } from '../../components/products/ProductGallery'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { Modal } from '../../components/ui/Modal'
+import { StatusConfirmation } from '../../components/ui/StatusConfirmation'
 import { StatusBadge } from '../../components/users/StatusBadge'
 import { useAuth } from '../../hooks/useAuth'
 import { useProduct } from '../../hooks/useProduct'
 import { AppLayout } from '../../layouts/AppLayout'
+import { productsService } from '../../services/products.service'
 import { hasRole } from '../../utils/categories'
 import { formatDateTime } from '../../utils/format'
-import { PRODUCT_MANAGE_ROLES, formatPrice } from '../../utils/products'
+import {
+  PRODUCT_MANAGE_ROLES,
+  formatPrice,
+  productStatusDescription,
+  resolveProductError,
+} from '../../utils/products'
 
 import './ProductDetailPage.css'
 
@@ -20,8 +29,10 @@ const BACK_LABEL = 'Volver al listado de productos'
 export function ProductDetailPage() {
   const { productId } = useParams()
   const location = useLocation()
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const { status, product, error, refetch } = useProduct(productId)
+  const [isStatusOpen, setIsStatusOpen] = useState(false)
+  const [statusFeedback, setStatusFeedback] = useState<string | null>(null)
   const canManage = hasRole(PRODUCT_MANAGE_ROLES, user?.role.name)
 
   const backTo = (location.state as { from?: string } | null)?.from ?? '/catalogo'
@@ -75,14 +86,40 @@ export function ProductDetailPage() {
     )
   }
 
+  const handleChangeStatus = async () => {
+    await productsService.updateStatus(product.id, { active: !product.active }, token)
+    setIsStatusOpen(false)
+    setStatusFeedback(`El producto ahora está ${product.active ? 'inactivo' : 'activo'}.`)
+    refetch()
+  }
+
+  const statusAction = canManage ? (
+    <Button
+      variant={product.active ? 'danger' : 'outline'}
+      onClick={() => {
+        setStatusFeedback(null)
+        setIsStatusOpen(true)
+      }}
+    >
+      {product.active ? 'Desactivar producto' : 'Activar producto'}
+    </Button>
+  ) : null
+
   return (
     <AppLayout
       title={product.name}
       subtitle={`Código ${product.referenceCode}`}
       backTo={backTo}
       backLabel={BACK_LABEL}
+      actions={statusAction}
     >
-      {!product.active && (
+      {statusFeedback && (
+        <div className="product-page__feedback">
+          <Alert tone="success">{statusFeedback}</Alert>
+        </div>
+      )}
+
+      {!product.active && !statusFeedback && (
         <div className="product-page__feedback">
           <Alert tone="info">
             Este producto está inactivo: conserva su historial y existencias, pero no se puede
@@ -147,6 +184,25 @@ export function ProductDetailPage() {
           <ProductDataForm product={product} canEdit={canManage} onSaved={refetch} />
         </section>
       </div>
+
+      <Modal
+        open={isStatusOpen}
+        title={product.active ? '¿Desactivar este producto?' : '¿Activar este producto?'}
+        description={productStatusDescription(product)}
+        onClose={() => setIsStatusOpen(false)}
+      >
+        <StatusConfirmation
+          active={product.active}
+          onConfirm={handleChangeStatus}
+          onCancel={() => setIsStatusOpen(false)}
+          resolveError={(statusError) =>
+            resolveProductError(
+              statusError,
+              'No fue posible cambiar el estado del producto. Intenta de nuevo.',
+            )
+          }
+        />
+      </Modal>
     </AppLayout>
   )
 }
