@@ -244,9 +244,17 @@ export class ProductsService {
           select: { id: true, name: true, abreviation: true },
         },
         images: {
-          where: { isPrimary: true },
-          select: { url: true },
-          take: 1,
+          orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
+          select: {
+            id: true,
+            url: true,
+            fileName: true,
+            mimeType: true,
+            sizeBytes: true,
+            isPrimary: true,
+            sortOrder: true,
+            createdAt: true,
+          },
         },
       },
     });
@@ -258,7 +266,34 @@ export class ProductsService {
       });
     }
 
-    return this.toDetail(product);
+    return {
+      data: {
+        id: product.id,
+        name: product.name,
+        referenceCode: product.referenceCode,
+        description: product.description,
+        category: product.category,
+        unitOfMeasure: {
+          id: product.unitOfMeasure.id,
+          name: product.unitOfMeasure.name,
+          abbreviation: product.unitOfMeasure.abreviation,
+        },
+        price: product.price.toFixed(2),
+        active: product.active,
+        images: product.images.map((img) => ({
+          id: img.id,
+          url: img.url,
+          fileName: img.fileName,
+          mimeType: img.mimeType,
+          sizeBytes: img.sizeBytes,
+          isPrimary: img.isPrimary,
+          sortOrder: img.sortOrder,
+          createdAt: img.createdAt,
+        })),
+        createdAt: product.createdAt,
+        updatedAt: product.updatedAt,
+      },
+    };
   }
 
   private toListItem(product: {
@@ -291,21 +326,5 @@ export class ProductsService {
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
     };
-  }
-
-  private toDetail(product: {
-    id: string;
-    name: string;
-    referenceCode: string;
-    description: string | null;
-    price: Prisma.Decimal;
-    active: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-    category: { id: string; name: string };
-    unitOfMeasure: { id: string; name: string; abreviation: string };
-    images: { url: string }[];
-  }) {
-    return this.toListItem(product);
   }
 }
