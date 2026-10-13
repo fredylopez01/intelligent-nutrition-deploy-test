@@ -1,5 +1,6 @@
 import type {
   CreateUnitPayload,
+  UpdateUnitPayload,
   UnitOfMeasure,
   UnitsListParams,
   UnitsListResponse,
@@ -50,4 +51,23 @@ export const unitsService = {
     )
     return toUnit(unit)
   },
+
+  update: async (
+    unitId: string,
+    payload: UpdateUnitPayload,
+    token: string | null,
+  ): Promise<UnitOfMeasure> => {
+    const unit = await http.patch<ApiUnit>(
+      `${UNITS_PATH}/${unitId}`,
+      {
+        ...(payload.name === undefined ? {} : { name: payload.name }),
+        ...(payload.abbreviation === undefined ? {} : { abreviation: payload.abbreviation }),
+      },
+      { token },
+    )
+    return toUnit(unit)
+  },
+
+  updateStatus: (unitId: string, payload: { active: boolean }, token: string | null) =>
+    http.patch<{ message: string }>(`${UNITS_PATH}/${unitId}/status`, payload, { token }),
 }

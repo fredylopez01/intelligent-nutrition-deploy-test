@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { unitsService } from '../../services/units.service'
 import type { UnitOfMeasure } from '../../types/unit'
 import {
+  UNIT_API_CONFLICT_MESSAGES,
   apiConflictField,
   findUnitConflict,
   resolveUnitError,
@@ -22,11 +23,6 @@ import '../categories/CategoryForm.css'
 interface CreateUnitFormProps {
   onCreated: (unit: UnitOfMeasure) => void
   onCancel: () => void
-}
-
-const API_CONFLICT_MESSAGES = {
-  name: 'Ya existe una unidad con ese nombre. Usa uno diferente.',
-  abbreviation: 'Esa abreviatura ya la usa otra unidad. Usa una diferente.',
 }
 
 export function CreateUnitForm({ onCreated, onCancel }: CreateUnitFormProps) {
@@ -56,7 +52,7 @@ export function CreateUnitForm({ onCreated, onCancel }: CreateUnitFormProps) {
     } catch (error) {
       const field = apiConflictField(error)
       if (field) {
-        setError(field, { message: API_CONFLICT_MESSAGES[field] }, { shouldFocus: true })
+        setError(field, { message: UNIT_API_CONFLICT_MESSAGES[field] }, { shouldFocus: true })
         return
       }
       setSubmitError(

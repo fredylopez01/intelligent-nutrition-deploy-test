@@ -25,3 +25,8 @@ export interface CreateUnitPayload {
   name: string
   abbreviation: string
 }
+
+export interface UpdateUnitPayload {
+  name?: string
+  abbreviation?: string
+}

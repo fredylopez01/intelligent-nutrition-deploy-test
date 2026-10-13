@@ -1,13 +1,17 @@
 import type { UnitOfMeasure } from '../../types/unit'
+import { RowActions } from '../ui/RowActions'
 
 import '../users/StatusBadge.css'
 import '../categories/CategoriesTable.css'
 
 interface UnitsTableProps {
   units: UnitOfMeasure[]
+  canManage: boolean
+  onEdit: (unit: UnitOfMeasure) => void
+  onToggleStatus: (unit: UnitOfMeasure) => void
 }
 
-export function UnitsTable({ units }: UnitsTableProps) {
+export function UnitsTable({ units, canManage, onEdit, onToggleStatus }: UnitsTableProps) {
   return (
     <table className="categories-table units-table">
       <caption className="sr-only">Unidades de medida del catálogo de productos</caption>
@@ -18,6 +22,11 @@ export function UnitsTable({ units }: UnitsTableProps) {
           <th scope="col" className="categories-table__col-status">
             Estado
           </th>
+          {canManage && (
+            <th scope="col" className="categories-table__col-actions">
+              <span className="sr-only">Acciones</span>
+            </th>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -32,6 +41,21 @@ export function UnitsTable({ units }: UnitsTableProps) {
                 {unit.active ? 'Activa' : 'Inactiva'}
               </span>
             </td>
+            {canManage && (
+              <td className="categories-table__col-actions">
+                <RowActions
+                  label={`Acciones para ${unit.name}`}
+                  actions={[
+                    { label: 'Editar', onSelect: () => onEdit(unit) },
+                    {
+                      label: unit.active ? 'Desactivar' : 'Activar',
+                      tone: unit.active ? 'danger' : undefined,
+                      onSelect: () => onToggleStatus(unit),
+                    },
+                  ]}
+                />
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

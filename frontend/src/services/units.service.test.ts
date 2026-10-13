@@ -4,11 +4,12 @@ import { http } from './http'
 import { unitsService } from './units.service'
 
 vi.mock('./http', () => ({
-  http: { get: vi.fn(), post: vi.fn() },
+  http: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
 }))
 
 const get = vi.mocked(http.get)
 const post = vi.mocked(http.post)
+const patch = vi.mocked(http.patch)
 
 const apiUnit = {
   id: 'unit-1',
@@ -61,5 +62,30 @@ describe('unitsService', () => {
     )
     expect(unit.abbreviation).toBe('kg')
     expect(unit).not.toHaveProperty('abreviation')
+  })
+
+  it('updates only the fields sent, with the name the backend expects', async () => {
+    patch.mockResolvedValue({ ...apiUnit, abreviation: 'kgs' })
+
+    const unit = await unitsService.update('unit-1', { abbreviation: 'kgs' }, 'token')
+
+    expect(patch).toHaveBeenCalledWith(
+      '/unit-measure/unit-1',
+      { abreviation: 'kgs' },
+      { token: 'token' },
+    )
+    expect(unit.abbreviation).toBe('kgs')
+  })
+
+  it('changes the state', async () => {
+    patch.mockResolvedValue({ message: 'ok' })
+
+    await unitsService.updateStatus('unit-1', { active: false }, 'token')
+
+    expect(patch).toHaveBeenCalledWith(
+      '/unit-measure/unit-1/status',
+      { active: false },
+      { token: 'token' },
+    )
   })
 })
