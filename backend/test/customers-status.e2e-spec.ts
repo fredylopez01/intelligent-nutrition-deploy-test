@@ -39,7 +39,7 @@ describe("PATCH /api/v1/customers/:customerId/status (e2e)", () => {
     return `${runId}${sequence}`;
   };
 
-  const createCustomer = async (active: boolean) => {
+  const createCustomer = async (active: boolean, personActive = true) => {
     const person = await prisma.person.create({
       data: {
         documentTypeId,
@@ -49,6 +49,7 @@ describe("PATCH /api/v1/customers/:customerId/status (e2e)", () => {
         email: `cliente.${sequence}.${runId}@e2e.test`,
         phone: "3001112233",
         address: "Calle 20 # 10-15",
+        active: personActive,
         customer: {
           create: { fullName: `Cliente E2E ${sequence}`, active },
         },
@@ -62,6 +63,13 @@ describe("PATCH /api/v1/customers/:customerId/status (e2e)", () => {
     (
       await prisma.customer.findUniqueOrThrow({
         where: { personId: customerId },
+      })
+    ).active;
+
+  const isPersonActive = async (personId: string) =>
+    (
+      await prisma.person.findUniqueOrThrow({
+        where: { id: personId },
       })
     ).active;
 
@@ -173,6 +181,26 @@ describe("PATCH /api/v1/customers/:customerId/status (e2e)", () => {
 
       expect(await isActive(customerId)).toBe(true);
     });
+
+    it("changes customer status independently from the person status", async () => {
+      const customerId = await createCustomer(true, false);
+
+      await patchStatus(
+        customerId,
+        { active: false },
+        tokens.BRANCH_LEADER,
+      ).expect(200);
+
+      expect(await isActive(customerId)).toBe(false);
+      expect(await isPersonActive(customerId)).toBe(false);
+
+      await patchStatus(customerId, { active: true }, tokens.SUPERADMIN).expect(
+        200,
+      );
+
+      expect(await isActive(customerId)).toBe(true);
+      expect(await isPersonActive(customerId)).toBe(false);
+    });
   });
 
   describe("rejected roles", () => {
@@ -212,6 +240,12 @@ describe("PATCH /api/v1/customers/:customerId/status (e2e)", () => {
       ).expect(409);
 
       expect(errorCode(response.body)).toBe("ALREADY_IN_STATE");
+      expect(await isActive(customerId)).toBe(true);
+      expect(
+        await prisma.auditLog.count({
+          where: { entity: "CUSTOMER", entityId: customerId },
+        }),
+      ).toBe(0);
     });
 
     it("answers 404 for a customer that does not exist", async () => {
