@@ -210,7 +210,7 @@ model ProductImage {
   url        String   @db.Text
   fileName   String   @map("file_name") @db.VarChar(255)
   mimeType   String   @map("mime_type") @db.VarChar(100)
-  sizeBytes  Int      @map("size_bytes")
+  sizeBytes  BigInt   @map("size_bytes")
   isPrimary  Boolean  @default(false) @map("is_primary")
   sortOrder  Int      @default(0) @map("sort_order")
   createdBy  String   @map("created_by") @db.Uuid
@@ -219,6 +219,6 @@ model ProductImage {
   product Product     @relation(fields: [productId], references: [id])
   creator UserAccount @relation("ProductImageCreatedBy", fields: [createdBy], references: [personId])
 
-  @@index([productId])
+  @@index([productId], map: "idx_product_image_product_id")
   @@map("product_image")
 }
