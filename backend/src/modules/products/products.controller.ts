@@ -1,9 +1,19 @@
-import { Body, Controller, Ip, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Ip,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from "@nestjs/common";
 import { ProductsService } from "./products.service.js";
 import { CreateProductDto } from "./dto/create-product.dto.js";
 import { Roles } from "../../common/decorators/roles.decorator.js";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
+import { ListProductsQueryDto } from "./dto/list-products-query.dto.js";
 
 @Controller("products")
 export class ProductsController {
@@ -21,5 +31,17 @@ export class ProductsController {
       currentUser,
       ipAddress,
     );
+  }
+
+  @Get()
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  findAll(@Query() query: ListProductsQueryDto) {
+    return this.productsService.findAll(query);
+  }
+
+  @Get(":productId")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  findOne(@Param("productId", new ParseUUIDPipe()) productId: string) {
+    return this.productsService.findOne(productId);
   }
 }
