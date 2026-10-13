@@ -11,6 +11,8 @@ import { randomUUID } from "node:crypto";
 import { PrismaService } from "../../../database/prisma/prisma.service.js";
 import { StorageService } from "../../storage/storage.service.js";
 import { GenerateUploadUrlDto } from "./dto/generate-upload-url.dto.js";
+import { AuditService } from "../../audit/audit.service.js";
+import { PatchImageDto } from "./dto/patch-image.dto.js";
 
 const MAX_IMAGES_PER_PRODUCT = Number(process.env.PRODUCT_IMAGE_LIMIT ?? 5);
 const UPLOAD_URL_EXPIRES_IN = Number(
@@ -22,6 +24,7 @@ export class ProductImagesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly auditService: AuditService,
   ) {}
 
   async generateUploadUrl(productId: string, dto: GenerateUploadUrlDto) {
@@ -58,7 +61,12 @@ export class ProductImagesService {
     };
   }
 
-  async confirmImage(productId: string, dto: ConfirmImageDto, userId: string) {
+  async confirmImage(
+    productId: string,
+    dto: ConfirmImageDto,
+    userId: string,
+    ipAddress?: string,
+  ) {
     if (!dto.storageKey.startsWith(`products/${productId}/`)) {
       throw new ForbiddenException({
         code: "STORAGE_KEY_MISMATCH",
@@ -118,7 +126,7 @@ export class ProductImagesService {
         });
       }
 
-      return tx.productImage.create({
+      const created = await tx.productImage.create({
         data: {
           productId,
           storageKey: dto.storageKey,
@@ -131,6 +139,208 @@ export class ProductImagesService {
           createdBy: userId,
         },
       });
+
+      await this.auditService.createAuditLog(
+        {
+          userId,
+          action: "CREATE",
+          entity: "PRODUCT_IMAGE",
+          entityId: created.id,
+          newData: {
+            productId,
+            storageKey: created.storageKey,
+            url: created.url,
+            fileName: created.fileName,
+            mimeType: created.mimeType,
+            sizeBytes: Number(created.sizeBytes),
+            isPrimary: created.isPrimary,
+            sortOrder: created.sortOrder,
+          },
+          reason: `Creación de imagen ${created.fileName} para el producto ${productId}`,
+          ipAddress,
+        },
+        tx,
+      );
+
+      return created;
+    });
+  }
+
+  async listImages(productId: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true },
+    });
+    if (!product) throw new NotFoundException("Product not found");
+
+    const images = await this.prisma.productImage.findMany({
+      where: { productId },
+      orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
+      select: {
+        id: true,
+        url: true,
+        fileName: true,
+        mimeType: true,
+        sizeBytes: true,
+        isPrimary: true,
+        sortOrder: true,
+        createdAt: true,
+      },
+    });
+
+    return images;
+  }
+
+  async patchImage(
+    productId: string,
+    imageId: string,
+    dto: PatchImageDto,
+    userId: string,
+    ipAddress?: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const image = await tx.productImage.findFirst({
+        where: { id: imageId, productId },
+      });
+      if (!image) throw new NotFoundException("Image not found");
+
+      const allImages = await tx.productImage.findMany({
+        where: { productId },
+        orderBy: { sortOrder: "asc" },
+      });
+
+      const oldData = {
+        isPrimary: image.isPrimary,
+        sortOrder: image.sortOrder,
+      };
+
+      if (
+        dto.isPrimary === false &&
+        image.isPrimary &&
+        allImages.length === 1
+      ) {
+        throw new ConflictException({
+          code: "PRIMARY_IMAGE_REQUIRED",
+          message: "Product must have at least one primary image",
+        });
+      }
+
+      if (dto.sortOrder !== undefined && dto.sortOrder !== image.sortOrder) {
+        const others = allImages.filter((i) => i.id !== imageId);
+        const reordered = [
+          ...others.slice(0, dto.sortOrder),
+          image,
+          ...others.slice(dto.sortOrder),
+        ];
+        for (let i = 0; i < reordered.length; i++) {
+          await tx.productImage.update({
+            where: { id: reordered[i].id },
+            data: { sortOrder: i },
+          });
+        }
+      }
+
+      if (dto.isPrimary === true && !image.isPrimary) {
+        await tx.productImage.updateMany({
+          where: { productId, isPrimary: true },
+          data: { isPrimary: false },
+        });
+        await tx.productImage.update({
+          where: { id: imageId },
+          data: { isPrimary: true },
+        });
+      }
+
+      const updated = await tx.productImage.findUniqueOrThrow({
+        where: { id: imageId },
+      });
+
+      const newData = {
+        isPrimary: updated.isPrimary,
+        sortOrder: updated.sortOrder,
+      };
+
+      const hasChange =
+        oldData.isPrimary !== newData.isPrimary ||
+        oldData.sortOrder !== newData.sortOrder;
+
+      if (hasChange) {
+        await this.auditService.createAuditLog(
+          {
+            userId,
+            action: "UPDATE",
+            entity: "PRODUCT_IMAGE",
+            entityId: imageId,
+            oldData: { ...oldData, productId },
+            newData: { ...newData, productId },
+            reason: `Actualización de imagen ${updated.fileName} del producto ${productId}`,
+            ipAddress,
+          },
+          tx,
+        );
+      }
+
+      return updated;
+    });
+  }
+
+  async deleteImage(
+    productId: string,
+    imageId: string,
+    userId: string,
+    ipAddress?: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const image = await tx.productImage.findFirst({
+        where: { id: imageId, productId },
+      });
+      if (!image) throw new NotFoundException("Image not found");
+
+      await this.storage.deleteObject(image.storageKey);
+      await tx.productImage.delete({ where: { id: imageId } });
+
+      const remaining = await tx.productImage.findMany({
+        where: { productId },
+        orderBy: { sortOrder: "asc" },
+      });
+
+      if (image.isPrimary && remaining.length > 0) {
+        await tx.productImage.update({
+          where: { id: remaining[0].id },
+          data: { isPrimary: true },
+        });
+      }
+
+      for (let i = 0; i < remaining.length; i++) {
+        await tx.productImage.update({
+          where: { id: remaining[i].id },
+          data: { sortOrder: i },
+        });
+      }
+
+      await this.auditService.createAuditLog(
+        {
+          userId,
+          action: "DELETE",
+          entity: "PRODUCT_IMAGE",
+          entityId: imageId,
+          oldData: {
+            productId,
+            storageKey: image.storageKey,
+            url: image.url,
+            fileName: image.fileName,
+            mimeType: image.mimeType,
+            sizeBytes: Number(image.sizeBytes),
+            isPrimary: image.isPrimary,
+            sortOrder: image.sortOrder,
+          },
+          reason: `Eliminación de imagen ${image.fileName} del producto ${productId}`,
+          ipAddress,
+        },
+        tx,
+      );
+
+      return { deleted: true };
     });
   }
 }
