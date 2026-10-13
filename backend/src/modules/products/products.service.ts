@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -9,6 +10,7 @@ import { AuditService } from "../audit/audit.service.js";
 import { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CreateProductDto } from "./dto/create-product.dto.js";
 import { Prisma } from "../../../generated/prisma/client.js";
+import { ListProductsQueryDto } from "./dto/list-products-query.dto.js";
 
 @Injectable()
 export class ProductsService {
@@ -143,5 +145,167 @@ export class ProductsService {
       }
       throw error;
     }
+  }
+
+  async findAll(query: ListProductsQueryDto) {
+    const {
+      page,
+      limit,
+      search,
+      categoryId,
+      unitOfMeasureId,
+      active,
+      sortBy,
+      sortOrder,
+    } = query;
+
+    if (search !== undefined && search.length < 2) {
+      throw new BadRequestException({
+        code: "SEARCH_TOO_SHORT",
+        message: "Search must contain at least 2 characters.",
+        details: { minLength: 2 },
+      });
+    }
+
+    const where: Prisma.ProductWhereInput = {
+      ...(active === undefined ? {} : { active }),
+      ...(categoryId ? { categoryId } : {}),
+      ...(unitOfMeasureId ? { unitOfMeasureId } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { referenceCode: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+
+    const skip = (page - 1) * limit;
+
+    const [total, products] = await this.prisma.$transaction([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { [sortBy]: sortOrder },
+        select: {
+          id: true,
+          name: true,
+          referenceCode: true,
+          description: true,
+          price: true,
+          active: true,
+          createdAt: true,
+          updatedAt: true,
+          category: {
+            select: { id: true, name: true },
+          },
+          unitOfMeasure: {
+            select: { id: true, name: true, abreviation: true },
+          },
+          images: {
+            where: { isPrimary: true },
+            select: { url: true },
+            take: 1,
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data: products.map((product) => this.toListItem(product)),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findOne(productId: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: {
+        id: true,
+        name: true,
+        referenceCode: true,
+        description: true,
+        price: true,
+        active: true,
+        createdAt: true,
+        updatedAt: true,
+        category: {
+          select: { id: true, name: true },
+        },
+        unitOfMeasure: {
+          select: { id: true, name: true, abreviation: true },
+        },
+        images: {
+          where: { isPrimary: true },
+          select: { url: true },
+          take: 1,
+        },
+      },
+    });
+
+    if (!product) {
+      throw new NotFoundException({
+        code: "PRODUCT_NOT_FOUND",
+        message: "Product not found",
+      });
+    }
+
+    return this.toDetail(product);
+  }
+
+  private toListItem(product: {
+    id: string;
+    name: string;
+    referenceCode: string;
+    description: string | null;
+    price: Prisma.Decimal;
+    active: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+    category: { id: string; name: string };
+    unitOfMeasure: { id: string; name: string; abreviation: string };
+    images: { url: string }[];
+  }) {
+    return {
+      id: product.id,
+      name: product.name,
+      referenceCode: product.referenceCode,
+      description: product.description,
+      category: product.category,
+      unitOfMeasure: {
+        id: product.unitOfMeasure.id,
+        name: product.unitOfMeasure.name,
+        abbreviation: product.unitOfMeasure.abreviation,
+      },
+      price: product.price.toFixed(2),
+      active: product.active,
+      primaryImageUrl: product.images[0]?.url ?? null,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+    };
+  }
+
+  private toDetail(product: {
+    id: string;
+    name: string;
+    referenceCode: string;
+    description: string | null;
+    price: Prisma.Decimal;
+    active: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+    category: { id: string; name: string };
+    unitOfMeasure: { id: string; name: string; abreviation: string };
+    images: { url: string }[];
+  }) {
+    return this.toListItem(product);
   }
 }
