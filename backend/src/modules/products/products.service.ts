@@ -471,6 +471,11 @@ export class ProductsService {
           price: true,
           active: true,
           updatedAt: true,
+          images: {
+            where: { isPrimary: true },
+            select: { url: true },
+            take: 1,
+          },
         },
       });
 
@@ -483,6 +488,7 @@ export class ProductsService {
         unitOfMeasureId: finalProduct.unitOfMeasureId,
         price: finalProduct.price.toFixed(2),
         active: finalProduct.active,
+        primaryImageUrl: finalProduct.images[0]?.url ?? null,
         updatedAt: finalProduct.updatedAt,
       };
     });
