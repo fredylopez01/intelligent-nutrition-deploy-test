@@ -40,6 +40,11 @@ export function toPriceString(price: string): string {
   return Number(price.trim().replace(',', '.')).toFixed(2)
 }
 
+export function toPriceInput(price: string): string {
+  const value = Number(price)
+  return Number.isInteger(value) ? String(value) : price
+}
+
 export function isValidPrice(price: string): boolean {
   return PRICE_PATTERN.test(price.trim())
 }
@@ -111,6 +116,8 @@ export function resolveProductError(error: unknown, fallback: string): string {
   switch (error.code) {
     case 'SEARCH_TOO_SHORT':
       return 'Escribe al menos 2 caracteres para buscar.'
+    case 'FIELD_NOT_EDITABLE':
+      return 'El código de referencia no se puede cambiar después de crear el producto.'
   }
   if (error.status === 403) return 'No tienes permiso para realizar esta acción.'
   if (error.status === 404) return 'Este producto ya no existe. Recarga el listado.'

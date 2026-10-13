@@ -1,14 +1,17 @@
 import { Link, useLocation, useParams } from 'react-router-dom'
 
+import { ProductDataForm } from '../../components/products/ProductDataForm'
 import { ProductGallery } from '../../components/products/ProductGallery'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { StatusBadge } from '../../components/users/StatusBadge'
+import { useAuth } from '../../hooks/useAuth'
 import { useProduct } from '../../hooks/useProduct'
 import { AppLayout } from '../../layouts/AppLayout'
+import { hasRole } from '../../utils/categories'
 import { formatDateTime } from '../../utils/format'
-import { formatPrice } from '../../utils/products'
+import { PRODUCT_MANAGE_ROLES, formatPrice } from '../../utils/products'
 
 import './ProductDetailPage.css'
 
@@ -17,7 +20,9 @@ const BACK_LABEL = 'Volver al listado de productos'
 export function ProductDetailPage() {
   const { productId } = useParams()
   const location = useLocation()
+  const { user } = useAuth()
   const { status, product, error, refetch } = useProduct(productId)
+  const canManage = hasRole(PRODUCT_MANAGE_ROLES, user?.role.name)
 
   const backTo = (location.state as { from?: string } | null)?.from ?? '/catalogo'
 
@@ -134,24 +139,12 @@ export function ProductDetailPage() {
           <h2 id="product-data-title" className="product-page__panel-title">
             Datos del producto
           </h2>
-          <dl className="product-page__facts product-page__facts--panel">
-            <div className="product-page__fact">
-              <dt>Nombre</dt>
-              <dd>{product.name}</dd>
-            </div>
-            <div className="product-page__fact">
-              <dt>Código de referencia</dt>
-              <dd>{product.referenceCode}</dd>
-            </div>
-            <div className="product-page__fact">
-              <dt>Descripción</dt>
-              <dd>{product.description || 'Sin descripción'}</dd>
-            </div>
-            <div className="product-page__fact">
-              <dt>Precio de venta</dt>
-              <dd className="product-page__numeric">{formatPrice(product.price)}</dd>
-            </div>
-          </dl>
+          <p className="product-page__panel-text">
+            {canManage
+              ? 'Pulsa "Editar producto" para cambiar el nombre, la descripción, la categoría, la unidad o el precio. El código de referencia no se puede cambiar.'
+              : 'Consulta los datos del producto. Solo el superadmin y el líder de sede pueden editarlo.'}
+          </p>
+          <ProductDataForm product={product} canEdit={canManage} onSaved={refetch} />
         </section>
       </div>
     </AppLayout>
