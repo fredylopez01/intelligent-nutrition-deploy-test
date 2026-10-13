@@ -5,6 +5,7 @@ import {
   Ip,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from "@nestjs/common";
@@ -14,6 +15,7 @@ import { Roles } from "../../common/decorators/roles.decorator.js";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { ListProductsQueryDto } from "./dto/list-products-query.dto.js";
+import { UpdateProductDto } from "./dto/update-product.dto.js";
 
 @Controller("products")
 export class ProductsController {
@@ -43,5 +45,21 @@ export class ProductsController {
   @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   findOne(@Param("productId", new ParseUUIDPipe()) productId: string) {
     return this.productsService.findOne(productId);
+  }
+
+  @Patch(":productId")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
+  update(
+    @Param("productId", new ParseUUIDPipe()) productId: string,
+    @Body() updateProductDto: UpdateProductDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.productsService.update(
+      productId,
+      updateProductDto,
+      currentUser,
+      ipAddress,
+    );
   }
 }
