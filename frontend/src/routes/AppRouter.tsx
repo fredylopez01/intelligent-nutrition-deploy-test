@@ -5,6 +5,8 @@ import { ActivateAccountPage } from '../pages/activation/ActivateAccountPage'
 import { AuditLogsPage } from '../pages/audit-logs/AuditLogsPage'
 import { BranchesPage } from '../pages/branches/BranchesPage'
 import { CategoriesPage } from '../pages/catalog/CategoriesPage'
+import { ProductDetailPage } from '../pages/catalog/ProductDetailPage'
+import { ProductsPage } from '../pages/catalog/ProductsPage'
 import { UnitsPage } from '../pages/catalog/UnitsPage'
 import { ComingSoonPage } from '../pages/ComingSoonPage'
 import { CustomerDetailPage } from '../pages/customers/CustomerDetailPage'
@@ -62,6 +64,22 @@ export function AppRouter() {
         }
       />
 
+      <Route
+        path="/catalogo"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/catalogo']}>
+            <ProductsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/catalogo/productos/:productId"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/catalogo']}>
+            <ProductDetailPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/catalogo/categorias"
         element={
