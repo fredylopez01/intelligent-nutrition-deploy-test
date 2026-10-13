@@ -1,21 +1,33 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { categoriesService } from '../../services/categories.service'
 import { ApiError } from '../../services/http'
 import { productsService } from '../../services/products.service'
-import { buildProduct } from '../../test-utils/products'
+import { unitsService } from '../../services/units.service'
+import { CATEGORIES, UNITS, buildProduct, optionsPage } from '../../test-utils/products'
 
 import { ProductDetailPage } from './ProductDetailPage'
 
+const auth = vi.hoisted(() => ({ role: 'SUPERADMIN' }))
+
 vi.mock('../../services/products.service', () => ({
-  productsService: { getById: vi.fn() },
+  productsService: { getById: vi.fn(), update: vi.fn() },
+}))
+
+vi.mock('../../services/categories.service', () => ({
+  categoriesService: { list: vi.fn() },
+}))
+
+vi.mock('../../services/units.service', () => ({
+  unitsService: { list: vi.fn() },
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => ({ token: 'test-token', user: { id: 'me', role: { name: auth.role } } }),
 }))
 
 vi.mock('../../layouts/AppLayout', () => ({
@@ -42,6 +54,7 @@ vi.mock('../../layouts/AppLayout', () => ({
 }))
 
 const getProduct = vi.mocked(productsService.getById)
+const updateProduct = vi.mocked(productsService.update)
 
 const whey = buildProduct()
 
@@ -67,7 +80,10 @@ async function waitForProduct() {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  auth.role = 'SUPERADMIN'
   getProduct.mockResolvedValue(whey)
+  vi.mocked(categoriesService.list).mockResolvedValue(optionsPage(CATEGORIES))
+  vi.mocked(unitsService.list).mockResolvedValue(optionsPage(UNITS))
 })
 
 describe('ProductDetailPage view', () => {
@@ -81,7 +97,7 @@ describe('ProductDetailPage view', () => {
     expect(profile.getByText('$ 145.000')).toBeInTheDocument()
     expect(profile.getByText('Proteínas')).toBeInTheDocument()
     expect(profile.getByText('Unidad (und)')).toBeInTheDocument()
-    expect(screen.getByText('Proteína de suero')).toBeInTheDocument()
+    expect(screen.getByLabelText('Descripción')).toHaveValue('Proteína de suero')
     expect(screen.getByRole('link', { name: 'Volver al listado de productos' })).toHaveAttribute(
       'href',
       '/catalogo?pagina=2',
@@ -148,5 +164,34 @@ describe('ProductDetailPage view', () => {
     await waitForProduct()
 
     expect(screen.getByRole('status')).toHaveTextContent('Este producto está inactivo')
+  })
+})
+
+describe('ProductDetailPage edit', () => {
+  it('edits the product from the detail and shows the saved values', async () => {
+    updateProduct.mockResolvedValue(whey)
+    const { user } = renderPage()
+    await waitForProduct()
+
+    await user.click(screen.getByRole('button', { name: 'Editar producto' }))
+    await waitFor(() => expect(screen.getByLabelText('Categoría')).toHaveValue('cat-protein'))
+    getProduct.mockResolvedValue(buildProduct({ price: '149900.00' }))
+    await user.clear(screen.getByLabelText('Precio de venta (COP)'))
+    await user.type(screen.getByLabelText('Precio de venta (COP)'), '149900')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    expect(await screen.findByText('Producto actualizado exitosamente.')).toBeInTheDocument()
+    expect(updateProduct).toHaveBeenCalledWith('product-whey', { price: '149900.00' }, 'test-token')
+    const profile = within(screen.getByRole('region', { name: 'Whey Protein 2 lb' }))
+    expect(await profile.findByText('$ 149.900')).toBeInTheDocument()
+  })
+
+  it('only lets the branch assistant consult', async () => {
+    auth.role = 'BRANCH_ASSISTANT'
+    renderPage()
+    await waitForProduct()
+
+    expect(screen.queryByRole('button', { name: 'Editar producto' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /producto$/ })).not.toBeInTheDocument()
   })
 })

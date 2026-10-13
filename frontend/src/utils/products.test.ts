@@ -7,6 +7,7 @@ import {
   isValidPrice,
   productFieldError,
   productSchema,
+  toPriceInput,
   toPriceString,
 } from './products'
 
@@ -30,6 +31,11 @@ describe('product prices', () => {
   it('sends the price with two decimals, accepting a comma', () => {
     expect(toPriceString('145000')).toBe('145000.00')
     expect(toPriceString(' 89900,5 ')).toBe('89900.50')
+  })
+
+  it('shows a whole price without decimals in the form', () => {
+    expect(toPriceInput('145000.00')).toBe('145000')
+    expect(toPriceInput('89900.50')).toBe('89900.50')
   })
 
   it.each([

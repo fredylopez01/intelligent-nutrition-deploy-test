@@ -3,6 +3,7 @@ import type {
   Product,
   ProductsListParams,
   ProductsListResponse,
+  UpdateProductPayload,
 } from '../types/product'
 
 import { http } from './http'
@@ -39,4 +40,7 @@ export const productsService = {
 
   create: (payload: CreateProductPayload, token: string | null) =>
     http.post<Product>('/products', payload, { token }),
+
+  update: (productId: string, payload: UpdateProductPayload, token: string | null) =>
+    http.patch<Product>(`/products/${productId}`, payload, { token }),
 }

@@ -59,3 +59,11 @@ export interface CreateProductPayload {
   unitOfMeasureId: string
   price: string
 }
+
+export interface UpdateProductPayload {
+  name?: string
+  description?: string
+  categoryId?: string
+  unitOfMeasureId?: string
+  price?: string
+}
