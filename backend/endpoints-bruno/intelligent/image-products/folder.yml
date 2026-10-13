@@ -1,0 +1,7 @@
+info:
+  name: image-products
+  type: folder
+  seq: 12
+
+request:
+  auth: inherit

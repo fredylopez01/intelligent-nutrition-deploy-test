@@ -1,0 +1,26 @@
+info:
+  name: upload_url
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/products/{{productId}}/images/upload-url"
+  body:
+    type: json
+    data: |-
+      {
+        "fileName": "proteina1.webp",
+        "mimeType": "image/webp",
+        "sizeBytes": 66236
+      }
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
