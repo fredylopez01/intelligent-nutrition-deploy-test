@@ -205,3 +205,13 @@
 .products-table th.products-table__col-price {
   text-align: right;
 }
+
+.products-table__col-actions {
+  width: 48px;
+  text-align: center;
+}
+
+.products-table th.products-table__col-actions,
+.products-table td.products-table__col-actions {
+  padding-inline: 0.25rem;
+}

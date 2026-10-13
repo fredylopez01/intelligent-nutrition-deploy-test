@@ -10,15 +10,21 @@ import { Modal } from '../../components/ui/Modal'
 import { Pagination } from '../../components/ui/Pagination'
 import { ReloadButton } from '../../components/ui/ReloadButton'
 import { SearchBar } from '../../components/ui/SearchBar'
+import { StatusConfirmation } from '../../components/ui/StatusConfirmation'
 import { TableSkeleton } from '../../components/ui/TableSkeleton'
 import { useAuth } from '../../hooks/useAuth'
 import { useCatalogOptions } from '../../hooks/useCatalogOptions'
 import { usePagination } from '../../hooks/usePagination'
 import { useProducts } from '../../hooks/useProducts'
 import { AppLayout } from '../../layouts/AppLayout'
+import { productsService } from '../../services/products.service'
 import type { Product } from '../../types/product'
 import { hasRole } from '../../utils/categories'
-import { PRODUCT_MANAGE_ROLES } from '../../utils/products'
+import {
+  PRODUCT_MANAGE_ROLES,
+  productStatusDescription,
+  resolveProductError,
+} from '../../utils/products'
 
 import './CatalogPage.css'
 
@@ -32,7 +38,7 @@ const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
 const FILTER_DEFAULTS = { categoria: 'todos', unidad: 'todos', estado: 'todos' }
 
 export function ProductsPage() {
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const location = useLocation()
   const canManage = hasRole(PRODUCT_MANAGE_ROLES, user?.role.name)
   const filterOptions = useCatalogOptions({ activeOnly: false })
@@ -51,6 +57,7 @@ export function ProductsPage() {
     clearFilters,
   } = usePagination({ filters: FILTER_DEFAULTS })
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [statusProduct, setStatusProduct] = useState<Product | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, products, meta, error, refetch } = useProducts({
@@ -79,6 +86,15 @@ export function ProductsPage() {
     )
     if (page === 1) refetch()
     else setPage(1)
+  }
+
+  const handleChangeStatus = async (product: Product) => {
+    await productsService.updateStatus(product.id, { active: !product.active }, token)
+    setStatusProduct(null)
+    setFeedbackMessage(
+      `El producto ${product.name} ahora está ${product.active ? 'inactivo' : 'activo'}.`,
+    )
+    refetch()
   }
 
   const renderList = () => {
@@ -116,7 +132,17 @@ export function ProductsPage() {
       )
     }
 
-    return <ProductsTable products={products} returnTo={returnTo} />
+    return (
+      <ProductsTable
+        products={products}
+        returnTo={returnTo}
+        canManage={canManage}
+        onToggleStatus={(product) => {
+          setFeedbackMessage(null)
+          setStatusProduct(product)
+        }}
+      />
+    )
   }
 
   return (
@@ -215,6 +241,27 @@ export function ProductsPage() {
         onClose={() => setIsCreateOpen(false)}
       >
         <CreateProductForm onCreated={handleCreated} onCancel={() => setIsCreateOpen(false)} />
+      </Modal>
+
+      <Modal
+        open={statusProduct !== null}
+        title={statusProduct?.active ? '¿Desactivar este producto?' : '¿Activar este producto?'}
+        description={statusProduct ? productStatusDescription(statusProduct) : undefined}
+        onClose={() => setStatusProduct(null)}
+      >
+        {statusProduct && (
+          <StatusConfirmation
+            active={statusProduct.active}
+            onConfirm={() => handleChangeStatus(statusProduct)}
+            onCancel={() => setStatusProduct(null)}
+            resolveError={(error) =>
+              resolveProductError(
+                error,
+                'No fue posible cambiar el estado del producto. Intenta de nuevo.',
+              )
+            }
+          />
+        )}
       </Modal>
     </AppLayout>
   )

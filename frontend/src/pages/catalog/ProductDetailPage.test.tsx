@@ -15,7 +15,7 @@ import { ProductDetailPage } from './ProductDetailPage'
 const auth = vi.hoisted(() => ({ role: 'SUPERADMIN' }))
 
 vi.mock('../../services/products.service', () => ({
-  productsService: { getById: vi.fn(), update: vi.fn() },
+  productsService: { getById: vi.fn(), update: vi.fn(), updateStatus: vi.fn() },
 }))
 
 vi.mock('../../services/categories.service', () => ({
@@ -55,6 +55,7 @@ vi.mock('../../layouts/AppLayout', () => ({
 
 const getProduct = vi.mocked(productsService.getById)
 const updateProduct = vi.mocked(productsService.update)
+const updateStatus = vi.mocked(productsService.updateStatus)
 
 const whey = buildProduct()
 
@@ -193,5 +194,31 @@ describe('ProductDetailPage edit', () => {
 
     expect(screen.queryByRole('button', { name: 'Editar producto' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /producto$/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('ProductDetailPage state', () => {
+  it('deactivates the product after confirming', async () => {
+    updateStatus.mockResolvedValue({ message: 'ok' })
+    const { user } = renderPage()
+    await waitForProduct()
+
+    await user.click(screen.getByRole('button', { name: 'Desactivar producto' }))
+    const dialog = screen.getByRole('dialog', { name: '¿Desactivar este producto?' })
+    expect(dialog).toHaveTextContent('Su historial y existencias se conservan')
+    getProduct.mockResolvedValue(buildProduct({ active: false }))
+    await user.click(within(dialog).getByRole('button', { name: 'Sí, desactivar' }))
+
+    expect(await screen.findByText('El producto ahora está inactivo.')).toBeInTheDocument()
+    expect(updateStatus).toHaveBeenCalledWith('product-whey', { active: false }, 'test-token')
+    expect(await screen.findByRole('button', { name: 'Activar producto' })).toBeInTheDocument()
+  })
+
+  it('lets the branch leader change the state, as the contract allows', async () => {
+    auth.role = 'BRANCH_LEADER'
+    renderPage()
+    await waitForProduct()
+
+    expect(screen.getByRole('button', { name: 'Desactivar producto' })).toBeInTheDocument()
   })
 })

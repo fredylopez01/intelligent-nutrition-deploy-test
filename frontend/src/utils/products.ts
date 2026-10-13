@@ -114,6 +114,8 @@ export function productFieldError(
 export function resolveProductError(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) return fallback
   switch (error.code) {
+    case 'ALREADY_IN_STATE':
+      return 'El producto ya tenía ese estado. Recarga para ver su estado actual.'
     case 'SEARCH_TOO_SHORT':
       return 'Escribe al menos 2 caracteres para buscar.'
     case 'FIELD_NOT_EDITABLE':
@@ -131,3 +133,9 @@ export const productSchema = z.object({
 })
 
 export type ProductFormValues = z.infer<typeof productSchema>
+
+export function productStatusDescription(product: { name: string; active: boolean }): string {
+  return product.active
+    ? `${product.name} no se podrá asignar a sedes, ni agregar a ventas o compras nuevas, ni recibir reposición. Su historial y existencias se conservan.`
+    : `${product.name} volverá a estar disponible para sedes, ventas, compras y reposición.`
+}
