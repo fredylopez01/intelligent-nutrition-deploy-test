@@ -1,17 +1,24 @@
+import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
 
+import { CreateProductForm } from '../../components/products/CreateProductForm'
 import { ProductsTable } from '../../components/products/ProductsTable'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { Modal } from '../../components/ui/Modal'
 import { Pagination } from '../../components/ui/Pagination'
 import { ReloadButton } from '../../components/ui/ReloadButton'
 import { SearchBar } from '../../components/ui/SearchBar'
 import { TableSkeleton } from '../../components/ui/TableSkeleton'
+import { useAuth } from '../../hooks/useAuth'
 import { useCatalogOptions } from '../../hooks/useCatalogOptions'
 import { usePagination } from '../../hooks/usePagination'
 import { useProducts } from '../../hooks/useProducts'
 import { AppLayout } from '../../layouts/AppLayout'
+import type { Product } from '../../types/product'
+import { hasRole } from '../../utils/categories'
+import { PRODUCT_MANAGE_ROLES } from '../../utils/products'
 
 import './CatalogPage.css'
 
@@ -25,10 +32,13 @@ const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
 const FILTER_DEFAULTS = { categoria: 'todos', unidad: 'todos', estado: 'todos' }
 
 export function ProductsPage() {
+  const { user } = useAuth()
   const location = useLocation()
+  const canManage = hasRole(PRODUCT_MANAGE_ROLES, user?.role.name)
   const filterOptions = useCatalogOptions({ activeOnly: false })
 
   const {
+    page,
     search,
     filters,
     hasFilters,
@@ -40,6 +50,8 @@ export function ProductsPage() {
     setFilter,
     clearFilters,
   } = usePagination({ filters: FILTER_DEFAULTS })
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, products, meta, error, refetch } = useProducts({
     ...params,
@@ -53,6 +65,20 @@ export function ProductsPage() {
   const handleSearch = (term: string) => {
     if (term === search) refetch()
     else applySearch(term)
+  }
+
+  const handleOpenCreate = () => {
+    setFeedbackMessage(null)
+    setIsCreateOpen(true)
+  }
+
+  const handleCreated = (product: Product) => {
+    setIsCreateOpen(false)
+    setFeedbackMessage(
+      `El producto ${product.name} (${product.referenceCode}) quedó registrado y activo.`,
+    )
+    if (page === 1) refetch()
+    else setPage(1)
   }
 
   const renderList = () => {
@@ -84,7 +110,9 @@ export function ProductsPage() {
           variant="sin-registros"
           title="Todavía no hay productos en el catálogo"
           description="Un producto se registra una sola vez y luego se asigna a las sedes que lo venden."
-        />
+        >
+          {canManage && <Button onClick={handleOpenCreate}>Registrar producto</Button>}
+        </EmptyState>
       )
     }
 
@@ -147,7 +175,18 @@ export function ProductsPage() {
           <option value="inactivos">Inactivos</option>
         </select>
         <ReloadButton onReload={refetch} loading={status === 'loading'} />
+        {canManage && (
+          <Button className="catalog-page__primary" onClick={handleOpenCreate}>
+            Registrar producto
+          </Button>
+        )}
       </div>
+
+      {feedbackMessage && (
+        <div className="catalog-page__feedback">
+          <Alert tone="success">{feedbackMessage}</Alert>
+        </div>
+      )}
 
       <div className="catalog-page__card">{renderList()}</div>
 
@@ -168,6 +207,15 @@ export function ProductsPage() {
           Abre un producto para ver todos sus datos, sus imágenes y actualizarlo.
         </p>
       </div>
+
+      <Modal
+        open={isCreateOpen}
+        title="Registrar producto"
+        description="El producto se registra una vez en el catálogo maestro y luego se asigna a las sedes."
+        onClose={() => setIsCreateOpen(false)}
+      >
+        <CreateProductForm onCreated={handleCreated} onCancel={() => setIsCreateOpen(false)} />
+      </Modal>
     </AppLayout>
   )
 }
