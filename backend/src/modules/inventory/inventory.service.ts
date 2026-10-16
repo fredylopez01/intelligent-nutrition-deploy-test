@@ -16,6 +16,7 @@ import {
 } from "./dto/list-branch-inventory-query.dto.js";
 import { Prisma } from "../../../generated/prisma/client.js";
 import { UpdateMinimumStockDto } from "./dto/update-minimunstock.dto.js";
+import { ListConsolidatedQueryDto } from "./dto/list-consolidated-query.dto.js";
 
 @Injectable()
 export class InventoryService {
@@ -596,6 +597,118 @@ export class InventoryService {
           branchName: b.name,
           quantity: b.branchInventories.reduce((sum, l) => sum + l.quantity, 0),
         })),
+      },
+    };
+  }
+
+  async getConsolidated(query: ListConsolidatedQueryDto) {
+    const { page, limit, search, categoryId } = query;
+
+    if (search !== undefined && search.length < 2) {
+      throw new BadRequestException({
+        code: "SEARCH_TOO_SHORT",
+        message: "Search must contain at least 2 characters.",
+        details: { minLength: 2 },
+      });
+    }
+
+    const productIdsWithStock = await this.prisma.branchInventory.findMany({
+      distinct: ["productId"],
+      select: { productId: true },
+    });
+
+    if (productIdsWithStock.length === 0) {
+      return {
+        data: [],
+        meta: { page, limit, total: 0, totalPages: 0 },
+      };
+    }
+
+    const where: Prisma.ProductWhereInput = {
+      id: { in: productIdsWithStock.map((x) => x.productId) },
+      ...(categoryId ? { categoryId } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { referenceCode: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+
+    const skip = (page - 1) * limit;
+
+    const [total, products] = await this.prisma.$transaction([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          referenceCode: true,
+          inventories: {
+            select: {
+              quantity: true,
+              minimumStock: true,
+              branch: {
+                select: { id: true, name: true, active: true },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data: products.map((p) => {
+        const branchMap = new Map<
+          string,
+          {
+            branchId: string;
+            branchName: string;
+            quantity: number;
+            minimumStock: number;
+          }
+        >();
+
+        for (const inv of p.inventories) {
+          const key = inv.branch.id;
+          const existing = branchMap.get(key);
+          if (existing) {
+            existing.quantity += inv.quantity;
+          } else {
+            branchMap.set(key, {
+              branchId: inv.branch.id,
+              branchName: inv.branch.name,
+              quantity: inv.quantity,
+              minimumStock: inv.minimumStock,
+            });
+          }
+        }
+
+        const branches = Array.from(branchMap.values());
+        const branchesTotal = branches.reduce((s, b) => s + b.quantity, 0);
+
+        return {
+          product: {
+            id: p.id,
+            name: p.name,
+            referenceCode: p.referenceCode,
+          },
+          branchesTotal,
+          total: branchesTotal,
+          branches,
+        };
+      }),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
       },
     };
   }
