@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -64,6 +64,16 @@ describe('CreateProductForm', () => {
 
     expect(listCategories).toHaveBeenCalledWith({ page: 1, limit: 100, active: true }, 'test-token')
     expect(listUnits).toHaveBeenCalledWith({ page: 1, limit: 100, active: true }, 'test-token')
+    expect(
+      within(screen.getByLabelText('Categoría'))
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Selecciona', 'Proteínas', 'Vitaminas'])
+    expect(
+      within(screen.getByLabelText('Unidad de medida'))
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Selecciona', 'Unidad (und)', 'Kilogramo (kg)'])
   })
 
   it('sends the product with the price as text with two decimals', async () => {
