@@ -25,7 +25,7 @@ export class AssignProductDto {
 
   @IsDateString(
     { strict: true },
-    { message: "expirationDate must be a valid ISO 8601 date" },
+    { message: "expirationDate must be a valid ISO 8601 date (YYYY-MM-DD)" },
   )
   expirationDate!: string;
 
