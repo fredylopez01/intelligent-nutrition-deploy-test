@@ -65,7 +65,7 @@ export class UnitMeasureController {
   }
 
   @Patch(":unitMeasureId/status")
-  @Roles("SUPERADMIN", "BRANCH_LEADER")
+  @Roles("SUPERADMIN")
   updateStatus(
     @Param("unitMeasureId", new ParseUUIDPipe()) unitMeasureId: string,
     @Body() UpdateUnitMeasureStatusDto: UpdateUnitMeasureStatusDto,
