@@ -79,6 +79,7 @@ model UserAccount {
   branchAssignments UserBranch[]
   auditLogs         AuditLog[]
   createdImages     ProductImage[] @relation("ProductImageCreatedBy")
+  inventoryMovements InventoryMovement[]
 
   @@map("user_account")
 }
@@ -117,6 +118,9 @@ model Branch {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   userAssignments UserBranch[]
+  branchInventories BranchInventory[]
+  inventoryMovements   InventoryMovement[] @relation("InventoryMovementDestinationBranch")
+  originMovements      InventoryMovement[] @relation("InventoryMovementOriginBranch")
 
   @@map("branch")
 }
@@ -197,6 +201,8 @@ model Product {
   category      Category       @relation(fields: [categoryId], references: [id])
   unitOfMeasure UnitMeasure    @relation(fields: [unitOfMeasureId], references: [id])
   images        ProductImage[]
+  inventories   BranchInventory[]
+  movements     InventoryMovement[]
 
   @@index([categoryId])
   @@index([unitOfMeasureId])
@@ -221,4 +227,58 @@ model ProductImage {
 
   @@index([productId], map: "idx_product_image_product_id")
   @@map("product_image")
+}
+
+enum InventoryMovementType {
+  ENTRY
+  EXIT
+  ADJUSTMENT_ENTRY
+  ADJUSTMENT_EXIT
+  TRANSFER
+}
+
+model BranchInventory {
+  id             String   @id @default(uuid()) @db.Uuid
+  branchId       String   @map("branch_id") @db.Uuid
+  productId      String   @map("product_id") @db.Uuid
+  quantity       Int      @default(0)
+  minimumStock   Int      @default(0) @map("minimum_stock")
+  expirationDate DateTime @map("expiration_date") @db.Timestamp(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  branch  Branch  @relation(fields: [branchId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([branchId, productId, expirationDate])
+  @@index([branchId])
+  @@index([productId])
+  @@map("branch_inventory")
+}
+
+model InventoryMovement {
+  id             String                @id @default(uuid()) @db.Uuid
+  productId      String                @map("product_id") @db.Uuid
+  branchId       String?               @map("branch_id") @db.Uuid
+  originBranchId String?               @map("origin_branch_id") @db.Uuid
+  userId         String                @map("user_id") @db.Uuid
+  movementType   InventoryMovementType @map("movement_type")
+  quantity       Int
+  observation    String?               @db.Text
+  movementAt     DateTime              @default(now()) @map("movement_at") @db.Timestamp(6)
+  saleId         String?               @map("sale_id") @db.Uuid
+  purchaseId     String?               @map("purchase_id") @db.Uuid
+
+  product        Product     @relation(fields: [productId], references: [id])
+  branch         Branch?     @relation("InventoryMovementDestinationBranch", fields: [branchId], references: [id])
+  originBranch   Branch?     @relation("InventoryMovementOriginBranch", fields: [originBranchId], references: [id])
+  user           UserAccount @relation(fields: [userId], references: [personId])
+
+  @@index([productId])
+  @@index([branchId])
+  @@index([originBranchId])
+  @@index([userId])
+  @@index([movementAt])
+  @@index([movementType])
+  @@map("inventory_movement")
 }
