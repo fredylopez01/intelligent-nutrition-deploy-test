@@ -42,8 +42,19 @@ const kilogram: UnitOfMeasure = {
 }
 const box: UnitOfMeasure = { id: 'unit-2', name: 'Cajas', abbreviation: 'cja', active: false }
 
-function pageOf(data: UnitOfMeasure[]) {
-  return { data, meta: { page: 1, limit: 10, total: data.length, totalPages: data.length ? 1 : 0 } }
+function pageOf(
+  data: UnitOfMeasure[],
+  meta: Partial<{ page: number; total: number; totalPages: number }> = {},
+) {
+  return {
+    data,
+    meta: {
+      page: meta.page ?? 1,
+      limit: 10,
+      total: meta.total ?? data.length,
+      totalPages: meta.totalPages ?? (data.length ? 1 : 0),
+    },
+  }
 }
 
 function lastListParams(): UnitsListParams {
@@ -79,11 +90,15 @@ describe('UnitsPage', () => {
     expect(lastListParams()).toEqual({ page: 1, limit: 10, search: undefined, active: undefined })
   })
 
-  it('searches and filters by state', async () => {
+  it('searches with the search button and filters by state', async () => {
     const { user } = renderPage()
     await screen.findByText('Kilogramo')
 
-    await user.type(screen.getByRole('searchbox', { name: 'Buscar por nombre' }), 'kilo{Enter}')
+    const search = screen.getByRole('searchbox', { name: 'Buscar por nombre' })
+    await user.type(search, 'kilo')
+    expect(listUnits).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getByRole('button', { name: 'Buscar' }))
     await waitFor(() => expect(lastListParams()).toMatchObject({ search: 'kilo' }))
     await user.selectOptions(screen.getByLabelText('Filtrar por estado'), 'activas')
 
@@ -92,14 +107,46 @@ describe('UnitsPage', () => {
     )
   })
 
-  it('clears the filters when nothing matches', async () => {
+  it('clears search and state filters when nothing matches', async () => {
     listUnits.mockResolvedValue(pageOf([]))
-    const { user } = renderPage('/catalogo/unidades?q=zzz')
+    const { user } = renderPage('/catalogo/unidades?q=zzz&estado=inactivas')
     expect(await screen.findByText('Ninguna unidad coincide con los filtros')).toBeInTheDocument()
 
+    listUnits.mockResolvedValue(pageOf([kilogram]))
     await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
 
-    await waitFor(() => expect(lastListParams()).toMatchObject({ search: undefined }))
+    expect(await screen.findByText('Kilogramo')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(lastListParams()).toMatchObject({
+        page: 1,
+        search: undefined,
+        active: undefined,
+      }),
+    )
+    expect(screen.getByRole('searchbox', { name: 'Buscar por nombre' })).toHaveValue('')
+    expect(screen.getByLabelText('Filtrar por estado')).toHaveValue('todos')
+  })
+
+  it('moves between pages from the table pagination', async () => {
+    listUnits.mockImplementation((params) =>
+      Promise.resolve(
+        pageOf([params.page === 2 ? box : kilogram], {
+          page: params.page ?? 1,
+          total: 25,
+          totalPages: 3,
+        }),
+      ),
+    )
+    const { user } = renderPage()
+    await screen.findByText('Kilogramo')
+
+    const pagination = screen.getByRole('navigation', {
+      name: 'Paginación de unidades de medida',
+    })
+    await user.click(within(pagination).getByRole('button', { name: 'Página siguiente' }))
+
+    expect(await screen.findByText('Cajas')).toBeInTheDocument()
+    await waitFor(() => expect(lastListParams()).toMatchObject({ page: 2 }))
   })
 
   it('registers a unit and confirms it', async () => {
