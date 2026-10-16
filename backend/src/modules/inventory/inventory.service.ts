@@ -13,7 +13,6 @@ import { AssignProductDto } from "./dto/assign-product.dto.js";
 import {
   BranchInventorySortBy,
   ListBranchInventoryQueryDto,
-  SortOrder,
 } from "./dto/list-branch-inventory-query.dto.js";
 import { Prisma } from "../../../generated/prisma/client.js";
 import { UpdateMinimumStockDto } from "./dto/update-minimunstock.dto.js";
@@ -561,6 +560,43 @@ export class InventoryService {
             lowStock: item.lowStock,
           }
         : {}),
+    };
+  }
+
+  async getAvailability(productId: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true, name: true, referenceCode: true },
+    });
+    if (!product) {
+      throw new NotFoundException({
+        code: "PRODUCT_NOT_FOUND",
+        message: "Product not found",
+      });
+    }
+
+    const branches = await this.prisma.branch.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        name: true,
+        branchInventories: {
+          where: { productId },
+          select: { quantity: true },
+        },
+      },
+      orderBy: { name: "asc" },
+    });
+
+    return {
+      data: {
+        product,
+        branches: branches.map((b) => ({
+          branchId: b.id,
+          branchName: b.name,
+          quantity: b.branchInventories.reduce((sum, l) => sum + l.quantity, 0),
+        })),
+      },
     };
   }
 }
