@@ -383,6 +383,12 @@ Luego ejecuta:
 npm run test:e2e
 ```
 
+Para ejecutar únicamente la suite de listado y detalle de productos:
+
+```bash
+npm run test:e2e -- products-list.e2e-spec.ts
+```
+
 Antes de correr, el script aplica las migraciones pendientes a la base de pruebas. Cada suite
 crea sus propios usuarios y datos, y los elimina al terminar.
 
