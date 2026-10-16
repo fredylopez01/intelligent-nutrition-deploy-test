@@ -11,7 +11,7 @@ http:
     data: |-
       {
         "name": "Whey Protein",
-        "referenceCode": "WHEY-2KG-001",
+        "referenceCode": "WHEY-1KG-001",
         "description": "",
         "categoryId": "627d545b-6277-4e4e-93a6-1bf7a9ddacb2",
         "unitOfMeasureId": "ff686082-5860-44d3-a410-4d052ac2f29a",

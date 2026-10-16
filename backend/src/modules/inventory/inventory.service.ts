@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -199,6 +200,14 @@ export class InventoryService {
       sortOrder,
     } = query;
 
+    if (search !== undefined && search.length < 2) {
+      throw new BadRequestException({
+        code: "SEARCH_TOO_SHORT",
+        message: "Search must contain at least 2 characters.",
+        details: { minLength: 2 },
+      });
+    }
+
     const branch = await this.prisma.branch.findUnique({
       where: { id: branchId },
       select: { id: true },
@@ -288,12 +297,13 @@ export class InventoryService {
   ) {
     this.assertBranchScope(branchId, currentUser);
 
-    const inventory = await this.prisma.branchInventory.findFirst({
+    const lots = await this.prisma.branchInventory.findMany({
       where: { branchId, productId },
+      orderBy: { expirationDate: "asc" },
       select: this.inventorySelect(),
     });
 
-    if (!inventory) {
+    if (lots.length === 0) {
       throw new NotFoundException({
         code: "PRODUCT_NOT_IN_BRANCH_INVENTORY",
         message: "Product not found in this branch inventory",
@@ -304,8 +314,41 @@ export class InventoryService {
     const canSeeStockThresholds =
       roleName === "SUPERADMIN" || roleName === "BRANCH_LEADER";
 
+    const first = lots[0];
+    const totalQuantity = lots.reduce((sum, l) => sum + l.quantity, 0);
+    const totalMinimumStock = lots.reduce((sum, l) => sum + l.minimumStock, 0);
+
     return {
-      data: this.toInventoryResponse(inventory, canSeeStockThresholds),
+      data: {
+        branchId,
+        product: {
+          id: first.product.id,
+          name: first.product.name,
+          referenceCode: first.product.referenceCode,
+          category: first.product.category,
+          unitOfMeasure: {
+            abbreviation: first.product.unitOfMeasure.abreviation,
+          },
+          price: first.product.price.toFixed(2),
+          active: first.product.active,
+        },
+        totalQuantity,
+        ...(canSeeStockThresholds
+          ? { lowStock: totalQuantity < totalMinimumStock }
+          : {}),
+        lots: lots.map((lot) => ({
+          id: lot.id,
+          quantity: lot.quantity,
+          expirationDate: lot.expirationDate,
+          updatedAt: lot.updatedAt,
+          ...(canSeeStockThresholds
+            ? {
+                minimumStock: lot.minimumStock,
+                lowStock: lot.quantity < lot.minimumStock,
+              }
+            : {}),
+        })),
+      },
     };
   }
 
