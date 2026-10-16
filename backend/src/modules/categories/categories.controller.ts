@@ -65,7 +65,7 @@ export class CategoriesController {
   }
 
   @Patch(":categoryId/status")
-  @Roles("SUPERADMIN", "BRANCH_LEADER")
+  @Roles("SUPERADMIN")
   updateStatus(
     @Param("categoryId", new ParseUUIDPipe()) categoryId: string,
     @Body() updateCategoryStatusDto: UpdateCategoryStatusDto,
