@@ -5,6 +5,7 @@ import {
   Ip,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from "@nestjs/common";
@@ -14,6 +15,7 @@ import { Roles } from "../../common/decorators/roles.decorator.js";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { ListBranchInventoryQueryDto } from "./dto/list-branch-inventory-query.dto.js";
+import { UpdateMinimumStockDto } from "./dto/update-minimunstock.dto.js";
 
 @Controller("branches/:branchId/inventory")
 export class InventoryController {
@@ -56,6 +58,24 @@ export class InventoryController {
       branchId,
       productId,
       currentUser,
+    );
+  }
+
+  @Patch(":productId")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
+  updateMinimumStock(
+    @Param("branchId", new ParseUUIDPipe()) branchId: string,
+    @Param("productId", new ParseUUIDPipe()) productId: string,
+    @Body() updateMinimumStockDto: UpdateMinimumStockDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.inventoryService.updateMinimumStock(
+      branchId,
+      productId,
+      updateMinimumStockDto,
+      currentUser,
+      ipAddress,
     );
   }
 }
