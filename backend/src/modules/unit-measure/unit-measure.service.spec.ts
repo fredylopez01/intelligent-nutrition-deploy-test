@@ -15,6 +15,7 @@ const prismaMock = {
   unitMeasure: {
     findUnique: jest.fn<AsyncMock>(),
     findFirst: jest.fn<AsyncMock>(),
+    create: jest.fn<AsyncMock>(),
     update: jest.fn<AsyncMock>(),
   },
   $transaction:
@@ -35,9 +36,8 @@ jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
 
 const { Test } = await import("@nestjs/testing");
 const { UnitMeasureService } = await import("./unit-measure.service.js");
-const { PrismaService } = await import(
-  "../../database/prisma/prisma.service.js"
-);
+const { PrismaService } =
+  await import("../../database/prisma/prisma.service.js");
 const { AuditService } = await import("../audit/audit.service.js");
 
 const unitId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -160,9 +160,9 @@ describe("UnitMeasureService > update", () => {
   it("sends only the name when only the name is provided", async () => {
     await service.update(unitId, { name: "Gramo" }, currentUser);
 
-    const [[call]] = prismaMock.unitMeasure.update.mock.calls as [
-      [{ data: Record<string, unknown> }],
-    ][];
+    const [call] = prismaMock.unitMeasure.update.mock.calls[0] as [
+      { data: Record<string, unknown> },
+    ];
     expect(call.data).toEqual({ name: "Gramo" });
     expect(call.data).not.toHaveProperty("abreviation");
   });
@@ -170,20 +170,20 @@ describe("UnitMeasureService > update", () => {
   it("sends only the abreviation when only the abreviation is provided", async () => {
     await service.update(unitId, { abreviation: "KGR" }, currentUser);
 
-    const [[call]] = prismaMock.unitMeasure.update.mock.calls as [
-      [{ data: Record<string, unknown> }],
-    ][];
+    const [call] = prismaMock.unitMeasure.update.mock.calls[0] as [
+      { data: Record<string, unknown> },
+    ];
     expect(call.data).toEqual({ abreviation: "KGR" });
     expect(call.data).not.toHaveProperty("name");
   });
 
   it("rejects an empty update DTO", async () => {
-    await expect(
-      service.update(unitId, {}, currentUser),
-    ).rejects.toMatchObject({
-      status: 400,
-      message: "At least one field must be provided",
-    });
+    await expect(service.update(unitId, {}, currentUser)).rejects.toMatchObject(
+      {
+        status: 400,
+        message: "At least one field must be provided",
+      },
+    );
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
@@ -348,4 +348,101 @@ describe("UnitMeasureService > update", () => {
       expect(prismaMock.unitMeasure.update).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("UnitMeasureService > create", () => {
+  let service: InstanceType<typeof UnitMeasureService>;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    prismaMock.$transaction.mockImplementation((operation) =>
+      Array.isArray(operation) ? Promise.all(operation) : operation(prismaMock),
+    );
+    prismaMock.unitMeasure.findFirst.mockResolvedValue(null);
+    prismaMock.unitMeasure.create.mockResolvedValue(buildUnit());
+    auditMock.createAuditLog.mockResolvedValue({});
+
+    const module = await Test.createTestingModule({
+      providers: [
+        UnitMeasureService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: AuditService, useValue: auditMock },
+      ],
+    }).compile();
+    service = module.get(UnitMeasureService);
+  });
+
+  it("creates the unit and records the audit log", async () => {
+    const unit = buildUnit();
+    prismaMock.unitMeasure.create.mockResolvedValue(unit);
+
+    const result: unknown = await service.create(
+      { name: "Kilogramo", abreviation: "kg" },
+      currentUser,
+      "127.0.0.1",
+    );
+
+    expect(prismaMock.unitMeasure.findFirst).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { name: { equals: "Kilogramo", mode: "insensitive" } },
+          { abreviation: { equals: "kg", mode: "insensitive" } },
+        ],
+      },
+    });
+    expect(prismaMock.unitMeasure.create).toHaveBeenCalledWith({
+      data: { name: "Kilogramo", abreviation: "kg" },
+    });
+    expect(result).toBe(unit);
+    expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+      {
+        userId: "admin-user-id",
+        action: "CREATE",
+        entity: "UNIT_MEASURE",
+        entityId: unitId,
+        newData: unit,
+        reason: "Creación de la unidad de medida Kilogramo",
+        ipAddress: "127.0.0.1",
+      },
+      prismaMock,
+    );
+  });
+
+  it("rejects a duplicate name without distinguishing case", async () => {
+    prismaMock.unitMeasure.findFirst.mockResolvedValue(
+      buildUnit({ name: "KILOGRAMO" }),
+    );
+
+    await expect(
+      service.create({ name: "Kilogramo", abreviation: "KGM" }, currentUser),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        code: "UNIT_NAME_ALREADY_EXISTS",
+        message: "Unit Measure with this name already exists",
+      },
+    });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.unitMeasure.create).not.toHaveBeenCalled();
+    expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+  });
+
+  it("rejects a duplicate abreviation without distinguishing case", async () => {
+    prismaMock.unitMeasure.findFirst.mockResolvedValue(
+      buildUnit({ name: "Gramo", abreviation: "KG" }),
+    );
+
+    await expect(
+      service.create({ name: "Kilogramo", abreviation: "kg" }, currentUser),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: {
+        code: "UNIT_ABBREVIATION_ALREADY_EXISTS",
+        message: "Unit Measure with this abreviation already exists",
+      },
+    });
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.unitMeasure.create).not.toHaveBeenCalled();
+    expect(auditMock.createAuditLog).not.toHaveBeenCalled();
+  });
 });
