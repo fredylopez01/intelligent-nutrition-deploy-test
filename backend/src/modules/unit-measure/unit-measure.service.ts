@@ -27,12 +27,15 @@ export class UnitMeasureService {
 
     const existingUnitMeasure = await this.prisma.unitMeasure.findFirst({
       where: {
-        OR: [{ name }, { abreviation }],
+        OR: [
+          { name: { equals: name, mode: "insensitive" } },
+          { abreviation: { equals: abreviation, mode: "insensitive" } },
+        ],
       },
     });
 
     if (existingUnitMeasure) {
-      if (existingUnitMeasure.name === name) {
+      if (existingUnitMeasure.name.toLowerCase() === name.toLowerCase()) {
         throw new ConflictException({
           code: "UNIT_NAME_ALREADY_EXISTS",
           message: "Unit Measure with this name already exists",
