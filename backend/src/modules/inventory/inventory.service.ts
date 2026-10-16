@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -9,6 +10,12 @@ import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { AssignProductDto } from "./dto/assign-product.dto.js";
+import {
+  BranchInventorySortBy,
+  ListBranchInventoryQueryDto,
+  SortOrder,
+} from "./dto/list-branch-inventory-query.dto.js";
+import { Prisma } from "../../../generated/prisma/client.js";
 
 @Injectable()
 export class InventoryService {
@@ -173,5 +180,259 @@ export class InventoryService {
       code: "FORBIDDEN",
       message: "You do not have permission to perform this action",
     });
+  }
+
+  async findAllByBranch(
+    branchId: string,
+    query: ListBranchInventoryQueryDto,
+    currentUser: AuthenticatedUser,
+  ) {
+    this.assertBranchScope(branchId, currentUser);
+
+    const {
+      page,
+      limit,
+      search,
+      categoryId,
+      lowStock,
+      productActive,
+      sortBy,
+      sortOrder,
+    } = query;
+
+    if (search !== undefined && search.length < 2) {
+      throw new BadRequestException({
+        code: "SEARCH_TOO_SHORT",
+        message: "Search must contain at least 2 characters.",
+        details: { minLength: 2 },
+      });
+    }
+
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { id: true },
+    });
+    if (!branch) {
+      throw new NotFoundException({
+        code: "BRANCH_NOT_FOUND",
+        message: "Branch not found",
+      });
+    }
+
+    const productWhere: Prisma.ProductWhereInput = {
+      ...(productActive === undefined ? {} : { active: productActive }),
+      ...(categoryId ? { categoryId } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { referenceCode: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+
+    const where: Prisma.BranchInventoryWhereInput = {
+      branchId,
+      ...(Object.keys(productWhere).length ? { product: productWhere } : {}),
+    };
+
+    const skip = (page - 1) * limit;
+
+    let idFilter: string[] | undefined;
+    if (lowStock === true || lowStock === false) {
+      const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(
+        lowStock
+          ? Prisma.sql`SELECT id FROM branch_inventory WHERE branch_id = ${branchId}::uuid AND quantity < minimum_stock`
+          : Prisma.sql`SELECT id FROM branch_inventory WHERE branch_id = ${branchId}::uuid AND quantity >= minimum_stock`,
+      );
+      idFilter = rows.map((r) => r.id);
+      if (idFilter.length === 0) {
+        return {
+          data: [],
+          meta: { page, limit, total: 0, totalPages: 0 },
+        };
+      }
+    }
+
+    const finalWhere: Prisma.BranchInventoryWhereInput = {
+      ...where,
+      ...(idFilter ? { id: { in: idFilter } } : {}),
+    };
+
+    const orderBy = this.buildOrderBy(sortBy, sortOrder);
+
+    const [total, inventories] = await this.prisma.$transaction([
+      this.prisma.branchInventory.count({ where: finalWhere }),
+      this.prisma.branchInventory.findMany({
+        where: finalWhere,
+        skip,
+        take: limit,
+        orderBy,
+        select: this.inventorySelect(),
+      }),
+    ]);
+
+    const roleName = currentUser.role?.name;
+    const canSeeStockThresholds =
+      roleName === "SUPERADMIN" || roleName === "BRANCH_LEADER";
+
+    return {
+      data: inventories.map((inv) =>
+        this.toInventoryResponse(inv, canSeeStockThresholds),
+      ),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findOneByBranchAndProduct(
+    branchId: string,
+    productId: string,
+    currentUser: AuthenticatedUser,
+  ) {
+    this.assertBranchScope(branchId, currentUser);
+
+    const lots = await this.prisma.branchInventory.findMany({
+      where: { branchId, productId },
+      orderBy: { expirationDate: "asc" },
+      select: this.inventorySelect(),
+    });
+
+    if (lots.length === 0) {
+      throw new NotFoundException({
+        code: "PRODUCT_NOT_IN_BRANCH_INVENTORY",
+        message: "Product not found in this branch inventory",
+      });
+    }
+
+    const roleName = currentUser.role?.name;
+    const canSeeStockThresholds =
+      roleName === "SUPERADMIN" || roleName === "BRANCH_LEADER";
+
+    const first = lots[0];
+    const totalQuantity = lots.reduce((sum, l) => sum + l.quantity, 0);
+    const totalMinimumStock = lots.reduce((sum, l) => sum + l.minimumStock, 0);
+
+    return {
+      data: {
+        branchId,
+        product: {
+          id: first.product.id,
+          name: first.product.name,
+          referenceCode: first.product.referenceCode,
+          category: first.product.category,
+          unitOfMeasure: {
+            abbreviation: first.product.unitOfMeasure.abreviation,
+          },
+          price: first.product.price.toFixed(2),
+          active: first.product.active,
+        },
+        totalQuantity,
+        ...(canSeeStockThresholds
+          ? { lowStock: totalQuantity < totalMinimumStock }
+          : {}),
+        lots: lots.map((lot) => ({
+          id: lot.id,
+          quantity: lot.quantity,
+          expirationDate: lot.expirationDate,
+          updatedAt: lot.updatedAt,
+          ...(canSeeStockThresholds
+            ? {
+                minimumStock: lot.minimumStock,
+                lowStock: lot.quantity < lot.minimumStock,
+              }
+            : {}),
+        })),
+      },
+    };
+  }
+
+  private inventorySelect() {
+    return {
+      id: true,
+      branchId: true,
+      productId: true,
+      quantity: true,
+      minimumStock: true,
+      expirationDate: true,
+      updatedAt: true,
+      product: {
+        select: {
+          id: true,
+          name: true,
+          referenceCode: true,
+          active: true,
+          price: true,
+          category: { select: { id: true, name: true } },
+          unitOfMeasure: { select: { abreviation: true } },
+        },
+      },
+    } as const;
+  }
+
+  private buildOrderBy(
+    sortBy: BranchInventorySortBy,
+    sortOrder: SortOrder,
+  ): Prisma.BranchInventoryOrderByWithRelationInput {
+    switch (sortBy) {
+      case BranchInventorySortBy.NAME:
+        return { product: { name: sortOrder } };
+      case BranchInventorySortBy.REFERENCE_CODE:
+        return { product: { referenceCode: sortOrder } };
+      case BranchInventorySortBy.QUANTITY:
+        return { quantity: sortOrder };
+      default:
+        return { product: { name: "asc" } };
+    }
+  }
+
+  private toInventoryResponse(
+    inv: {
+      id: string;
+      branchId: string;
+      productId: string;
+      quantity: number;
+      minimumStock: number;
+      expirationDate: Date;
+      updatedAt: Date;
+      product: {
+        id: string;
+        name: string;
+        referenceCode: string;
+        active: boolean;
+        price: Prisma.Decimal;
+        category: { id: string; name: string };
+        unitOfMeasure: { abreviation: string };
+      };
+    },
+    includeThresholds: boolean,
+  ) {
+    return {
+      id: inv.id,
+      branchId: inv.branchId,
+      product: {
+        id: inv.product.id,
+        name: inv.product.name,
+        referenceCode: inv.product.referenceCode,
+        category: inv.product.category,
+        unitOfMeasure: { abbreviation: inv.product.unitOfMeasure.abreviation },
+        price: inv.product.price.toFixed(2),
+        active: inv.product.active,
+      },
+      quantity: inv.quantity,
+      expirationDate: inv.expirationDate,
+      updatedAt: inv.updatedAt,
+      ...(includeThresholds
+        ? {
+            minimumStock: inv.minimumStock,
+            lowStock: inv.quantity < inv.minimumStock,
+          }
+        : {}),
+    };
   }
 }

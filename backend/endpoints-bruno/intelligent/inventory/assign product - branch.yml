@@ -10,10 +10,10 @@ http:
     type: json
     data: |-
       {
-          "productId": "a1c5f1b9-dd67-438b-b8bc-815ce410fc9a",
-          "quantity": 20,
+          "productId": "315b23ca-8c30-4b05-933e-9df4e94cd086",
+          "quantity": 5,
           "minimumStock": 3,
-          "expirationDate": "2026-12-31T00:00:00.000Z"
+          "expirationDate": "2027-12-10T00:00:00.000Z"
         }
   auth:
     type: bearer

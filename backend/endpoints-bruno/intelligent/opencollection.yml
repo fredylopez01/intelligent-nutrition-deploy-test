@@ -17,7 +17,7 @@ config:
 request:
   variables:
     - name: json_web_token_15kq
-      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYTBmZDg5MS1iNzY4LTQ3MjItYWFlZC1iZjI3ODlhYmViNzUiLCJpYXQiOjE3OTIxMjEzNjksImV4cCI6MTc5MjEyNDk2OX0.O8DSFEDolQ64dLVovi2enWI0eF-dFnCQ1wrkPiDJNrw
+      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYTBmZDg5MS1iNzY4LTQ3MjItYWFlZC1iZjI3ODlhYmViNzUiLCJpYXQiOjE3OTIxMjUyMTMsImV4cCI6MTc5MjEyODgxM30.M2_nn4QgB_bH6Ol9XBuz4QtGvVOEUSU5XHH5TH5xxgY
     - name: url-back
       value: ""
 bundled: false
