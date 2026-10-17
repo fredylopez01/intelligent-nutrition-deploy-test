@@ -65,6 +65,7 @@ const storageMock = {
   verifyObject: jest.fn<AsyncMock>(),
   getMagicBytes: jest.fn<AsyncMock>(),
   deleteObject: jest.fn<AsyncMock>(),
+  buildPublicUrl: jest.fn<(storageKey: string) => string>(),
 };
 
 const auditMock = {
@@ -141,6 +142,9 @@ describe("ProductImagesService", () => {
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     );
     storageMock.deleteObject.mockResolvedValue(undefined);
+    storageMock.buildPublicUrl.mockImplementation(
+      (storageKey) => `https://cdn.example.test/${storageKey}`,
+    );
     auditMock.createAuditLog.mockResolvedValue({});
 
     testingModule = await Test.createTestingModule({
@@ -197,6 +201,7 @@ describe("ProductImagesService", () => {
         storageKey: expect.stringMatching(
           new RegExp(`^products/${productId}/[0-9a-f-]{36}\\.png$`),
         ),
+        publicUrl: `https://cdn.example.test/${result.storageKey}`,
         expiresIn: 300,
       });
       expect(prismaMock.product.findUnique).toHaveBeenCalledWith({

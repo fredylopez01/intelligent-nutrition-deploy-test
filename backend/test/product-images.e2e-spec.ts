@@ -23,6 +23,7 @@ interface ApiResponse<T> {
 interface UploadUrlResponse {
   uploadUrl: string;
   storageKey: string;
+  publicUrl: string;
   expiresIn: number;
 }
 
@@ -62,6 +63,7 @@ const storageMock = {
   verifyObject: jest.fn<(...args: unknown[]) => Promise<unknown>>(),
   getMagicBytes: jest.fn<(...args: unknown[]) => Promise<Buffer>>(),
   deleteObject: jest.fn<(...args: unknown[]) => Promise<void>>(),
+  buildPublicUrl: jest.fn<(storageKey: string) => string>(),
 };
 
 const roleNames: RoleName[] = [
@@ -265,6 +267,9 @@ describe("Product image endpoints (e2e)", () => {
     storageMock.verifyObject.mockResolvedValue({ exists: true });
     storageMock.getMagicBytes.mockResolvedValue(pngMagicBytes);
     storageMock.deleteObject.mockResolvedValue(undefined);
+    storageMock.buildPublicUrl.mockImplementation(
+      (storageKey) => `https://cdn.example.test/${storageKey}`,
+    );
   });
 
   afterAll(async () => {
@@ -337,6 +342,9 @@ describe("Product image endpoints (e2e)", () => {
         ),
         expiresIn: expect.any(Number),
       });
+      expect(result.publicUrl).toBe(
+        `https://cdn.example.test/${result.storageKey}`,
+      );
       expect(storageMock.generateUploadUrl).toHaveBeenCalledWith(
         expect.objectContaining({
           storageKey: result.storageKey,

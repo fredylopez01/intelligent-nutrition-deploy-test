@@ -79,10 +79,14 @@ export function ProductsPage() {
     setIsCreateOpen(true)
   }
 
-  const handleCreated = (product: Product) => {
+  const handleCreated = (product: Product, failedImages: number) => {
     setIsCreateOpen(false)
+    const imagesNote =
+      failedImages === 0
+        ? ''
+        : ` ${failedImages === 1 ? 'Una imagen no se pudo subir' : `${failedImages} imágenes no se pudieron subir`}; agrégalas desde su detalle.`
     setFeedbackMessage(
-      `El producto ${product.name} (${product.referenceCode}) quedó registrado y activo.`,
+      `El producto ${product.name} (${product.referenceCode}) quedó registrado y activo.${imagesNote}`,
     )
     if (page === 1) refetch()
     else setPage(1)

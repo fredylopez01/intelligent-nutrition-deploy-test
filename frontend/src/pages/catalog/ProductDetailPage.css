@@ -65,6 +65,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+.product-page__main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
 .product-page__panel {
   min-width: 0;
   padding: 1.75rem;

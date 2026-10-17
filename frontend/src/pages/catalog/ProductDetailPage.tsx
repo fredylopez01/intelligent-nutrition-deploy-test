@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 
 import { ProductDataForm } from '../../components/products/ProductDataForm'
 import { ProductGallery } from '../../components/products/ProductGallery'
+import { ProductImageManager } from '../../components/products/ProductImageManager'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -172,17 +173,30 @@ export function ProductDetailPage() {
           </div>
         </section>
 
-        <section className="product-page__panel" aria-labelledby="product-data-title">
-          <h2 id="product-data-title" className="product-page__panel-title">
-            Datos del producto
-          </h2>
-          <p className="product-page__panel-text">
-            {canManage
-              ? 'Pulsa "Editar producto" para cambiar el nombre, la descripción, la categoría, la unidad o el precio. El código de referencia no se puede cambiar.'
-              : 'Consulta los datos del producto. Solo el superadmin y el líder de sede pueden editarlo.'}
-          </p>
-          <ProductDataForm product={product} canEdit={canManage} onSaved={refetch} />
-        </section>
+        <div className="product-page__main">
+          <section className="product-page__panel" aria-labelledby="product-data-title">
+            <h2 id="product-data-title" className="product-page__panel-title">
+              Datos del producto
+            </h2>
+            <p className="product-page__panel-text">
+              {canManage
+                ? 'Pulsa "Editar producto" para cambiar el nombre, la descripción, la categoría, la unidad o el precio. El código de referencia no se puede cambiar.'
+                : 'Consulta los datos del producto. Solo el superadmin y el líder de sede pueden editarlo.'}
+            </p>
+            <ProductDataForm product={product} canEdit={canManage} onSaved={refetch} />
+          </section>
+
+          {canManage && (
+            <div className="product-page__panel">
+              <ProductImageManager
+                productId={product.id}
+                productName={product.name}
+                images={product.images ?? []}
+                onChange={refetch}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       <Modal
