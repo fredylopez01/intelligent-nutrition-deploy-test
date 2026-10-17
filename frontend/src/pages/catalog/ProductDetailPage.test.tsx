@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { categoriesService } from '../../services/categories.service'
 import { ApiError } from '../../services/http'
+import { productImagesService } from '../../services/productImages.service'
 import { productsService } from '../../services/products.service'
 import { unitsService } from '../../services/units.service'
 import { CATEGORIES, UNITS, buildProduct, optionsPage } from '../../test-utils/products'
@@ -16,6 +17,10 @@ const auth = vi.hoisted(() => ({ role: 'SUPERADMIN' }))
 
 vi.mock('../../services/products.service', () => ({
   productsService: { getById: vi.fn(), update: vi.fn(), updateStatus: vi.fn() },
+}))
+
+vi.mock('../../services/productImages.service', () => ({
+  productImagesService: { upload: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }))
 
 vi.mock('../../services/categories.service', () => ({
@@ -194,7 +199,44 @@ describe('ProductDetailPage edit', () => {
 
     expect(screen.queryByRole('button', { name: 'Editar producto' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /producto$/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Imágenes' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Seleccionar imágenes del producto')).not.toBeInTheDocument()
   })
+
+  it.each(['SUPERADMIN', 'BRANCH_LEADER'])(
+    'lets the %s upload images and reloads the product after each one',
+    async (role) => {
+      auth.role = role
+      URL.createObjectURL = vi.fn(() => 'blob:frente')
+      URL.revokeObjectURL = vi.fn()
+      vi.mocked(productImagesService.upload).mockResolvedValue({
+        id: 'image-1',
+        url: 'https://cdn.example.com/frente.png',
+        fileName: 'frente.png',
+        mimeType: 'image/png',
+        sizeBytes: 2048,
+        isPrimary: true,
+        sortOrder: 0,
+      })
+      const { user } = renderPage()
+      await waitForProduct()
+
+      const manager = screen.getByRole('region', { name: 'Imágenes' })
+      expect(within(manager).getByText('0 de 5')).toBeInTheDocument()
+      await user.upload(
+        within(manager).getByLabelText('Seleccionar imágenes del producto'),
+        new File([new Uint8Array(2048)], 'frente.png', { type: 'image/png' }),
+      )
+
+      await waitFor(() => expect(getProduct).toHaveBeenCalledTimes(2))
+      expect(productImagesService.upload).toHaveBeenCalledWith(
+        'product-whey',
+        expect.objectContaining({ name: 'frente.png' }),
+        expect.objectContaining({ isPrimary: true }),
+        'test-token',
+      )
+    },
+  )
 })
 
 describe('ProductDetailPage state', () => {
