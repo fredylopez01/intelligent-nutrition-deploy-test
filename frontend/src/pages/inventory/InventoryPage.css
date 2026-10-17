@@ -1,0 +1,114 @@
+.inventory-page__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  margin-bottom: 1.25rem;
+}
+
+.inventory-page__toolbar .ui-search {
+  flex: 1 1 240px;
+  min-width: 220px;
+}
+
+.inventory-page__primary {
+  margin-left: auto;
+}
+
+.inventory-page__filter {
+  height: 42px;
+  padding: 0 0.875rem;
+  background: var(--color-surface-field);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  color: var(--color-text-secondary);
+  font-size: 0.845rem;
+  cursor: pointer;
+}
+
+.inventory-page__filter:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
+}
+
+.inventory-page__feedback {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.inventory-page__feedback--inset {
+  margin: 0;
+  padding: 1.25rem 1.125rem;
+}
+
+.inventory-page__card {
+  background: var(--color-surface-field);
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.inventory-page__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  margin-top: 1rem;
+}
+
+.inventory-page__note {
+  margin: 0;
+  max-width: 68ch;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--color-text-faint);
+}
+
+@media (max-width: 767px) {
+  .inventory-page__toolbar .ui-search {
+    flex: 1 1 100%;
+  }
+
+  .inventory-page__primary {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+.inventory-page__branch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.inventory-page__branch-label {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.inventory-page__filter--branch {
+  min-width: 180px;
+  border-color: var(--color-border-outline);
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.inventory-page__filter:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+@media (max-width: 767px) {
+  .inventory-page__branch {
+    flex: 1 1 100%;
+  }
+
+  .inventory-page__filter--branch {
+    flex: 1 1 auto;
+  }
+}

@@ -1,0 +1,121 @@
+.inventory-lots {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.inventory-lots__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 10px;
+  background: var(--color-surface-elevated);
+}
+
+.inventory-lots__summary dt {
+  margin-bottom: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.inventory-lots__summary dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-lots__loading {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+}
+
+.inventory-lots__error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.inventory-lots__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.inventory-lots__table th {
+  padding: 0 0.5rem 0.5rem;
+  border-bottom: 1px solid var(--color-border-soft);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--color-text-faint);
+}
+
+.inventory-lots__table td {
+  padding: 0.625rem 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.845rem;
+}
+
+.inventory-lots__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.inventory-lots__date {
+  font-variant-numeric: tabular-nums;
+}
+
+.inventory-lots__table .inventory-lots__number {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.inventory-lots__table .inventory-lots__state {
+  text-align: right;
+}
+
+.inventory-lots__badge {
+  display: inline-flex;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.inventory-lots__badge--ok {
+  color: var(--color-text-muted);
+  background: var(--color-border-soft);
+}
+
+.inventory-lots__badge--soon {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.inventory-lots__badge--expired {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.inventory-lots__note {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-text-faint);
+}
+
+.inventory-lots__actions {
+  display: flex;
+  justify-content: flex-end;
+}

@@ -180,7 +180,7 @@ export class InventoryService {
     const roleName = currentUser.role?.name;
     if (roleName === "SUPERADMIN") return;
 
-    if (roleName === "BRANCH_LEADER") {
+    if (roleName === "BRANCH_LEADER" || roleName === "BRANCH_ASSISTANT") {
       const branches = currentUser.branches ?? [];
       const hasAccess = branches.some((b) => b.id === branchId);
       if (!hasAccess) {
