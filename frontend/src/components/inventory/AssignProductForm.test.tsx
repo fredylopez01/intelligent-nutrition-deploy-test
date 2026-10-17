@@ -309,4 +309,46 @@ describe('AssignProductForm', () => {
     expect(onCancel).toHaveBeenCalled()
     expect(assign).not.toHaveBeenCalled()
   })
+
+  it('says there are no active products when the catalogue is empty', async () => {
+    listProducts.mockResolvedValue(optionsPage([]))
+    renderForm()
+
+    expect(
+      await screen.findByText('No hay productos activos en el catálogo.'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows an error when the product search fails', async () => {
+    listProducts.mockRejectedValue(new Error('Network error'))
+    renderForm()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No fue posible buscar productos. Intenta de nuevo.',
+    )
+  })
+
+  it('shows an error when checking the branch inventory fails', async () => {
+    getProductInBranch.mockRejectedValue(new ApiError('Server error', 500))
+    const { user } = renderForm()
+
+    await chooseProduct(user, 'Whey Protein 2 lb')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No fue posible revisar si el producto ya está en la sede.',
+    )
+  })
+
+  it('shows a generic error when the assignment fails unexpectedly', async () => {
+    assign.mockRejectedValue(new ApiError('Server error', 500))
+    const { user } = renderForm()
+
+    await chooseProduct(user, 'Whey Protein 2 lb')
+    await fillLot(user)
+    await submit(user)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No fue posible asignar el producto. Intenta de nuevo.',
+    )
+  })
 })
