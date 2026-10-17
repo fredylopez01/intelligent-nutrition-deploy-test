@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import { AssignProductForm } from '../../components/inventory/AssignProductForm'
 import { InventoryLots } from '../../components/inventory/InventoryLots'
 import { InventoryTable } from '../../components/inventory/InventoryTable'
 import { Alert } from '../../components/ui/Alert'
@@ -17,9 +18,9 @@ import { useCatalogOptions } from '../../hooks/useCatalogOptions'
 import { useInventoryBranches } from '../../hooks/useInventoryBranches'
 import { usePagination } from '../../hooks/usePagination'
 import { AppLayout } from '../../layouts/AppLayout'
-import type { BranchInventoryItem } from '../../types/inventory'
+import type { AssignedLot, BranchInventoryItem } from '../../types/inventory'
 import { hasRole } from '../../utils/categories'
-import { INVENTORY_MANAGE_ROLES } from '../../utils/inventory'
+import { INVENTORY_MANAGE_ROLES, formatQuantity } from '../../utils/inventory'
 
 import './InventoryPage.css'
 
@@ -33,7 +34,7 @@ const LOW_STOCK_FILTER_VALUES: Record<string, boolean | undefined> = {
 
 const FILTER_DEFAULTS = { categoria: 'todos', stock: 'todos' }
 
-type Dialog = { kind: 'lots'; item: BranchInventoryItem }
+type Dialog = { kind: 'assign' } | { kind: 'lots'; item: BranchInventoryItem }
 
 export function InventoryPage() {
   const { user } = useAuth()
@@ -63,6 +64,7 @@ export function InventoryPage() {
     null
 
   const [dialog, setDialog] = useState<Dialog | null>(null)
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, items, meta, error, refetch } = useBranchInventory(branch?.id ?? null, {
     ...params,
@@ -72,9 +74,13 @@ export function InventoryPage() {
 
   const closeDialog = () => setDialog(null)
 
-  const openDialog = (next: Dialog) => setDialog(next)
+  const openDialog = (next: Dialog) => {
+    setFeedbackMessage(null)
+    setDialog(next)
+  }
 
   const changeBranch = (branchId: string) => {
+    setFeedbackMessage(null)
     setSearchParams(
       (previous) => {
         const next = new URLSearchParams(previous)
@@ -89,6 +95,14 @@ export function InventoryPage() {
   const handleSearch = (term: string) => {
     if (term === search) refetch()
     else applySearch(term)
+  }
+
+  const handleAssigned = (lot: AssignedLot) => {
+    closeDialog()
+    setFeedbackMessage(
+      `Se asignaron ${formatQuantity(lot.quantity, lot.product.unitOfMeasure.abbreviation)} de ${lot.product.name} a ${branch?.name ?? 'la sede'}.`,
+    )
+    refetch()
   }
 
   const renderList = () => {
@@ -131,7 +145,11 @@ export function InventoryPage() {
           variant="sin-registros"
           title={`${branch?.name ?? 'Esta sede'} todavía no tiene productos`}
           description="Cuando se asigne un producto a la sede, aquí verás sus existencias y su stock mínimo."
-        />
+        >
+          {canManage && branch?.active && (
+            <Button onClick={() => openDialog({ kind: 'assign' })}>Asignar producto</Button>
+          )}
+        </EmptyState>
       )
     }
 
@@ -221,6 +239,15 @@ export function InventoryPage() {
           </>
         )}
         <ReloadButton onReload={refetch} loading={status === 'loading'} />
+        {canManage && (
+          <Button
+            className="inventory-page__primary"
+            onClick={() => openDialog({ kind: 'assign' })}
+            disabled={!branch?.active}
+          >
+            Asignar producto
+          </Button>
+        )}
       </div>
 
       {branch && !branch.active && (
@@ -229,6 +256,12 @@ export function InventoryPage() {
             {branch.name} está inactiva: puedes consultar su inventario, pero no asignar productos
             ni cambiar el stock mínimo.
           </Alert>
+        </div>
+      )}
+
+      {feedbackMessage && (
+        <div className="inventory-page__feedback">
+          <Alert tone="success">{feedbackMessage}</Alert>
         </div>
       )}
 
@@ -254,6 +287,22 @@ export function InventoryPage() {
             : 'Se resaltan los productos agotados.'}
         </p>
       </div>
+
+      <Modal
+        open={dialog?.kind === 'assign'}
+        title="Asignar producto a la sede"
+        description={`El lote se registra en ${branch?.name ?? 'la sede'} con su cantidad inicial y su fecha de vencimiento.`}
+        onClose={closeDialog}
+      >
+        {dialog?.kind === 'assign' && branch && (
+          <AssignProductForm
+            branchId={branch.id}
+            branchName={branch.name}
+            onAssigned={handleAssigned}
+            onCancel={closeDialog}
+          />
+        )}
+      </Modal>
 
       <Modal
         open={dialog?.kind === 'lots'}

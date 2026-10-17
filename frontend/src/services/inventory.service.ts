@@ -1,4 +1,6 @@
 import type {
+  AssignedLot,
+  AssignProductPayload,
   BranchInventoryDetail,
   BranchInventoryParams,
   BranchInventoryResponse,
@@ -38,5 +40,16 @@ export const inventoryService = {
         `${branchInventoryPath(branchId)}/${productId}`,
         { token },
       ),
+    ),
+
+  assign: async (
+    branchId: string,
+    payload: AssignProductPayload,
+    token: string | null,
+  ): Promise<AssignedLot> =>
+    unwrap(
+      await http.post<AssignedLot | { data: AssignedLot }>(branchInventoryPath(branchId), payload, {
+        token,
+      }),
     ),
 }

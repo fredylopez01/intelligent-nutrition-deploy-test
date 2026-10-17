@@ -41,3 +41,21 @@ export interface BranchInventoryResponse {
   data: BranchInventoryItem[]
   meta: PaginationMeta
 }
+
+export interface AssignProductPayload {
+  productId: string
+  quantity: number
+  minimumStock?: number
+  expirationDate: string
+}
+
+export interface AssignedLot {
+  id: string
+  branchId: string
+  product: InventoryProduct
+  quantity: number
+  minimumStock: number
+  lowStock: boolean
+  expirationDate: string
+  updatedAt: string
+}

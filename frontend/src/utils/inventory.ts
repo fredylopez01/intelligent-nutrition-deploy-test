@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 import { ApiError } from '../services/http'
 import type { RoleName } from '../types/auth'
 
@@ -81,4 +83,64 @@ export function resolveInventoryError(error: unknown, fallback: string): string 
   if (error.status === 404) return 'No se encontró la información solicitada. Recarga la página.'
   if (error.status === 400) return 'Revisa los datos: hay un valor que el servidor no aceptó.'
   return fallback
+}
+
+const STOCK_PATTERN = /^\d{1,9}$/
+
+export function stockAmountSchema(requiredMessage: string, label: string) {
+  return z
+    .string()
+    .trim()
+    .min(1, requiredMessage)
+    .regex(
+      STOCK_PATTERN,
+      `${label} debe ser un número entero de 0 en adelante, sin puntos ni comas.`,
+    )
+}
+
+export const assignProductSchema = z.object({
+  quantity: stockAmountSchema('Escribe la cantidad inicial del lote.', 'La cantidad'),
+  minimumStock: stockAmountSchema('Escribe el stock mínimo (puede ser 0).', 'El stock mínimo'),
+  expirationDate: z
+    .string()
+    .min(1, 'Elige la fecha de vencimiento del lote.')
+    .refine(
+      (value) => value >= todayInputValue(),
+      'La fecha de vencimiento no puede ser anterior a hoy.',
+    ),
+})
+
+export type AssignProductValues = z.infer<typeof assignProductSchema>
+
+export function toExpirationDateTime(inputDate: string): string {
+  return `${inputDate}T00:00:00Z`
+}
+
+export type AssignErrorField = 'product' | 'quantity' | 'expirationDate'
+
+export function assignFieldError(
+  error: unknown,
+): { field: AssignErrorField; message: string } | null {
+  if (!(error instanceof ApiError)) return null
+  switch (error.code) {
+    case 'PRODUCT_ALREADY_ASSIGNED':
+      return {
+        field: 'expirationDate',
+        message:
+          'Este producto ya tiene un lote con esa fecha de vencimiento en la sede. Para cambiar su cantidad usa un movimiento de inventario.',
+      }
+    case 'PRODUCT_INACTIVE':
+      return {
+        field: 'product',
+        message: 'El producto está inactivo y no se puede asignar. Elige otro producto.',
+      }
+    case 'PRODUCT_NOT_FOUND':
+      return { field: 'product', message: 'El producto ya no existe. Elige otro producto.' }
+    case 'INSUFFICIENT_STOCK':
+      return {
+        field: 'quantity',
+        message: 'No hay existencias suficientes para asignar esa cantidad.',
+      }
+  }
+  return null
 }

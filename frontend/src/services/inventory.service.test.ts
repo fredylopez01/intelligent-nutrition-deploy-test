@@ -11,6 +11,7 @@ vi.mock('./http', async (importOriginal) => {
 })
 
 const get = vi.mocked(http.get)
+const post = vi.mocked(http.post)
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -53,6 +54,22 @@ describe('inventoryService', () => {
       inventoryService.getProductInBranch('branch-centro', 'product-whey', 'token'),
     ).resolves.toEqual(detail)
     expect(get).toHaveBeenCalledWith('/branches/branch-centro/inventory/product-whey', {
+      token: 'token',
+    })
+  })
+
+  it('assigns a lot to a branch and unwraps the created lot', async () => {
+    const lot = { id: 'lot-3', quantity: 20 }
+    post.mockResolvedValue({ data: lot })
+    const payload = {
+      productId: 'product-whey',
+      quantity: 20,
+      minimumStock: 5,
+      expirationDate: '2026-12-31T00:00:00Z',
+    }
+
+    await expect(inventoryService.assign('branch-centro', payload, 'token')).resolves.toEqual(lot)
+    expect(post).toHaveBeenCalledWith('/branches/branch-centro/inventory', payload, {
       token: 'token',
     })
   })
