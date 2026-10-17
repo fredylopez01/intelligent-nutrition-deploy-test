@@ -10,6 +10,7 @@ import {
 import { INestApplication } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { Test } from "@nestjs/testing";
+import { randomUUID } from "node:crypto";
 import request from "supertest";
 import type { App } from "supertest/types.js";
 
@@ -576,5 +577,278 @@ describe("Product image endpoints (e2e)", () => {
         expect(errorCodeOf(response.body)).toBe("INSUFFICIENT_PERMISSIONS");
       },
     );
+  });
+
+  describe("GET /products/:productId/images", () => {
+    it("returns an empty array when the product has no images", async () => {
+      const product = await createProduct();
+
+      const response = await request(app.getHttpServer())
+        .get(endpointPath(product.id))
+        .set("Authorization", `Bearer ${tokens.SUPERADMIN}`)
+        .expect(200);
+
+      expect((response.body as { data: unknown[] }).data).toEqual([]);
+    });
+
+    it("returns images sorted primary first then by sortOrder ascending", async () => {
+      const product = await createProduct();
+      const third = await createImage(product.id, {
+        isPrimary: false,
+        sortOrder: 2,
+      });
+      const first = await createImage(product.id, {
+        isPrimary: false,
+        sortOrder: 0,
+      });
+      const primary = await createImage(product.id, {
+        isPrimary: true,
+        sortOrder: 1,
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(endpointPath(product.id))
+        .set("Authorization", `Bearer ${tokens.SUPERADMIN}`)
+        .expect(200);
+
+      const images = (
+        response.body as { data: { id: string; isPrimary: boolean }[] }
+      ).data;
+      expect(images).toHaveLength(3);
+      expect(images[0].id).toBe(primary.id);
+      expect(images[0].isPrimary).toBe(true);
+      expect(images[1].id).toBe(first.id);
+      expect(images[2].id).toBe(third.id);
+    });
+
+    it("includes expected fields and excludes storageKey and createdBy", async () => {
+      const product = await createProduct();
+      await createImage(product.id, { isPrimary: true, sortOrder: 0 });
+
+      const response = await request(app.getHttpServer())
+        .get(endpointPath(product.id))
+        .set("Authorization", `Bearer ${tokens.SUPERADMIN}`)
+        .expect(200);
+
+      const images = (
+        response.body as { data: Record<string, unknown>[] }
+      ).data;
+      expect(images).toHaveLength(1);
+      expect(images[0]).toMatchObject({
+        id: expect.any(String),
+        url: expect.any(String),
+        fileName: expect.any(String),
+        mimeType: "image/png",
+        isPrimary: true,
+        sortOrder: 0,
+        createdAt: expect.any(String),
+      });
+      expect(images[0]).not.toHaveProperty("storageKey");
+      expect(images[0]).not.toHaveProperty("productId");
+      expect(images[0]).not.toHaveProperty("createdBy");
+    });
+
+    it("returns 404 when the product does not exist", async () => {
+      await request(app.getHttpServer())
+        .get(`/api/v1/products/${randomUUID()}/images`)
+        .set("Authorization", `Bearer ${tokens.SUPERADMIN}`)
+        .expect(404);
+    });
+
+    it("allows BRANCH_ASSISTANT to list images", async () => {
+      const product = await createProduct();
+
+      await request(app.getHttpServer())
+        .get(endpointPath(product.id))
+        .set("Authorization", `Bearer ${tokens.BRANCH_ASSISTANT}`)
+        .expect(200);
+    });
+
+    it("returns 401 without a token", async () => {
+      const product = await createProduct();
+
+      await request(app.getHttpServer())
+        .get(endpointPath(product.id))
+        .expect(401);
+    });
+  });
+
+  describe("product list and detail image responses", () => {
+    it("sets primaryImageUrl to the primary image URL in the product list", async () => {
+      const product = await createProduct();
+      await createImage(product.id, { isPrimary: true, sortOrder: 0 });
+
+      const response = await request(app.getHttpServer())
+        .get("/api/v1/products")
+        .query({ search: product.referenceCode })
+        .set("Authorization", `Bearer ${tokens.SUPERADMIN}`)
+        .expect(200);
+
+      const page = response.body as {
+        data: { id: string; primaryImageUrl: string | null }[];
+      };
+      const found = page.data.find((p) => p.id === product.id);
+      expect(found).toBeDefined();
+      expect(found!.primaryImageUrl).not.toBeNull();
+      expect(typeof found!.primaryImageUrl).toBe("string");
+    });
+
+    it("includes an images array in the product detail sorted primary first", async () => {
+      const product = await createProduct();
+      const secondary = await createImage(product.id, {
+        isPrimary: false,
+        sortOrder: 1,
+      });
+      const primary = await createImage(product.id, {
+        isPrimary: true,
+        sortOrder: 0,
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/products/${product.id}`)
+        .set("Authorization", `Bearer ${tokens.SUPERADMIN}`)
+        .expect(200);
+
+      // findOne returns { data: {...} }; the global interceptor wraps it again → body.data.data
+      const detail = (
+        response.body as {
+          data: {
+            data: {
+              images: { id: string; isPrimary: boolean; sortOrder: number }[];
+            };
+          };
+        }
+      ).data.data;
+      expect(detail.images).toHaveLength(2);
+      expect(detail.images[0].id).toBe(primary.id);
+      expect(detail.images[0].isPrimary).toBe(true);
+      expect(detail.images[1].id).toBe(secondary.id);
+      expect(detail.images[1].isPrimary).toBe(false);
+      expect(detail.images[0]).not.toHaveProperty("storageKey");
+    });
+
+    it("returns an empty images array in the product detail when there are no images", async () => {
+      const product = await createProduct();
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/products/${product.id}`)
+        .set("Authorization", `Bearer ${tokens.SUPERADMIN}`)
+        .expect(200);
+
+      const detail = (
+        response.body as { data: { data: { images: unknown[] } } }
+      ).data.data;
+      expect(detail.images).toEqual([]);
+    });
+  });
+
+  describe("POST /products/:productId/images — additional edge cases", () => {
+    it("rejects a storageKey that does not belong to the product → 403 STORAGE_KEY_MISMATCH", async () => {
+      const product = await createProduct();
+      const otherProduct = await createProduct();
+      const payload = confirmPayload(otherProduct.id);
+
+      const response = await requestFor(
+        "post",
+        endpointPath(product.id),
+        tokens.SUPERADMIN,
+      )
+        .send(payload)
+        .expect(403);
+
+      expect(errorCodeOf(response.body)).toBe("STORAGE_KEY_MISMATCH");
+    });
+
+    it("rejects a storageKey already registered for another image → 409 STORAGE_KEY_ALREADY_EXISTS", async () => {
+      const product = await createProduct();
+      const payload = confirmPayload(product.id);
+      await requestFor("post", endpointPath(product.id), tokens.SUPERADMIN)
+        .send(payload)
+        .expect(201);
+
+      const response = await requestFor(
+        "post",
+        endpointPath(product.id),
+        tokens.SUPERADMIN,
+      )
+        .send({ ...payload, isPrimary: false })
+        .expect(409);
+
+      expect(errorCodeOf(response.body)).toBe("STORAGE_KEY_ALREADY_EXISTS");
+    });
+
+    it("rejects a file whose magic bytes do not match the declared MIME type → 422 INVALID_FILE_CONTENT", async () => {
+      const product = await createProduct();
+      // PDF magic bytes instead of PNG
+      storageMock.getMagicBytes.mockResolvedValue(
+        Buffer.from([0x25, 0x50, 0x44, 0x46]),
+      );
+
+      const response = await requestFor(
+        "post",
+        endpointPath(product.id),
+        tokens.SUPERADMIN,
+      )
+        .send(confirmPayload(product.id, { mimeType: "image/png" }))
+        .expect(422);
+
+      expect(errorCodeOf(response.body)).toBe("INVALID_FILE_CONTENT");
+      expect(storageMock.deleteObject).toHaveBeenCalled();
+      expect(
+        await prisma.productImage.count({ where: { productId: product.id } }),
+      ).toBe(0);
+    });
+  });
+
+  describe("PATCH and DELETE — additional edge cases", () => {
+    it("returns 409 PRIMARY_IMAGE_REQUIRED when trying to unset the only primary image", async () => {
+      const product = await createProduct();
+      const image = await createImage(product.id, {
+        isPrimary: true,
+        sortOrder: 0,
+      });
+
+      const response = await requestFor(
+        "patch",
+        endpointPath(product.id, image.id),
+        tokens.SUPERADMIN,
+      )
+        .send({ isPrimary: false })
+        .expect(409);
+
+      expect(errorCodeOf(response.body)).toBe("PRIMARY_IMAGE_REQUIRED");
+    });
+
+    it("returns 404 when patching an image that does not belong to the product", async () => {
+      const product = await createProduct();
+      const otherProduct = await createProduct();
+      const image = await createImage(otherProduct.id, {
+        isPrimary: true,
+        sortOrder: 0,
+      });
+
+      await requestFor(
+        "patch",
+        endpointPath(product.id, image.id),
+        tokens.SUPERADMIN,
+      )
+        .send({ sortOrder: 1 })
+        .expect(404);
+    });
+
+    it("returns 404 when deleting an image that does not belong to the product", async () => {
+      const product = await createProduct();
+      const otherProduct = await createProduct();
+      const image = await createImage(otherProduct.id, {
+        isPrimary: true,
+        sortOrder: 0,
+      });
+
+      await requestFor(
+        "delete",
+        endpointPath(product.id, image.id),
+        tokens.SUPERADMIN,
+      ).expect(404);
+    });
   });
 });
