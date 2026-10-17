@@ -13,6 +13,7 @@ import { CustomerDetailPage } from '../pages/customers/CustomerDetailPage'
 import { CustomersPage } from '../pages/customers/CustomersPage'
 import { ForbiddenPage } from '../pages/ForbiddenPage'
 import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
+import { InventoryPage } from '../pages/inventory/InventoryPage'
 import { LandingPage } from '../pages/LandingPage'
 import { PrivacyPolicyPage } from '../pages/legal/PrivacyPolicyPage'
 import { TermsOfServicePage } from '../pages/legal/TermsOfServicePage'
@@ -60,6 +61,15 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={ROUTE_ROLES['/sedes']}>
             <BranchesPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/inventario"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/inventario']}>
+            <InventoryPage />
           </ProtectedRoute>
         }
       />

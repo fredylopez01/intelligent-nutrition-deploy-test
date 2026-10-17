@@ -5,6 +5,11 @@ export interface UserRole {
   name: RoleName
 }
 
+export interface SessionBranch {
+  id: string
+  name: string
+}
+
 export interface SessionUser {
   id: string
   fullName: string
@@ -12,6 +17,7 @@ export interface SessionUser {
   roleId: string
   active: boolean
   role: UserRole
+  branches?: SessionBranch[]
 }
 
 export interface LoginCredentials {

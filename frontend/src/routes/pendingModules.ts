@@ -11,11 +11,6 @@ export const PENDING_MODULES: PendingModule[] = [
     description: 'Ventas del día, stock por sede y alertas de inventario en una sola vista.',
   },
   {
-    path: '/inventario',
-    title: 'Inventario',
-    description: 'Existencias por sede, con estado de stock óptimo o bajo.',
-  },
-  {
     path: '/inventario/movimientos',
     title: 'Movimientos',
     description: 'Entradas, salidas y ajustes de inventario con su motivo y responsable.',

@@ -1,4 +1,4 @@
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   IsBoolean,
   IsEnum,
@@ -9,6 +9,12 @@ import {
   Max,
   Min,
 } from "class-validator";
+
+function toBoolean({ value }: { value: unknown }) {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return value;
+}
 
 export enum BranchInventorySortBy {
   NAME = "name",
@@ -44,12 +50,12 @@ export class ListBranchInventoryQueryDto {
   categoryId?: string;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(toBoolean)
   @IsBoolean()
   lowStock?: boolean;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(toBoolean)
   @IsBoolean()
   productActive?: boolean = true;
 
