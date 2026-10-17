@@ -8,6 +8,7 @@ import { branchesService } from '../../services/branches.service'
 import { categoriesService } from '../../services/categories.service'
 import { ApiError } from '../../services/http'
 import { inventoryService } from '../../services/inventory.service'
+import { productsService } from '../../services/products.service'
 import { unitsService } from '../../services/units.service'
 import {
   BRANCHES,
@@ -16,7 +17,7 @@ import {
   inventoryPage,
   withoutThresholds,
 } from '../../test-utils/inventory'
-import { CATEGORIES, UNITS, optionsPage } from '../../test-utils/products'
+import { CATEGORIES, UNITS, buildProduct, optionsPage } from '../../test-utils/products'
 import type { BranchInventoryParams } from '../../types/inventory'
 
 import { InventoryPage } from './InventoryPage'
@@ -30,6 +31,7 @@ vi.mock('../../services/inventory.service', () => ({
   inventoryService: {
     listByBranch: vi.fn(),
     getProductInBranch: vi.fn(),
+    assign: vi.fn(),
   },
 }))
 
@@ -43,6 +45,10 @@ vi.mock('../../services/categories.service', () => ({
 
 vi.mock('../../services/units.service', () => ({
   unitsService: { list: vi.fn() },
+}))
+
+vi.mock('../../services/products.service', () => ({
+  productsService: { list: vi.fn() },
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
@@ -63,7 +69,9 @@ vi.mock('../../layouts/AppLayout', () => ({
 
 const listByBranch = vi.mocked(inventoryService.listByBranch)
 const getProductInBranch = vi.mocked(inventoryService.getProductInBranch)
+const assign = vi.mocked(inventoryService.assign)
 const listBranches = vi.mocked(branchesService.list)
+const listProducts = vi.mocked(productsService.list)
 
 const whey = buildInventoryItem()
 const creatine = buildInventoryItem({
@@ -154,11 +162,12 @@ describe('InventoryPage', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('sede=branch-norte')
   })
 
-  it('lets the superadmin read an inactive branch', async () => {
+  it('lets the superadmin read an inactive branch but not change it', async () => {
     renderPage('/inventario?sede=branch-sur')
 
     expect(await screen.findByText(/Sur está inactiva/)).toBeInTheDocument()
     expect(lastListCall()[0]).toBe('branch-sur')
+    expect(screen.getByRole('button', { name: 'Asignar producto' })).toBeDisabled()
   })
 
   it('uses the branches of the session for the branch leader', async () => {
@@ -176,9 +185,10 @@ describe('InventoryPage', () => {
         .getAllByRole('option')
         .map((option) => option.textContent),
     ).toEqual(['Centro', 'Norte'])
+    expect(screen.getByRole('button', { name: 'Asignar producto' })).toBeEnabled()
   })
 
-  it('hides the thresholds from the branch assistant', async () => {
+  it('hides the thresholds and the management actions from the branch assistant', async () => {
     auth.role = 'BRANCH_ASSISTANT'
     auth.branches = [{ id: 'branch-centro', name: 'Centro' }]
     listByBranch.mockResolvedValue(inventoryPage([withoutThresholds(whey)]))
@@ -187,6 +197,7 @@ describe('InventoryPage', () => {
     await screen.findByText('Whey Protein 2 lb')
     expect(screen.queryByRole('columnheader', { name: 'Stock mínimo' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Filtrar por nivel de stock')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Asignar producto' })).not.toBeInTheDocument()
     expect(lastListCall()[1].lowStock).toBeUndefined()
   })
 
@@ -272,5 +283,49 @@ describe('InventoryPage', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Whey Protein 2 lb' })
     expect(await within(dialog).findByText('31 dic 2026')).toBeInTheDocument()
     expect(getProductInBranch).toHaveBeenCalledWith('branch-centro', 'product-whey', 'test-token')
+  })
+
+  it('assigns a product to the branch and reloads the inventory', async () => {
+    listProducts.mockResolvedValue(optionsPage([buildProduct()]))
+    getProductInBranch.mockRejectedValue(
+      new ApiError('Not assigned', 404, undefined, 'PRODUCT_NOT_ASSIGNED'),
+    )
+    assign.mockResolvedValue({
+      id: 'lot-9',
+      branchId: 'branch-centro',
+      product: whey.product,
+      quantity: 20,
+      minimumStock: 5,
+      lowStock: false,
+      expirationDate: '2027-12-31T00:00:00Z',
+      updatedAt: '2026-10-16T00:00:00Z',
+    })
+    const { user } = renderPage()
+    await screen.findByText('Creatina 300 g')
+    const callsBefore = listByBranch.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'Asignar producto' }))
+    const dialog = screen.getByRole('dialog', { name: 'Asignar producto a la sede' })
+    await user.click(await within(dialog).findByRole('button', { name: /Whey Protein 2 lb/ }))
+    await user.type(within(dialog).getByLabelText('Cantidad inicial'), '20')
+    await user.clear(within(dialog).getByLabelText('Stock mínimo'))
+    await user.type(within(dialog).getByLabelText('Stock mínimo'), '5')
+    await user.type(within(dialog).getByLabelText('Fecha de vencimiento'), '2027-12-31')
+    await user.click(within(dialog).getByRole('button', { name: 'Asignar a la sede' }))
+
+    expect(
+      await screen.findByText('Se asignaron 20 und de Whey Protein 2 lb a Centro.'),
+    ).toBeInTheDocument()
+    expect(assign).toHaveBeenCalledWith(
+      'branch-centro',
+      {
+        productId: 'product-whey',
+        quantity: 20,
+        minimumStock: 5,
+        expirationDate: '2027-12-31T00:00:00Z',
+      },
+      'test-token',
+    )
+    await waitFor(() => expect(listByBranch.mock.calls.length).toBe(callsBefore + 1))
   })
 })
