@@ -176,4 +176,44 @@ describe('Pagination', () => {
 
     expect(container).toBeEmptyDOMElement()
   })
+
+  it('shows the correct range on page 1', () => {
+    renderPagination({ page: 1, totalPages: 5, total: 45, limit: 10 })
+
+    expect(screen.getByText('Mostrando 1–10 de 45')).toHaveAttribute('aria-live', 'polite')
+  })
+
+  it('hides the summary when there are no results', () => {
+    renderPagination({ page: 1, totalPages: 1, total: 0, limit: 10 })
+
+    expect(screen.queryByText(/Mostrando/)).not.toBeInTheDocument()
+  })
+
+  it('hides the page size selector when only one size is available', () => {
+    render(
+      <Pagination
+        page={1}
+        totalPages={2}
+        label="Paginación"
+        onChange={vi.fn()}
+        total={30}
+        limit={25}
+        limitOptions={[25]}
+        onLimitChange={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByLabelText('Filas por página')).not.toBeInTheDocument()
+    expect(screen.getByRole('navigation')).toBeInTheDocument()
+  })
+
+  it('keyboard can navigate to the previous page', async () => {
+    const { user, onChange } = renderPagination({ page: 3 })
+
+    await user.tab()
+    expect(screen.getByRole('button', { name: 'Página anterior' })).toHaveFocus()
+    await user.keyboard('{Enter}')
+
+    expect(onChange).toHaveBeenCalledWith(2)
+  })
 })
