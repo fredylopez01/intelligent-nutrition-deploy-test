@@ -13,6 +13,7 @@ import { CustomerDetailPage } from '../pages/customers/CustomerDetailPage'
 import { CustomersPage } from '../pages/customers/CustomersPage'
 import { ForbiddenPage } from '../pages/ForbiddenPage'
 import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
+import { ConsolidatedInventoryPage } from '../pages/inventory/ConsolidatedInventoryPage'
 import { InventoryPage } from '../pages/inventory/InventoryPage'
 import { LandingPage } from '../pages/LandingPage'
 import { PrivacyPolicyPage } from '../pages/legal/PrivacyPolicyPage'
@@ -70,6 +71,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={ROUTE_ROLES['/inventario']}>
             <InventoryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventario/consolidado"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/inventario/consolidado']}>
+            <ConsolidatedInventoryPage />
           </ProtectedRoute>
         }
       />

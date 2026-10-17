@@ -11,6 +11,7 @@ interface InventoryTableProps {
   showThresholds: boolean
   onViewLots: (item: BranchInventoryItem) => void
   onEditMinimum?: (item: BranchInventoryItem) => void
+  onViewAvailability?: (item: BranchInventoryItem) => void
 }
 
 export function InventoryTable({
@@ -18,6 +19,7 @@ export function InventoryTable({
   showThresholds,
   onViewLots,
   onEditMinimum,
+  onViewAvailability,
 }: InventoryTableProps) {
   return (
     <table className="inventory-table">
@@ -53,6 +55,9 @@ export function InventoryTable({
             { label: 'Ver lotes', onSelect: () => onViewLots(item) },
             ...(onEditMinimum
               ? [{ label: 'Editar stock mínimo', onSelect: () => onEditMinimum(item) }]
+              : []),
+            ...(onViewAvailability
+              ? [{ label: 'Ver en otras sedes', onSelect: () => onViewAvailability(item) }]
               : []),
           ]
 

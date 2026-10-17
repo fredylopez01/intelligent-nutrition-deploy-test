@@ -88,4 +88,30 @@ describe('inventoryService', () => {
       { token: 'token' },
     )
   })
+
+  it('asks for the availability of a product in the other branches', async () => {
+    const availability = { product: { id: 'product-whey' }, branches: [] }
+    get.mockResolvedValue({ data: availability })
+
+    await expect(inventoryService.availability('product-whey', 'token')).resolves.toEqual(
+      availability,
+    )
+    expect(get).toHaveBeenCalledWith('/inventory/availability?productId=product-whey', {
+      token: 'token',
+    })
+  })
+
+  it('lists the consolidated inventory with its filters', async () => {
+    get.mockResolvedValue(inventoryPage([]))
+
+    await inventoryService.consolidated(
+      { page: 1, limit: 20, search: 'whey', categoryId: 'cat-protein' },
+      'token',
+    )
+
+    expect(get).toHaveBeenCalledWith(
+      '/inventory/consolidated?page=1&limit=20&search=whey&categoryId=cat-protein',
+      { token: 'token' },
+    )
+  })
 })

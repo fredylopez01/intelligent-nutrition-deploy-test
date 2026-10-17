@@ -4,7 +4,10 @@ import type {
   BranchInventoryDetail,
   BranchInventoryParams,
   BranchInventoryResponse,
+  ConsolidatedParams,
+  ConsolidatedResponse,
   MinimumStockResult,
+  ProductAvailability,
 } from '../types/inventory'
 
 import { http } from './http'
@@ -67,4 +70,17 @@ export const inventoryService = {
         { token },
       ),
     ),
+
+  availability: async (productId: string, token: string | null): Promise<ProductAvailability> =>
+    unwrap(
+      await http.get<ProductAvailability | { data: ProductAvailability }>(
+        `/inventory/availability${buildQuery({ productId })}`,
+        { token },
+      ),
+    ),
+
+  consolidated: (params: ConsolidatedParams, token: string | null) =>
+    http.get<ConsolidatedResponse>(`/inventory/consolidated${buildQuery({ ...params })}`, {
+      token,
+    }),
 }
