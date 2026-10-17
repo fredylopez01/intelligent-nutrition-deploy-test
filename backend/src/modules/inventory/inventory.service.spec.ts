@@ -354,14 +354,14 @@ describe("InventoryService.assignProductToBranch", () => {
     });
 
     it("rejects roles without branch scope", async () => {
-      const assistant: AuthenticatedUser = {
+      const developer: AuthenticatedUser = {
         id: userId,
         active: true,
-        role: { name: "BRANCH_ASSISTANT" },
+        role: { name: "DEV" },
       };
 
       await expect(
-        service.assignProductToBranch(branchId, validDto(), assistant),
+        service.assignProductToBranch(branchId, validDto(), developer),
       ).rejects.toMatchObject({ response: { code: "FORBIDDEN" } });
 
       expect(prismaMock.$transaction).not.toHaveBeenCalled();

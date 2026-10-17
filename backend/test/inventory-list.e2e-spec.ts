@@ -457,10 +457,7 @@ describe("GET /api/v1/branches/:branchId/inventory (e2e)", () => {
       expect(body.meta.total).toBe(1);
     });
 
-    // Known backend issue: `@Type(() => Boolean)` turns the string "false"
-    // into `true`, so this filter behaves like lowStock=true. Remove
-    // `.failing` once the DTO parses booleans correctly.
-    it.failing("filters by lowStock=false", async () => {
+    it("filters by lowStock=false", async () => {
       const response = await getList(branchId, tokens.SUPERADMIN, {
         lowStock: "false",
       }).expect(200);
@@ -468,8 +465,7 @@ describe("GET /api/v1/branches/:branchId/inventory (e2e)", () => {
       expect(productNames(response.body)).toEqual([names.bravo, names.charlie]);
     });
 
-    // Same `@Type(() => Boolean)` issue: productActive=false is read as true.
-    it.failing("lists inactive products with productActive=false", async () => {
+    it("lists inactive products with productActive=false", async () => {
       const response = await getList(branchId, tokens.SUPERADMIN, {
         productActive: "false",
       }).expect(200);
@@ -632,11 +628,7 @@ describe("GET /api/v1/branches/:branchId/inventory (e2e)", () => {
       expect(errorOf(detail.body).code).toBe("BRANCH_OUT_OF_SCOPE");
     });
 
-    // Known backend issue: `assertBranchScope` only accepts SUPERADMIN and
-    // BRANCH_LEADER, so an assigned BRANCH_ASSISTANT gets 403 FORBIDDEN even
-    // though the contract (8.3 and 8.4) allows it without thresholds. Remove
-    // `.failing` once the scope check supports BRANCH_ASSISTANT.
-    it.failing("lets a BRANCH_ASSISTANT list their branch without thresholds", async () => {
+    it("lets a BRANCH_ASSISTANT list their branch without thresholds", async () => {
       const response = await getList(branchId, tokens.BRANCH_ASSISTANT).expect(
         200,
       );
@@ -650,7 +642,7 @@ describe("GET /api/v1/branches/:branchId/inventory (e2e)", () => {
       }
     });
 
-    it.failing("lets a BRANCH_ASSISTANT read a product detail without thresholds", async () => {
+    it("lets a BRANCH_ASSISTANT read a product detail without thresholds", async () => {
       const response = await getDetail(
         branchId,
         products.alpha,
