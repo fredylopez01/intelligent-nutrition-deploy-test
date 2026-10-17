@@ -3,6 +3,7 @@ import type { RoleName } from '../types/auth'
 export const ROUTE_ROLES: Record<string, RoleName[]> = {
   '/sedes': ['SUPERADMIN'],
   '/inventario': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
+  '/inventario/consolidado': ['SUPERADMIN'],
   '/catalogo': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
   '/catalogo/categorias': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
   '/catalogo/unidades': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],

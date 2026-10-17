@@ -133,3 +133,36 @@ describe('Sidebar catalog submenu', () => {
     expect(catalogSubs()).toEqual([])
   })
 })
+
+describe('Sidebar inventory submenu', () => {
+  function inventorySubs() {
+    const nav = screen.getByRole('navigation', { name: 'Navegación principal' })
+    return within(nav)
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('href')?.startsWith('/inventario'))
+      .map((link) => link.textContent)
+  }
+
+  it('shows the consolidated inventory only to the superadmin', () => {
+    renderSidebar('/inventario')
+
+    expect(inventorySubs()).toEqual([
+      'Inventario',
+      'Existencias',
+      'Consolidado',
+      'Movimientos',
+      'Cierre diario',
+    ])
+  })
+
+  it.each(['BRANCH_LEADER', 'BRANCH_ASSISTANT'])(
+    'hides the consolidated inventory from the %s',
+    (role) => {
+      auth.role = role
+      renderSidebar('/inventario')
+
+      expect(inventorySubs()).not.toContain('Consolidado')
+      expect(inventorySubs()).toContain('Existencias')
+    },
+  )
+})

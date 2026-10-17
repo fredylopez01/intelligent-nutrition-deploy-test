@@ -25,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
     to: '/inventario',
     subs: [
       { label: 'Existencias', to: '/inventario' },
+      { label: 'Consolidado', to: '/inventario/consolidado' },
       { label: 'Movimientos', to: '/inventario/movimientos' },
       { label: 'Cierre diario', to: '/inventario/cierre' },
     ],

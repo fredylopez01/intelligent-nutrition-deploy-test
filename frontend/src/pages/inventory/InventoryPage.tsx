@@ -5,6 +5,7 @@ import { AssignProductForm } from '../../components/inventory/AssignProductForm'
 import { InventoryLots } from '../../components/inventory/InventoryLots'
 import { InventoryTable } from '../../components/inventory/InventoryTable'
 import { MinimumStockForm } from '../../components/inventory/MinimumStockForm'
+import { ProductAvailability } from '../../components/inventory/ProductAvailability'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -39,6 +40,7 @@ type Dialog =
   | { kind: 'assign' }
   | { kind: 'lots'; item: BranchInventoryItem }
   | { kind: 'minimum'; item: BranchInventoryItem }
+  | { kind: 'availability'; item: BranchInventoryItem }
 
 export function InventoryPage() {
   const { user } = useAuth()
@@ -180,6 +182,7 @@ export function InventoryPage() {
         onEditMinimum={
           canManage && branch?.active ? (item) => openDialog({ kind: 'minimum', item }) : undefined
         }
+        onViewAvailability={(item) => openDialog({ kind: 'availability', item })}
       />
     )
   }
@@ -354,6 +357,21 @@ export function InventoryPage() {
             onSaved={(result) => handleMinimumSaved(dialog.item, result)}
             onCancel={closeDialog}
           />
+        )}
+      </Modal>
+
+      <Modal
+        open={dialog?.kind === 'availability'}
+        title="Disponibilidad en otras sedes"
+        description={
+          dialog?.kind === 'availability'
+            ? `${dialog.item.product.name} (${dialog.item.product.referenceCode})`
+            : undefined
+        }
+        onClose={closeDialog}
+      >
+        {dialog?.kind === 'availability' && branch && (
+          <ProductAvailability branchId={branch.id} item={dialog.item} onClose={closeDialog} />
         )}
       </Modal>
     </AppLayout>

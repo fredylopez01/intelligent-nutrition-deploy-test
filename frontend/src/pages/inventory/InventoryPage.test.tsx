@@ -33,6 +33,7 @@ vi.mock('../../services/inventory.service', () => ({
     getProductInBranch: vi.fn(),
     assign: vi.fn(),
     updateMinimumStock: vi.fn(),
+    availability: vi.fn(),
   },
 }))
 
@@ -72,6 +73,7 @@ const listByBranch = vi.mocked(inventoryService.listByBranch)
 const getProductInBranch = vi.mocked(inventoryService.getProductInBranch)
 const assign = vi.mocked(inventoryService.assign)
 const updateMinimumStock = vi.mocked(inventoryService.updateMinimumStock)
+const availability = vi.mocked(inventoryService.availability)
 const listBranches = vi.mocked(branchesService.list)
 const listProducts = vi.mocked(productsService.list)
 
@@ -371,5 +373,22 @@ describe('InventoryPage', () => {
 
     expect(screen.queryByRole('menuitem', { name: 'Editar stock mínimo' })).not.toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Ver lotes' })).toBeInTheDocument()
+  })
+
+  it('shows where else the product is available', async () => {
+    availability.mockResolvedValue({
+      product: { id: 'product-whey', name: 'Whey Protein 2 lb', referenceCode: 'WHEY-2LB-001' },
+      branches: [
+        { branchId: 'branch-norte', branchName: 'Norte', quantity: 12 },
+        { branchId: 'branch-centro', branchName: 'Centro', quantity: 35 },
+      ],
+    })
+    const { user } = renderPage()
+
+    await openRowAction(user, 'Whey Protein 2 lb', 'Ver en otras sedes')
+
+    const dialog = await screen.findByRole('dialog', { name: 'Disponibilidad en otras sedes' })
+    expect(await within(dialog).findByText('Norte')).toBeInTheDocument()
+    expect(availability).toHaveBeenCalledWith('product-whey', 'test-token')
   })
 })

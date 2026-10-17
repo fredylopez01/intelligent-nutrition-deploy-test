@@ -70,3 +70,40 @@ export interface MinimumStockResult {
   lots: InventoryLot[]
   updatedAt: string
 }
+
+export interface InventoryProductRef {
+  id: string
+  name: string
+  referenceCode: string
+}
+
+export interface ProductAvailability {
+  product: InventoryProductRef
+  branches: { branchId: string; branchName: string; quantity: number }[]
+}
+
+export interface ConsolidatedBranch {
+  branchId: string
+  branchName: string
+  quantity: number
+  minimumStock: number
+}
+
+export interface ConsolidatedItem {
+  product: InventoryProductRef
+  branchesTotal: number
+  total: number
+  branches: ConsolidatedBranch[]
+}
+
+export interface ConsolidatedParams {
+  page?: number
+  limit?: number
+  search?: string
+  categoryId?: string
+}
+
+export interface ConsolidatedResponse {
+  data: ConsolidatedItem[]
+  meta: PaginationMeta
+}
