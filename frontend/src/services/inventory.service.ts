@@ -4,6 +4,7 @@ import type {
   BranchInventoryDetail,
   BranchInventoryParams,
   BranchInventoryResponse,
+  MinimumStockResult,
 } from '../types/inventory'
 
 import { http } from './http'
@@ -51,5 +52,19 @@ export const inventoryService = {
       await http.post<AssignedLot | { data: AssignedLot }>(branchInventoryPath(branchId), payload, {
         token,
       }),
+    ),
+
+  updateMinimumStock: async (
+    branchId: string,
+    productId: string,
+    minimumStock: number,
+    token: string | null,
+  ): Promise<MinimumStockResult> =>
+    unwrap(
+      await http.patch<MinimumStockResult | { data: MinimumStockResult }>(
+        `${branchInventoryPath(branchId)}/${productId}`,
+        { minimumStock },
+        { token },
+      ),
     ),
 }

@@ -32,6 +32,7 @@ vi.mock('../../services/inventory.service', () => ({
     listByBranch: vi.fn(),
     getProductInBranch: vi.fn(),
     assign: vi.fn(),
+    updateMinimumStock: vi.fn(),
   },
 }))
 
@@ -70,6 +71,7 @@ vi.mock('../../layouts/AppLayout', () => ({
 const listByBranch = vi.mocked(inventoryService.listByBranch)
 const getProductInBranch = vi.mocked(inventoryService.getProductInBranch)
 const assign = vi.mocked(inventoryService.assign)
+const updateMinimumStock = vi.mocked(inventoryService.updateMinimumStock)
 const listBranches = vi.mocked(branchesService.list)
 const listProducts = vi.mocked(productsService.list)
 
@@ -327,5 +329,47 @@ describe('InventoryPage', () => {
       'test-token',
     )
     await waitFor(() => expect(listByBranch.mock.calls.length).toBe(callsBefore + 1))
+  })
+
+  it('updates the minimum stock in the row without reloading the list', async () => {
+    updateMinimumStock.mockResolvedValue({
+      branchId: 'branch-centro',
+      productId: 'product-whey',
+      minimumStock: 40,
+      totalQuantity: 35,
+      lowStock: true,
+      lotsUpdated: 2,
+      lots: [],
+      updatedAt: '2026-10-16T00:00:00Z',
+    })
+    const { user } = renderPage()
+    await screen.findByText('Whey Protein 2 lb')
+    const callsBefore = listByBranch.mock.calls.length
+
+    await openRowAction(user, 'Whey Protein 2 lb', 'Editar stock mínimo')
+    const dialog = screen.getByRole('dialog', { name: 'Editar stock mínimo' })
+    await user.clear(within(dialog).getByLabelText('Nuevo stock mínimo'))
+    await user.type(within(dialog).getByLabelText('Nuevo stock mínimo'), '40')
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar stock mínimo' }))
+
+    expect(
+      await screen.findByText(
+        'El stock mínimo de Whey Protein 2 lb ahora es 40 und y el producto quedó bajo mínimo.',
+      ),
+    ).toBeInTheDocument()
+    const row = screen.getByText('Whey Protein 2 lb').closest('tr') as HTMLElement
+    expect(within(row).getByText('40')).toBeInTheDocument()
+    expect(within(row).getByText('Bajo mínimo')).toBeInTheDocument()
+    expect(row).toHaveClass('inventory-table__row--low')
+    expect(listByBranch.mock.calls.length).toBe(callsBefore)
+  })
+
+  it('does not offer to edit the minimum stock of an inactive branch', async () => {
+    const { user } = renderPage('/inventario?sede=branch-sur')
+
+    await user.click(await screen.findByRole('button', { name: 'Acciones para Whey Protein 2 lb' }))
+
+    expect(screen.queryByRole('menuitem', { name: 'Editar stock mínimo' })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Ver lotes' })).toBeInTheDocument()
   })
 })

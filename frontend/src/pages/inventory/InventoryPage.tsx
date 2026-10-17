@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { AssignProductForm } from '../../components/inventory/AssignProductForm'
 import { InventoryLots } from '../../components/inventory/InventoryLots'
 import { InventoryTable } from '../../components/inventory/InventoryTable'
+import { MinimumStockForm } from '../../components/inventory/MinimumStockForm'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -18,7 +19,7 @@ import { useCatalogOptions } from '../../hooks/useCatalogOptions'
 import { useInventoryBranches } from '../../hooks/useInventoryBranches'
 import { usePagination } from '../../hooks/usePagination'
 import { AppLayout } from '../../layouts/AppLayout'
-import type { AssignedLot, BranchInventoryItem } from '../../types/inventory'
+import type { AssignedLot, BranchInventoryItem, MinimumStockResult } from '../../types/inventory'
 import { hasRole } from '../../utils/categories'
 import { INVENTORY_MANAGE_ROLES, formatQuantity } from '../../utils/inventory'
 
@@ -34,7 +35,10 @@ const LOW_STOCK_FILTER_VALUES: Record<string, boolean | undefined> = {
 
 const FILTER_DEFAULTS = { categoria: 'todos', stock: 'todos' }
 
-type Dialog = { kind: 'assign' } | { kind: 'lots'; item: BranchInventoryItem }
+type Dialog =
+  | { kind: 'assign' }
+  | { kind: 'lots'; item: BranchInventoryItem }
+  | { kind: 'minimum'; item: BranchInventoryItem }
 
 export function InventoryPage() {
   const { user } = useAuth()
@@ -66,11 +70,14 @@ export function InventoryPage() {
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
-  const { status, items, meta, error, refetch } = useBranchInventory(branch?.id ?? null, {
-    ...params,
-    categoryId: filters.categoria === 'todos' ? undefined : filters.categoria,
-    lowStock: canManage ? LOW_STOCK_FILTER_VALUES[filters.stock] : undefined,
-  })
+  const { status, items, meta, error, refetch, updateItem } = useBranchInventory(
+    branch?.id ?? null,
+    {
+      ...params,
+      categoryId: filters.categoria === 'todos' ? undefined : filters.categoria,
+      lowStock: canManage ? LOW_STOCK_FILTER_VALUES[filters.stock] : undefined,
+    },
+  )
 
   const closeDialog = () => setDialog(null)
 
@@ -103,6 +110,18 @@ export function InventoryPage() {
       `Se asignaron ${formatQuantity(lot.quantity, lot.product.unitOfMeasure.abbreviation)} de ${lot.product.name} a ${branch?.name ?? 'la sede'}.`,
     )
     refetch()
+  }
+
+  const handleMinimumSaved = (item: BranchInventoryItem, result: MinimumStockResult) => {
+    closeDialog()
+    updateItem(item.product.id, {
+      minimumStock: result.minimumStock,
+      lowStock: result.lowStock,
+      totalQuantity: result.totalQuantity,
+    })
+    setFeedbackMessage(
+      `El stock mínimo de ${item.product.name} ahora es ${formatQuantity(result.minimumStock, item.product.unitOfMeasure.abbreviation)}${result.lowStock ? ' y el producto quedó bajo mínimo.' : '.'}`,
+    )
   }
 
   const renderList = () => {
@@ -158,6 +177,9 @@ export function InventoryPage() {
         items={items}
         showThresholds={canManage}
         onViewLots={(item) => openDialog({ kind: 'lots', item })}
+        onEditMinimum={
+          canManage && branch?.active ? (item) => openDialog({ kind: 'minimum', item }) : undefined
+        }
       />
     )
   }
@@ -312,6 +334,26 @@ export function InventoryPage() {
       >
         {dialog?.kind === 'lots' && branch && (
           <InventoryLots branchId={branch.id} item={dialog.item} onClose={closeDialog} />
+        )}
+      </Modal>
+
+      <Modal
+        open={dialog?.kind === 'minimum'}
+        title="Editar stock mínimo"
+        description={
+          dialog?.kind === 'minimum'
+            ? `${dialog.item.product.name} en ${branch?.name ?? 'la sede'}. Cuando las existencias quedan por debajo de este valor, el producto se marca como bajo mínimo.`
+            : undefined
+        }
+        onClose={closeDialog}
+      >
+        {dialog?.kind === 'minimum' && branch && (
+          <MinimumStockForm
+            branchId={branch.id}
+            item={dialog.item}
+            onSaved={(result) => handleMinimumSaved(dialog.item, result)}
+            onCancel={closeDialog}
+          />
         )}
       </Modal>
     </AppLayout>

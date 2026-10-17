@@ -10,9 +10,15 @@ interface InventoryTableProps {
   items: BranchInventoryItem[]
   showThresholds: boolean
   onViewLots: (item: BranchInventoryItem) => void
+  onEditMinimum?: (item: BranchInventoryItem) => void
 }
 
-export function InventoryTable({ items, showThresholds, onViewLots }: InventoryTableProps) {
+export function InventoryTable({
+  items,
+  showThresholds,
+  onViewLots,
+  onEditMinimum,
+}: InventoryTableProps) {
   return (
     <table className="inventory-table">
       <caption className="sr-only">Existencias de la sede por producto</caption>
@@ -43,7 +49,12 @@ export function InventoryTable({ items, showThresholds, onViewLots }: InventoryT
           const { product } = item
           const abbreviation = product.unitOfMeasure.abbreviation
           const isLow = item.lowStock === true || item.totalQuantity === 0
-          const actions = [{ label: 'Ver lotes', onSelect: () => onViewLots(item) }]
+          const actions = [
+            { label: 'Ver lotes', onSelect: () => onViewLots(item) },
+            ...(onEditMinimum
+              ? [{ label: 'Editar stock mínimo', onSelect: () => onEditMinimum(item) }]
+              : []),
+          ]
 
           return (
             <tr

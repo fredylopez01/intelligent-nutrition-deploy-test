@@ -144,3 +144,9 @@ export function assignFieldError(
   }
   return null
 }
+
+export const minimumStockSchema = z.object({
+  minimumStock: stockAmountSchema('Escribe el stock mínimo (puede ser 0).', 'El stock mínimo'),
+})
+
+export type MinimumStockValues = z.infer<typeof minimumStockSchema>
