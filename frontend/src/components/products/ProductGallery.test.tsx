@@ -59,4 +59,33 @@ describe('ProductGallery', () => {
       'https://cdn.example.com/back.webp',
     )
   })
+
+  it('labels the gallery with the product name', () => {
+    render(<ProductGallery name="Proteína Whey" images={[]} />)
+
+    expect(screen.getByRole('region', { name: 'Imágenes de Proteína Whey' })).toBeInTheDocument()
+  })
+
+  it('shows no empty slots when there are five images', () => {
+    const images = Array.from({ length: 5 }, (_, i) => image(`img-${i}`, i === 0, i))
+    const { container } = render(<ProductGallery name="Whey" images={images} />)
+
+    expect(container.querySelectorAll('.product-gallery__slot')).toHaveLength(0)
+  })
+
+  it('keyboard can switch the main image', async () => {
+    const user = userEvent.setup()
+    render(
+      <ProductGallery name="Whey" images={[image('main', true, 0), image('back', false, 1)]} />,
+    )
+
+    await user.tab()
+    await user.tab()
+    await user.keyboard('{Enter}')
+
+    expect(screen.getByRole('img', { name: 'Whey: imagen principal' })).toHaveAttribute(
+      'src',
+      'https://cdn.example.com/back.webp',
+    )
+  })
 })
