@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 import './ProductThumb.css'
 
 interface ProductThumbProps {
@@ -7,10 +9,20 @@ interface ProductThumbProps {
 }
 
 export function ProductThumb({ imageUrl, name, muted = false }: ProductThumbProps) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null)
+  const showImage = Boolean(imageUrl) && failedUrl !== imageUrl
+
   return (
     <span className={`product-thumb${muted ? ' product-thumb--muted' : ''}`}>
-      {imageUrl ? (
-        <img className="product-thumb__image" src={imageUrl} alt="" loading="lazy" />
+      {showImage && imageUrl ? (
+        <img
+          className="product-thumb__image"
+          src={imageUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailedUrl(imageUrl)}
+        />
       ) : (
         <svg
           className="product-thumb__icon"
@@ -25,7 +37,7 @@ export function ProductThumb({ imageUrl, name, muted = false }: ProductThumbProp
           <path d="M12 13v8" />
         </svg>
       )}
-      <span className="sr-only">{imageUrl ? `Imagen de ${name}` : `${name} sin imagen`}</span>
+      <span className="sr-only">{showImage ? `Imagen de ${name}` : `${name} sin imagen`}</span>
     </span>
   )
 }
