@@ -1,10 +1,14 @@
 import { useState } from 'react'
 
 import type { ProductImage } from '../../types/product'
+import {
+  IMAGE_RULES_TEXT,
+  MAX_PRODUCT_IMAGES,
+  primaryImage,
+  sortImages,
+} from '../../utils/productImages'
 
 import './ProductGallery.css'
-
-const MAX_IMAGES = 5
 
 interface ProductGalleryProps {
   name: string
@@ -22,48 +26,97 @@ function PlaceholderIcon() {
 }
 
 export function ProductGallery({ name, images }: ProductGalleryProps) {
-  const sorted = [...images].sort(
-    (a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder,
-  )
+  const sorted = sortImages(images)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const selected = sorted.find((image) => image.id === selectedId) ?? sorted[0]
-  const emptySlots = Math.max(0, MAX_IMAGES - sorted.length)
+  const [failedIds, setFailedIds] = useState<string[]>([])
+  const [loadedIds, setLoadedIds] = useState<string[]>([])
+  const selected = sorted.find((image) => image.id === selectedId) ?? primaryImage(sorted)
+  const emptySlots = Math.max(0, MAX_PRODUCT_IMAGES - sorted.length)
+
+  const markFailed = (imageId: string) =>
+    setFailedIds((ids) => (ids.includes(imageId) ? ids : [...ids, imageId]))
+  const markLoaded = (imageId: string) =>
+    setLoadedIds((ids) => (ids.includes(imageId) ? ids : [...ids, imageId]))
+
+  const renderMain = () => {
+    if (!selected) {
+      return (
+        <div className="product-gallery__empty">
+          <PlaceholderIcon />
+          <p className="product-gallery__empty-title">Sin imágenes todavía</p>
+          <p className="product-gallery__empty-text">
+            Este producto podrá tener hasta {MAX_PRODUCT_IMAGES} imágenes {IMAGE_RULES_TEXT}.
+          </p>
+        </div>
+      )
+    }
+
+    if (failedIds.includes(selected.id)) {
+      return (
+        <div className="product-gallery__empty" role="status">
+          <PlaceholderIcon />
+          <p className="product-gallery__empty-title">No se pudo cargar la imagen</p>
+          <p className="product-gallery__empty-text">
+            Revisa tu conexión o recarga la página para intentarlo de nuevo.
+          </p>
+        </div>
+      )
+    }
+
+    return (
+      <>
+        <img
+          key={selected.id}
+          className={`product-gallery__image${loadedIds.includes(selected.id) ? ' product-gallery__image--loaded' : ''}`}
+          src={selected.url}
+          alt={
+            selected.isPrimary
+              ? `${name}: imagen principal`
+              : `${name}: imagen ${sorted.indexOf(selected) + 1}`
+          }
+          decoding="async"
+          onLoad={() => markLoaded(selected.id)}
+          onError={() => markFailed(selected.id)}
+        />
+        {selected.isPrimary && <span className="product-gallery__badge">Principal</span>}
+      </>
+    )
+  }
 
   return (
     <section className="product-gallery" aria-label={`Imágenes de ${name}`}>
-      <div className="product-gallery__main">
-        {selected ? (
-          <img
-            className="product-gallery__image"
-            src={selected.url}
-            alt={`${name}: imagen principal`}
-          />
-        ) : (
-          <div className="product-gallery__empty">
-            <PlaceholderIcon />
-            <p className="product-gallery__empty-title">Sin imágenes todavía</p>
-            <p className="product-gallery__empty-text">
-              Este producto podrá tener hasta {MAX_IMAGES} imágenes JPG, PNG, WebP o AVIF de máximo
-              5 MB.
-            </p>
-          </div>
-        )}
-      </div>
+      <div className="product-gallery__main">{renderMain()}</div>
 
       <ul className="product-gallery__thumbs">
-        {sorted.map((image, index) => (
-          <li key={image.id}>
-            <button
-              type="button"
-              className={`product-gallery__thumb${image.id === selected?.id ? ' product-gallery__thumb--selected' : ''}`}
-              aria-label={`Ver imagen ${index + 1} de ${sorted.length}`}
-              aria-pressed={image.id === selected?.id}
-              onClick={() => setSelectedId(image.id)}
-            >
-              <img src={image.url} alt="" loading="lazy" />
-            </button>
-          </li>
-        ))}
+        {sorted.map((image, index) => {
+          const isSelected = image.id === selected?.id
+          return (
+            <li key={image.id}>
+              <button
+                type="button"
+                className={`product-gallery__thumb${isSelected ? ' product-gallery__thumb--selected' : ''}`}
+                aria-label={`Ver imagen ${index + 1} de ${sorted.length}${image.isPrimary ? ' (principal)' : ''}`}
+                aria-pressed={isSelected}
+                onClick={() => setSelectedId(image.id)}
+              >
+                {failedIds.includes(image.id) ? (
+                  <PlaceholderIcon />
+                ) : (
+                  <img
+                    src={image.url}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    onError={() => markFailed(image.id)}
+                  />
+                )}
+                {image.isPrimary && (
+                  <span className="product-gallery__thumb-dot" aria-hidden="true" />
+                )}
+              </button>
+            </li>
+          )
+        })}
         {Array.from({ length: emptySlots }, (_, index) => (
           <li key={`slot-${index}`} className="product-gallery__slot" aria-hidden="true">
             <PlaceholderIcon />

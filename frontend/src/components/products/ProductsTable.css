@@ -215,3 +215,17 @@
 .products-table td.products-table__col-actions {
   padding-inline: 0.25rem;
 }
+
+@media (max-width: 599px) {
+  .products-table .products-table__col-price {
+    display: none;
+  }
+
+  .products-table__col-status {
+    width: 92px;
+  }
+
+  .products-table__col-open {
+    width: 36px;
+  }
+}

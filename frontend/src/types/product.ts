@@ -67,3 +67,28 @@ export interface UpdateProductPayload {
   unitOfMeasureId?: string
   price?: string
 }
+
+export interface ImageUploadRequest {
+  fileName: string
+  mimeType: string
+  sizeBytes: number
+}
+
+export interface ImageUploadTicket {
+  uploadUrl: string
+  storageKey: string
+  publicUrl: string
+  expiresIn: number
+}
+
+export interface ConfirmImagePayload extends ImageUploadRequest {
+  storageKey: string
+  url: string
+  isPrimary?: boolean
+  sortOrder?: number
+}
+
+export interface UpdateImagePayload {
+  isPrimary?: boolean
+  sortOrder?: number
+}

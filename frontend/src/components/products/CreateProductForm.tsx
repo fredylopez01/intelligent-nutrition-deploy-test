@@ -1,11 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 
 import { useAuth } from '../../hooks/useAuth'
 import { useCatalogOptions } from '../../hooks/useCatalogOptions'
+import { productImagesService } from '../../services/productImages.service'
 import { productsService } from '../../services/products.service'
 import type { Product } from '../../types/product'
+import { MAX_PRODUCT_IMAGES, selectImageFiles, type RejectedImage } from '../../utils/productImages'
 import {
   productFieldError,
   productSchema,
@@ -16,12 +18,13 @@ import {
 import { Alert } from '../ui/Alert'
 import { Button } from '../ui/Button'
 
+import { PendingImagesPicker, type PendingImage } from './PendingImagesPicker'
 import { ProductFields } from './ProductFields'
 
 import './ProductForm.css'
 
 interface CreateProductFormProps {
-  onCreated: (product: Product) => void
+  onCreated: (product: Product, failedImages: number) => void
   onCancel: () => void
 }
 
@@ -38,6 +41,13 @@ export function CreateProductForm({ onCreated, onCancel }: CreateProductFormProp
   const { token } = useAuth()
   const options = useCatalogOptions({ activeOnly: true })
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
+  const [primaryKey, setPrimaryKey] = useState<string | null>(null)
+  const [rejectedImages, setRejectedImages] = useState<RejectedImage[]>([])
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  )
+  const previewUrls = useRef(new Set<string>())
   const {
     register,
     handleSubmit,
@@ -52,6 +62,61 @@ export function CreateProductForm({ onCreated, onCancel }: CreateProductFormProp
     control,
     name: ['categoryId', 'unitOfMeasureId', 'price', 'description'],
   })
+
+  useEffect(() => {
+    const urls = previewUrls.current
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [])
+
+  const addImages = (files: File[]) => {
+    const { accepted, rejected } = selectImageFiles(
+      files,
+      MAX_PRODUCT_IMAGES - pendingImages.length,
+    )
+    setRejectedImages(rejected)
+    if (accepted.length === 0) return
+    const added = accepted.map((file) => {
+      const previewUrl = URL.createObjectURL(file)
+      previewUrls.current.add(previewUrl)
+      return { key: previewUrl, file, previewUrl }
+    })
+    setPendingImages((items) => [...items, ...added])
+    if (!primaryKey) setPrimaryKey(added[0].key)
+  }
+
+  const removeImage = (key: string) => {
+    const remaining = pendingImages.filter((item) => item.key !== key)
+    setPendingImages(remaining)
+    setRejectedImages([])
+    if (primaryKey === key) setPrimaryKey(remaining[0]?.key ?? null)
+  }
+
+  const uploadImages = async (productId: string): Promise<number> => {
+    const ordered = [
+      ...pendingImages.filter((item) => item.key === primaryKey),
+      ...pendingImages.filter((item) => item.key !== primaryKey),
+    ]
+    let failed = 0
+    let primaryUploaded = false
+    for (const [index, item] of ordered.entries()) {
+      setUploadProgress({ current: index + 1, total: ordered.length })
+      try {
+        await productImagesService.upload(
+          productId,
+          item.file,
+          { isPrimary: !primaryUploaded },
+          token,
+        )
+        primaryUploaded = true
+      } catch {
+        failed += 1
+      }
+    }
+    setUploadProgress(null)
+    return failed
+  }
 
   const missingOptions =
     options.status === 'success' && (options.categories.length === 0 || options.units.length === 0)
@@ -70,7 +135,8 @@ export function CreateProductForm({ onCreated, onCancel }: CreateProductFormProp
         },
         token,
       )
-      onCreated(product)
+      const failedImages = pendingImages.length > 0 ? await uploadImages(product.id) : 0
+      onCreated(product, failedImages)
     } catch (error) {
       const fieldError = productFieldError(error)
       if (fieldError) {
@@ -109,9 +175,19 @@ export function CreateProductForm({ onCreated, onCancel }: CreateProductFormProp
         optionsLoading={options.status === 'loading'}
       />
 
+      <PendingImagesPicker
+        items={pendingImages}
+        primaryKey={primaryKey}
+        rejected={rejectedImages}
+        disabled={isSubmitting}
+        onAdd={addImages}
+        onRemove={removeImage}
+        onSetPrimary={setPrimaryKey}
+      />
+
       <p className="product-form__note">
-        Solo se muestran categorías y unidades activas. El producto queda activo al registrarlo y
-        las imágenes se agregarán después, desde su detalle.
+        Solo se muestran categorías y unidades activas. El producto queda activo al registrarlo; las
+        imágenes se suben después de crearlo y también puedes gestionarlas desde su detalle.
       </p>
 
       <div className="product-form__actions">
@@ -122,7 +198,11 @@ export function CreateProductForm({ onCreated, onCancel }: CreateProductFormProp
           type="submit"
           disabled={isSubmitting || options.status !== 'success' || missingOptions}
         >
-          {isSubmitting ? 'Registrando...' : 'Registrar producto'}
+          {uploadProgress
+            ? `Subiendo imágenes (${uploadProgress.current} de ${uploadProgress.total})...`
+            : isSubmitting
+              ? 'Registrando...'
+              : 'Registrar producto'}
         </Button>
       </div>
     </form>

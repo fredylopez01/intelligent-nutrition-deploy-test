@@ -13,10 +13,15 @@ import { StorageService } from "../../storage/storage.service.js";
 import { GenerateUploadUrlDto } from "./dto/generate-upload-url.dto.js";
 import { AuditService } from "../../audit/audit.service.js";
 import { PatchImageDto } from "./dto/patch-image.dto.js";
+import { positiveIntFromEnv } from "../../../common/utils/env.util.js";
 
-const MAX_IMAGES_PER_PRODUCT = Number(process.env.PRODUCT_IMAGE_LIMIT ?? 5);
-const UPLOAD_URL_EXPIRES_IN = Number(
-  process.env.STORAGE_UPLOAD_URL_EXPIRES_IN ?? 300,
+const MAX_IMAGES_PER_PRODUCT = positiveIntFromEnv(
+  process.env.PRODUCT_IMAGE_LIMIT,
+  5,
+);
+const UPLOAD_URL_EXPIRES_IN = positiveIntFromEnv(
+  process.env.STORAGE_UPLOAD_URL_EXPIRES_IN,
+  300,
 );
 
 @Injectable()
@@ -57,6 +62,7 @@ export class ProductImagesService {
     return {
       uploadUrl,
       storageKey,
+      publicUrl: this.storage.buildPublicUrl(storageKey),
       expiresIn: UPLOAD_URL_EXPIRES_IN,
     };
   }

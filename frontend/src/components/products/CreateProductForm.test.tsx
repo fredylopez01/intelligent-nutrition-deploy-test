@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { categoriesService } from '../../services/categories.service'
 import { ApiError } from '../../services/http'
+import { productImagesService } from '../../services/productImages.service'
 import { productsService } from '../../services/products.service'
 import { unitsService } from '../../services/units.service'
 import { CATEGORIES, UNITS, buildProduct, optionsPage } from '../../test-utils/products'
@@ -12,6 +13,10 @@ import { CreateProductForm } from './CreateProductForm'
 
 vi.mock('../../services/products.service', () => ({
   productsService: { create: vi.fn() },
+}))
+
+vi.mock('../../services/productImages.service', () => ({
+  productImagesService: { upload: vi.fn() },
 }))
 
 vi.mock('../../services/categories.service', () => ({
@@ -29,6 +34,11 @@ vi.mock('../../hooks/useAuth', () => ({
 const createProduct = vi.mocked(productsService.create)
 const listCategories = vi.mocked(categoriesService.list)
 const listUnits = vi.mocked(unitsService.list)
+const uploadImage = vi.mocked(productImagesService.upload)
+
+function imageFile(name: string, type = 'image/png', size = 2048) {
+  return new File([new Uint8Array(size)], name, { type })
+}
 
 async function renderForm() {
   const onCreated = vi.fn()
@@ -53,6 +63,8 @@ function submit(user: ReturnType<typeof userEvent.setup>) {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  URL.createObjectURL = vi.fn((file: Blob) => `blob:${(file as File).name}`)
+  URL.revokeObjectURL = vi.fn()
   listCategories.mockResolvedValue(optionsPage(CATEGORIES))
   listUnits.mockResolvedValue(optionsPage(UNITS))
   createProduct.mockResolvedValue(buildProduct())
@@ -94,7 +106,7 @@ describe('CreateProductForm', () => {
         'test-token',
       ),
     )
-    expect(onCreated).toHaveBeenCalledWith(buildProduct())
+    expect(onCreated).toHaveBeenCalledWith(buildProduct(), 0)
   })
 
   it('sends the description only when it was written', async () => {
@@ -215,5 +227,95 @@ describe('CreateProductForm', () => {
 
     expect(onCancel).toHaveBeenCalledTimes(1)
     expect(createProduct).not.toHaveBeenCalled()
+  })
+
+  it('uploads the chosen images after creating the product, starting with the primary one', async () => {
+    uploadImage.mockResolvedValue({
+      id: 'image-1',
+      url: 'https://cdn.example.com/1.png',
+      fileName: 'frente.png',
+      mimeType: 'image/png',
+      sizeBytes: 2048,
+      isPrimary: true,
+      sortOrder: 0,
+    })
+    const { user, onCreated } = await renderForm()
+
+    await fillValid(user)
+    await user.upload(screen.getByLabelText('Seleccionar imágenes del producto'), [
+      imageFile('frente.png'),
+      imageFile('reverso.webp', 'image/webp'),
+    ])
+    expect(screen.getByText('Principal')).toBeInTheDocument()
+    await user.click(
+      screen.getByRole('button', { name: 'Usar reverso.webp como imagen principal' }),
+    )
+    await submit(user)
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(buildProduct(), 0))
+    expect(uploadImage).toHaveBeenCalledTimes(2)
+    expect(
+      uploadImage.mock.calls.map(([productId, file, options]) => [productId, file.name, options]),
+    ).toEqual([
+      ['product-whey', 'reverso.webp', { isPrimary: true }],
+      ['product-whey', 'frente.png', { isPrimary: false }],
+    ])
+  })
+
+  it('rejects files that are not allowed images before creating anything', async () => {
+    await renderForm()
+
+    fireEvent.change(screen.getByLabelText('Seleccionar imágenes del producto'), {
+      target: {
+        files: [
+          imageFile('manual.pdf', 'application/pdf'),
+          imageFile('enorme.png', 'image/png', 6 * 1024 * 1024),
+        ],
+      },
+    })
+
+    const rejected = screen.getByRole('alert')
+    expect(rejected).toHaveTextContent('manual.pdf no es JPG, PNG, WebP ni AVIF')
+    expect(rejected).toHaveTextContent('enorme.png supera el máximo de 5 MB (pesa 6 MB)')
+    expect(screen.queryByRole('img', { name: /Vista previa/ })).not.toBeInTheDocument()
+  })
+
+  it('creates the product even when an image fails and reports how many failed', async () => {
+    uploadImage
+      .mockRejectedValueOnce(new ApiError('Upload failed', 0, undefined, 'UPLOAD_FAILED'))
+      .mockResolvedValueOnce({
+        id: 'image-2',
+        url: 'https://cdn.example.com/2.png',
+        fileName: 'lado.png',
+        mimeType: 'image/png',
+        sizeBytes: 2048,
+        isPrimary: true,
+        sortOrder: 0,
+      })
+    const { user, onCreated } = await renderForm()
+
+    await fillValid(user)
+    await user.upload(screen.getByLabelText('Seleccionar imágenes del producto'), [
+      imageFile('frente.png'),
+      imageFile('lado.png'),
+    ])
+    await submit(user)
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(buildProduct(), 1))
+    expect(uploadImage.mock.calls[1][2]).toEqual({ isPrimary: true })
+  })
+
+  it('removes a chosen image before saving', async () => {
+    const { user } = await renderForm()
+
+    await user.upload(screen.getByLabelText('Seleccionar imágenes del producto'), [
+      imageFile('frente.png'),
+      imageFile('lado.png'),
+    ])
+    await user.click(screen.getByRole('button', { name: 'Quitar frente.png' }))
+
+    expect(screen.queryByRole('img', { name: /frente\.png/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Vista previa 1: lado.png' })).toBeInTheDocument()
+    expect(screen.getByText('Principal')).toBeInTheDocument()
   })
 })
