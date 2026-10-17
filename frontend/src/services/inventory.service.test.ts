@@ -12,6 +12,7 @@ vi.mock('./http', async (importOriginal) => {
 
 const get = vi.mocked(http.get)
 const post = vi.mocked(http.post)
+const patch = vi.mocked(http.patch)
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -72,5 +73,19 @@ describe('inventoryService', () => {
     expect(post).toHaveBeenCalledWith('/branches/branch-centro/inventory', payload, {
       token: 'token',
     })
+  })
+
+  it('changes the minimum stock of a product in a branch', async () => {
+    const result = { minimumStock: 8, lowStock: false, lotsUpdated: 2 }
+    patch.mockResolvedValue({ data: result })
+
+    await expect(
+      inventoryService.updateMinimumStock('branch-centro', 'product-whey', 8, 'token'),
+    ).resolves.toEqual(result)
+    expect(patch).toHaveBeenCalledWith(
+      '/branches/branch-centro/inventory/product-whey',
+      { minimumStock: 8 },
+      { token: 'token' },
+    )
   })
 })

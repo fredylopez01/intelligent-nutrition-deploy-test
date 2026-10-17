@@ -72,6 +72,19 @@ export function useBranchInventory(
     setReloadToken((value) => value + 1)
   }, [])
 
+  const updateItem = useCallback((productId: string, changes: Partial<BranchInventoryItem>) => {
+    setResult((current) =>
+      current
+        ? {
+            ...current,
+            items: current.items.map((item) =>
+              item.product.id === productId ? { ...item, ...changes } : item,
+            ),
+          }
+        : current,
+    )
+  }, [])
+
   const isCurrent = result?.key === requestKey
   let status: RequestStatus = 'loading'
   if (!branchId) status = 'idle'
@@ -83,5 +96,6 @@ export function useBranchInventory(
     meta: isCurrent ? result.meta : null,
     error: isCurrent ? result.error : null,
     refetch,
+    updateItem,
   }
 }

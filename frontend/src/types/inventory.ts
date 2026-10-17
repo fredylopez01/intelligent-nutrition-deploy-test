@@ -59,3 +59,14 @@ export interface AssignedLot {
   expirationDate: string
   updatedAt: string
 }
+
+export interface MinimumStockResult {
+  branchId: string
+  productId: string
+  minimumStock: number
+  totalQuantity: number
+  lowStock: boolean
+  lotsUpdated: number
+  lots: InventoryLot[]
+  updatedAt: string
+}
