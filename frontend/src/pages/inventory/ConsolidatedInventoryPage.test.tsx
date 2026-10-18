@@ -116,6 +116,9 @@ describe('ConsolidatedInventoryPage', () => {
     renderPage()
 
     expect(await screen.findByText('Todavía no hay productos en las sedes')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('table', { name: 'Inventario consolidado de todas las sedes' }),
+    ).not.toBeInTheDocument()
   })
 
   it('shows the error and retries', async () => {
@@ -127,6 +130,9 @@ describe('ConsolidatedInventoryPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'No fue posible cargar el inventario consolidado',
     )
+    expect(
+      screen.queryByRole('table', { name: 'Inventario consolidado de todas las sedes' }),
+    ).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
 
     expect(await screen.findByText('Whey Protein 2 lb')).toBeInTheDocument()
