@@ -408,6 +408,37 @@ describe('InventoryPage', () => {
     expect(listByBranch.mock.calls.length).toBe(callsBefore)
   })
 
+  it('removes the low-stock highlight when the minimum is lowered below current stock', async () => {
+    updateMinimumStock.mockResolvedValue({
+      branchId: 'branch-centro',
+      productId: 'product-creatine',
+      minimumStock: 3,
+      totalQuantity: 4,
+      lowStock: false,
+      lotsUpdated: 1,
+      lots: [],
+      updatedAt: '2026-10-16T00:00:00Z',
+    })
+    const { user } = renderPage()
+    await screen.findByText('Creatina 300 g')
+    const callsBefore = listByBranch.mock.calls.length
+    expect(screen.getByText('Creatina 300 g').closest('tr')).toHaveClass(
+      'inventory-table__row--low',
+    )
+
+    await openRowAction(user, 'Creatina 300 g', 'Editar stock mínimo')
+    const dialog = screen.getByRole('dialog', { name: 'Editar stock mínimo' })
+    await user.clear(within(dialog).getByLabelText('Nuevo stock mínimo'))
+    await user.type(within(dialog).getByLabelText('Nuevo stock mínimo'), '3')
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar stock mínimo' }))
+
+    const row = screen.getByText('Creatina 300 g').closest('tr') as HTMLElement
+    await waitFor(() => expect(within(row).getByText('En nivel')).toBeInTheDocument())
+    expect(within(row).getByText('3')).toBeInTheDocument()
+    expect(row).not.toHaveClass('inventory-table__row--low')
+    expect(listByBranch.mock.calls.length).toBe(callsBefore)
+  })
+
   it('does not offer to edit the minimum stock of an inactive branch', async () => {
     const { user } = renderPage('/inventario?sede=branch-sur')
 

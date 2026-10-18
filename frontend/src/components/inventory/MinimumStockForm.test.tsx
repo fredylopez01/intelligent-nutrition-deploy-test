@@ -119,6 +119,28 @@ describe('MinimumStockForm', () => {
     expect(updateMinimumStock).not.toHaveBeenCalled()
   })
 
+  it('rejects decimal and overlong values without saving', async () => {
+    const { user, onSaved } = renderForm()
+
+    await typeMinimum(user, '2.5')
+    await user.click(screen.getByRole('button', { name: 'Guardar stock mínimo' }))
+    expect(
+      screen.getByText(
+        'El stock mínimo debe ser un número entero de 0 en adelante, sin puntos ni comas.',
+      ),
+    ).toBeInTheDocument()
+
+    await typeMinimum(user, '1234567890')
+    await user.click(screen.getByRole('button', { name: 'Guardar stock mínimo' }))
+    expect(
+      screen.getByText(
+        'El stock mínimo debe ser un número entero de 0 en adelante, sin puntos ni comas.',
+      ),
+    ).toBeInTheDocument()
+    expect(updateMinimumStock).not.toHaveBeenCalled()
+    expect(onSaved).not.toHaveBeenCalled()
+  })
+
   it('explains why the backend rejected the change', async () => {
     updateMinimumStock.mockRejectedValue(
       new ApiError('Inactive', 422, undefined, 'BRANCH_INACTIVE'),
