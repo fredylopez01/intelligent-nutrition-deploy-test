@@ -222,10 +222,52 @@ describe('InventoryPage', () => {
     await waitFor(() => expect(lastListCall()[1]).toMatchObject({ search: 'whey' }))
   })
 
+  it('shows the results for the selected stock filter', async () => {
+    listByBranch.mockImplementation(async (_branchId, params) =>
+      inventoryPage(
+        params.lowStock === true
+          ? [creatine]
+          : params.lowStock === false
+            ? [whey]
+            : [whey, creatine],
+      ),
+    )
+    const { user } = renderPage()
+    await screen.findByText('Whey Protein 2 lb')
+    await screen.findByText('Creatina 300 g')
+
+    await user.selectOptions(screen.getByLabelText('Filtrar por nivel de stock'), 'Bajo mínimo')
+
+    expect(await screen.findByText('Creatina 300 g')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Whey Protein 2 lb')).not.toBeInTheDocument())
+    expect(screen.getByText('Creatina 300 g').closest('tr')).toHaveClass(
+      'inventory-table__row--low',
+    )
+
+    await user.selectOptions(screen.getByLabelText('Filtrar por nivel de stock'), 'En nivel')
+
+    expect(await screen.findByText('Whey Protein 2 lb')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Creatina 300 g')).not.toBeInTheDocument())
+  })
+
+  it('applies a search when the magnifier button is clicked', async () => {
+    const { user } = renderPage()
+    await screen.findByText('Whey Protein 2 lb')
+
+    await user.type(
+      screen.getByRole('searchbox', { name: 'Buscar producto por nombre o código' }),
+      'creatina',
+    )
+    await user.click(screen.getByRole('button', { name: 'Buscar' }))
+
+    await waitFor(() => expect(lastListCall()[1]).toMatchObject({ search: 'creatina' }))
+  })
+
   it('clears the filters but keeps the branch when nothing matches', async () => {
     listByBranch.mockResolvedValue(inventoryPage([]))
     const { user } = renderPage('/inventario?sede=branch-norte&q=zzz&stock=bajo-minimo')
 
+    expect(await screen.findByText('Ningún producto coincide con los filtros')).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Limpiar filtros' }))
 
     await waitFor(() =>
