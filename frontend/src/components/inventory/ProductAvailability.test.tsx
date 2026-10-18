@@ -73,6 +73,24 @@ describe('ProductAvailability', () => {
     ).toBeInTheDocument()
   })
 
+  it('renders the empty breakdown when no active branches are returned', async () => {
+    availability.mockResolvedValue({ product, branches: [] })
+    render(
+      <ProductAvailability
+        branchId="branch-centro"
+        item={buildInventoryItem()}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(
+      await screen.findByText('Ninguna otra sede activa tiene existencias de este producto.'),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('list', { name: 'Existencias por sede' })).queryAllByRole('listitem'),
+    ).toHaveLength(0)
+  })
+
   it('retries when the query fails', async () => {
     availability
       .mockRejectedValueOnce(new ApiError('Error', 500))
@@ -89,6 +107,7 @@ describe('ProductAvailability', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'No fue posible consultar la disponibilidad',
     )
+    expect(screen.queryByRole('list', { name: 'Existencias por sede' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
 
     expect(
