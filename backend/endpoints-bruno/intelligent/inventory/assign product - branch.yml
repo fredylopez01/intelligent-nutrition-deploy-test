@@ -1,0 +1,27 @@
+info:
+  name: assign product - branch
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/api/v1/branches/7c4a04bc-d52a-4bdc-9e70-c18eeb05c9dc/inventory
+  body:
+    type: json
+    data: |-
+      {
+          "productId": "315b23ca-8c30-4b05-933e-9df4e94cd086",
+          "quantity": 5,
+          "minimumStock": 3,
+          "expirationDate": "2027-12-10T00:00:00.000Z"
+        }
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

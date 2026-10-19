@@ -9,40 +9,55 @@ import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
+import { Pagination } from '../../components/ui/Pagination'
+import { ReloadButton } from '../../components/ui/ReloadButton'
+import { SearchBar } from '../../components/ui/SearchBar'
 import { useBranches } from '../../hooks/useBranches'
+import { usePagination } from '../../hooks/usePagination'
 import { AppLayout } from '../../layouts/AppLayout'
 import type { Branch } from '../../types/branch'
 
 import './BranchesPage.css'
 
-const PAGE_SIZE = 10
+const SKELETON_ROWS = 10
 
-type ActiveFilter = 'todos' | 'activas' | 'inactivas'
-
-const ACTIVE_FILTER_VALUES: Record<ActiveFilter, boolean | undefined> = {
-  todos: undefined,
+const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
   activas: true,
   inactivas: false,
 }
 
+const FILTER_DEFAULTS = { estado: 'todos' }
+
 export function BranchesPage() {
-  const [page, setPage] = useState(1)
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('todos')
-  const [search, setSearch] = useState('')
+  const {
+    page,
+    search,
+    filters,
+    hasFilters,
+    params,
+    limitOptions,
+    setPage,
+    setLimit,
+    applySearch,
+    setFilter,
+    clearFilters,
+  } = usePagination({ filters: FILTER_DEFAULTS })
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null)
   const [statusBranch, setStatusBranch] = useState<Branch | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, branches, meta, emptyMessage, error, refetch } = useBranches({
-    page,
-    limit: PAGE_SIZE,
-    search: search.trim() || undefined,
-    active: ACTIVE_FILTER_VALUES[activeFilter],
+    ...params,
+    active: ACTIVE_FILTER_VALUES[filters.estado],
   })
 
   const totalPages = meta?.totalPages ?? 0
-  const hasFilters = search.trim() !== '' || activeFilter !== 'todos'
+
+  const handleSearch = (term: string) => {
+    if (term === search) void refetch()
+    else applySearch(term)
+  }
 
   const handleOpenCreate = () => {
     setFeedbackMessage(null)
@@ -74,7 +89,7 @@ export function BranchesPage() {
   }
 
   const renderList = () => {
-    if (status === 'loading') return <BranchesTableSkeleton rows={PAGE_SIZE} />
+    if (status === 'loading') return <BranchesTableSkeleton rows={SKELETON_ROWS} />
 
     if (status === 'error') {
       return (
@@ -88,20 +103,20 @@ export function BranchesPage() {
     }
 
     if (branches.length === 0) {
-      return (
+      return hasFilters ? (
         <EmptyState
-          title={
-            hasFilters
-              ? 'Ninguna sede coincide con la búsqueda'
-              : 'Todavía no hay sedes registradas'
-          }
-          description={
-            hasFilters
-              ? 'Revisa el nombre o cambia el filtro de estado.'
-              : (emptyMessage ?? 'Registra la primera sede para empezar a operar.')
-          }
+          variant="sin-resultados"
+          title="Ninguna sede coincide con la búsqueda"
+          description="Revisa el nombre o cambia el filtro de estado."
+          onClearFilters={clearFilters}
+        />
+      ) : (
+        <EmptyState
+          variant="sin-registros"
+          title="Todavía no hay sedes registradas"
+          description={emptyMessage ?? 'Registra la primera sede para empezar a operar.'}
         >
-          {!hasFilters && <Button onClick={handleOpenCreate}>Registrar sede</Button>}
+          <Button onClick={handleOpenCreate}>Registrar sede</Button>
         </EmptyState>
       )
     }
@@ -124,19 +139,12 @@ export function BranchesPage() {
   return (
     <AppLayout title="Sedes">
       <div className="branches-page__toolbar">
-        <label className="sr-only" htmlFor="branches-search">
-          Buscar por nombre
-        </label>
-        <input
+        <SearchBar
           id="branches-search"
-          type="search"
-          className="branches-page__search"
+          label="Buscar por nombre"
           placeholder="Buscar por nombre"
           value={search}
-          onChange={(event) => {
-            setSearch(event.target.value)
-            setPage(1)
-          }}
+          onSearch={handleSearch}
         />
         <label className="sr-only" htmlFor="branches-active-filter">
           Filtrar por estado
@@ -144,16 +152,14 @@ export function BranchesPage() {
         <select
           id="branches-active-filter"
           className="branches-page__filter"
-          value={activeFilter}
-          onChange={(event) => {
-            setActiveFilter(event.target.value as ActiveFilter)
-            setPage(1)
-          }}
+          value={filters.estado}
+          onChange={(event) => setFilter('estado', event.target.value)}
         >
           <option value="todos">Todos los estados</option>
           <option value="activas">Activas</option>
           <option value="inactivas">Inactivas</option>
         </select>
+        <ReloadButton onReload={() => void refetch()} loading={status === 'loading'} />
         <Button onClick={handleOpenCreate}>Registrar sede</Button>
       </div>
 
@@ -165,23 +171,18 @@ export function BranchesPage() {
 
       <div className="branches-page__card">{renderList()}</div>
 
-      {status === 'success' && totalPages > 1 && (
+      {status === 'success' && (
         <div className="branches-page__footer">
-          <nav className="branches-page__pagination" aria-label="Paginación de sedes">
-            <Button variant="outline" onClick={() => setPage((p) => p - 1)} disabled={page <= 1}>
-              Anterior
-            </Button>
-            <span className="branches-page__page-info">
-              Página {meta?.page ?? page} de {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= totalPages}
-            >
-              Siguiente
-            </Button>
-          </nav>
+          <Pagination
+            page={meta?.page ?? page}
+            totalPages={totalPages}
+            total={meta?.total}
+            limit={params.limit}
+            limitOptions={limitOptions}
+            label="Paginación de sedes"
+            onChange={setPage}
+            onLimitChange={setLimit}
+          />
         </div>
       )}
 

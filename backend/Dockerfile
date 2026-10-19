@@ -15,13 +15,14 @@ COPY src ./src
 
 RUN npx prisma generate
 
-# RUN npx prisma db seed
-
 RUN npm run build
 
+FROM builder AS init
+
+CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed"]
 
 # ---------- Production ----------
-FROM node:22-alpine
+FROM node:22-alpine AS production
 
 WORKDIR /app
 

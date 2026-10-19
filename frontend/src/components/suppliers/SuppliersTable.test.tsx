@@ -1,52 +1,65 @@
 import { render, screen, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
+import { describe, expect, it } from 'vitest'
 
 import type { Supplier } from '../../types/supplier'
 
 import { SuppliersTable } from './SuppliersTable'
 
-const suppliers: Supplier[] = [
-  {
-    id: 'supplier-1',
-    commercialName: 'Suplementos Norte',
-    person: {
-      businessName: 'Suplementos Norte SAS',
-      documentNumber: '900123456',
-      documentType: { code: 'NIT', name: 'NIT' },
-      email: 'contacto@norte.test',
-      phone: '3001112222',
-      address: 'Calle 10 # 20-30',
-      active: true,
-    },
+const norte: Supplier = {
+  id: 'supplier-1',
+  commercialName: 'Suplementos Norte',
+  person: {
+    businessName: 'Suplementos Norte SAS',
+    documentNumber: '900123456',
+    documentType: { code: 'NIT', name: 'NIT' },
+    email: 'contacto@norte.test',
+    phone: '3001112222',
+    address: 'Calle 10 # 20-30',
+    active: true,
   },
-  {
-    id: 'supplier-2',
-    commercialName: null,
-    person: {
-      businessName: 'Distribuidora Sur',
-      documentNumber: '1234567890',
-      documentType: null,
-      email: null,
-      phone: null,
-      address: null,
-      active: false,
-    },
-  },
-]
-
-function renderTable(rows: Supplier[] = suppliers) {
-  const onView = vi.fn()
-  const onEdit = vi.fn()
-  const user = userEvent.setup()
-  render(<SuppliersTable suppliers={rows} onView={onView} onEdit={onEdit} />)
-  return { user, onView, onEdit }
 }
 
-function getRow(name: string) {
-  const row = screen.getByRole('cell', { name }).closest('tr')
-  if (!row) throw new Error(`No row found for ${name}`)
-  return row
+const sur: Supplier = {
+  id: 'supplier-2',
+  commercialName: null,
+  person: {
+    businessName: 'Distribuidora Sur',
+    documentNumber: '1234567890',
+    documentType: null,
+    email: null,
+    phone: null,
+    address: null,
+    active: false,
+  },
+}
+
+const marcela: Supplier = {
+  id: 'supplier-3',
+  commercialName: 'Distribuciones Marcela',
+  person: {
+    firstName: 'Marcela',
+    lastName: 'Rojas',
+    businessName: null,
+    documentNumber: '1049555666',
+    documentType: { code: 'CC', name: 'Cédula de Ciudadanía' },
+    email: 'marcela@correo.com',
+    phone: '3205557788',
+    address: 'Calle 15 # 9-30',
+    active: true,
+  },
+}
+
+function renderTable(rows: Supplier[] = [norte, sur]) {
+  render(
+    <MemoryRouter>
+      <SuppliersTable suppliers={rows} returnTo="/proveedores?pagina=2" />
+    </MemoryRouter>,
+  )
+}
+
+function rowOf(name: string) {
+  return screen.getByRole('link', { name: `Ver detalle de ${name}` }).closest('tr') as HTMLElement
 }
 
 describe('SuppliersTable', () => {
@@ -54,64 +67,43 @@ describe('SuppliersTable', () => {
     renderTable()
 
     const headers = screen.getAllByRole('columnheader').map((header) => header.textContent)
-    expect(headers).toEqual([
-      'Proveedor',
-      'Nombre comercial',
-      'Documento',
-      'Teléfono',
-      'Correo',
-      'Dirección',
-      'Estado',
-      'Acciones',
-    ])
+    expect(headers).toEqual(['Proveedor', 'Documento', 'Teléfono', 'Estado', 'Abrir'])
   })
 
-  it('renders one row per supplier with its data and status', () => {
+  it('shows the name, commercial name, document, kind, phone and state', () => {
     renderTable()
 
-    expect(screen.getAllByRole('row')).toHaveLength(suppliers.length + 1)
-
-    const norte = within(getRow('Suplementos Norte SAS'))
-    expect(norte.getByText('Suplementos Norte')).toBeInTheDocument()
-    expect(norte.getByText('NIT 900123456')).toBeInTheDocument()
-    expect(norte.getByText('3001112222')).toBeInTheDocument()
-    expect(norte.getByText('contacto@norte.test')).toBeInTheDocument()
-    expect(norte.getByText('Calle 10 # 20-30')).toBeInTheDocument()
-    expect(norte.getByText('Activo')).toBeInTheDocument()
-
-    const sur = within(getRow('Distribuidora Sur'))
-    expect(sur.getByText('1234567890')).toBeInTheDocument()
-    expect(sur.getByText('Inactivo')).toBeInTheDocument()
+    const row = within(rowOf('Suplementos Norte SAS'))
+    expect(row.getByText('Suplementos Norte SAS')).toBeInTheDocument()
+    expect(row.getByText('Suplementos Norte')).toBeInTheDocument()
+    expect(row.getByText('NIT 900123456')).toBeInTheDocument()
+    expect(row.getByText('Empresa')).toBeInTheDocument()
+    expect(row.getByText('3001112222')).toBeInTheDocument()
+    expect(row.getByText('Activo')).toBeInTheDocument()
   })
 
-  it('replaces missing optional values with an em dash', () => {
+  it('fills the missing data with a dash', () => {
     renderTable()
 
-    const sur = within(getRow('Distribuidora Sur'))
-    expect(sur.getAllByText('—')).toHaveLength(4)
+    const row = within(rowOf('Distribuidora Sur'))
+    expect(row.getAllByText('—')).toHaveLength(2)
+    expect(row.getByText('1234567890')).toBeInTheDocument()
+    expect(row.getByText('Inactivo')).toBeInTheDocument()
   })
 
-  it('renders only the header when there are no suppliers', () => {
-    renderTable([])
+  it('links each supplier to its detail page and remembers the list', () => {
+    renderTable()
 
-    expect(screen.getAllByRole('row')).toHaveLength(1)
+    expect(
+      screen.getByRole('link', { name: 'Ver detalle de Suplementos Norte SAS' }),
+    ).toHaveAttribute('href', '/proveedores/supplier-1')
   })
 
-  it('opens the detail view for the selected supplier', async () => {
-    const { user, onView, onEdit } = renderTable()
+  it('shows the names of a natural person supplier', () => {
+    renderTable([marcela])
 
-    await user.click(screen.getByRole('button', { name: 'Ver detalle de Suplementos Norte SAS' }))
-
-    expect(onView).toHaveBeenCalledWith(suppliers[0])
-    expect(onEdit).not.toHaveBeenCalled()
-  })
-
-  it('opens the edit form for the selected supplier', async () => {
-    const { user, onView, onEdit } = renderTable()
-
-    await user.click(screen.getByRole('button', { name: 'Editar Distribuidora Sur' }))
-
-    expect(onEdit).toHaveBeenCalledWith(suppliers[1])
-    expect(onView).not.toHaveBeenCalled()
+    const row = within(rowOf('Marcela Rojas'))
+    expect(row.getByText('Persona natural')).toBeInTheDocument()
+    expect(row.getByText('CC 1049555666')).toBeInTheDocument()
   })
 })

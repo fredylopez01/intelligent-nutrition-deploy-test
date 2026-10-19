@@ -1,0 +1,21 @@
+.ui-status-confirmation {
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+}
+
+.ui-status-confirmation__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.625rem;
+}
+
+@media (max-width: 479px) {
+  .ui-status-confirmation__actions {
+    flex-direction: column-reverse;
+  }
+
+  .ui-status-confirmation__actions .ui-button {
+    width: 100%;
+  }
+}

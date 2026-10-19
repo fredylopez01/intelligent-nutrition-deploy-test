@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { branchesService } from '../../services/branches.service'
@@ -66,7 +67,11 @@ describe('BranchesPage status button', () => {
     listBranches.mockResolvedValueOnce(pageOf(makro)).mockResolvedValue(pageOf(deactivated))
     updateStatus.mockResolvedValue(deactivated)
     const user = userEvent.setup()
-    render(<BranchesPage />)
+    render(
+      <MemoryRouter>
+        <BranchesPage />
+      </MemoryRouter>,
+    )
 
     await openRowMenu(user, 'Sede Makro')
     await user.click(screen.getByRole('menuitem', { name: 'Desactivar' }))
@@ -91,7 +96,11 @@ describe('BranchesPage status button', () => {
     listBranches.mockResolvedValueOnce(pageOf(inactive)).mockResolvedValue(pageOf(makro))
     updateStatus.mockResolvedValue(makro)
     const user = userEvent.setup()
-    render(<BranchesPage />)
+    render(
+      <MemoryRouter>
+        <BranchesPage />
+      </MemoryRouter>,
+    )
 
     await openRowMenu(user, 'Sede Makro')
     await user.click(screen.getByRole('menuitem', { name: 'Activar' }))
@@ -113,7 +122,11 @@ describe('BranchesPage status button', () => {
     listBranches.mockResolvedValue(pageOf(makro))
     updateStatus.mockRejectedValue(new ApiError('Branch is already inactive', 400))
     const user = userEvent.setup()
-    render(<BranchesPage />)
+    render(
+      <MemoryRouter>
+        <BranchesPage />
+      </MemoryRouter>,
+    )
 
     await openRowMenu(user, 'Sede Makro')
     await user.click(screen.getByRole('menuitem', { name: 'Desactivar' }))

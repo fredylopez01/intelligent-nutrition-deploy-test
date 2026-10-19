@@ -11,11 +11,6 @@ export const PENDING_MODULES: PendingModule[] = [
     description: 'Ventas del día, stock por sede y alertas de inventario en una sola vista.',
   },
   {
-    path: '/inventario',
-    title: 'Inventario',
-    description: 'Existencias por sede, con estado de stock óptimo o bajo.',
-  },
-  {
     path: '/inventario/movimientos',
     title: 'Movimientos',
     description: 'Entradas, salidas y ajustes de inventario con su motivo y responsable.',
@@ -24,11 +19,6 @@ export const PENDING_MODULES: PendingModule[] = [
     path: '/inventario/cierre',
     title: 'Cierre diario',
     description: 'Conteo ciego por sede y reporte de discrepancias contra el sistema.',
-  },
-  {
-    path: '/catalogo',
-    title: 'Catálogo',
-    description: 'Catálogo maestro de productos: se registran una vez y se asignan a las sedes.',
   },
   {
     path: '/pos',

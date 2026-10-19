@@ -5,7 +5,7 @@
 }
 
 .suppliers-table th {
-  padding: 0.75rem 1rem;
+  padding: 0.8125rem 1.25rem;
   background: var(--color-surface-elevated);
   border-bottom: 1px solid var(--color-border-soft);
   font-family: var(--font-mono);
@@ -15,119 +15,163 @@
   text-transform: uppercase;
   text-align: left;
   color: var(--color-text-faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.suppliers-table th:first-child {
+  width: 38%;
+}
+
+.suppliers-table__col-status {
+  width: 130px;
+  text-align: right;
+}
+
+.suppliers-table th.suppliers-table__col-status {
+  text-align: right;
+}
+
+.suppliers-table__col-open {
+  width: 52px;
+  text-align: right;
 }
 
 .suppliers-table td {
-  padding: 0.625rem 1rem;
+  padding: 0.75rem 1.25rem;
   border-bottom: 1px solid var(--color-border);
-  font-size: 0.815rem;
+  font-size: 0.845rem;
   color: var(--color-text);
   vertical-align: middle;
+  transition: background-color 0.15s ease;
+}
+
+.suppliers-table th.suppliers-table__col-open,
+.suppliers-table td.suppliers-table__col-open {
+  padding-left: 0;
 }
 
 .suppliers-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-/* Anchos: proveedor, nombre comercial y correo se reparten el espacio sobrante */
-.suppliers-table th.suppliers-table__col-document {
-  width: 9.5rem;
+.suppliers-table__row:hover td {
+  background: var(--color-surface-hover);
 }
 
-.suppliers-table th.suppliers-table__col-phone {
-  width: 8.5rem;
-}
-
-.suppliers-table th.suppliers-table__col-address {
-  width: 12rem;
-}
-
-.suppliers-table th.suppliers-table__col-status,
-.suppliers-table td.suppliers-table__col-status {
-  width: 7rem;
-  text-align: left;
-}
-
-.suppliers-table th.suppliers-table__col-actions,
-.suppliers-table td.suppliers-table__col-actions {
-  width: 5.5rem;
-  padding-left: 0.5rem;
-  padding-right: 0.75rem;
-  text-align: center;
-}
-
-.suppliers-table__actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.suppliers-table__name {
-  font-size: 0.845rem;
-  font-weight: 500;
+.suppliers-table__cell-muted {
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.suppliers-table__cell-muted {
-  color: var(--color-text-muted);
+.suppliers-table__identity-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  border-radius: 8px;
+}
+
+.suppliers-table__identity-link:focus-visible {
+  outline-offset: 4px;
+}
+
+.suppliers-table__identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.suppliers-table__name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.suppliers-table__row:hover .suppliers-table__name {
+  color: var(--color-hover);
+}
+
+.suppliers-table__secondary {
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .suppliers-table__document {
+  display: block;
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.suppliers-table__email {
-  font-size: 0.78rem;
+.suppliers-table__kind {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.72rem;
+  color: var(--color-text-faint);
 }
 
-.suppliers-table__action {
+.suppliers-table__open {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--color-text-disabled);
+  transition:
+    color 0.15s ease,
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.suppliers-table__open svg {
+  width: 18px;
+  height: 18px;
+}
+
+.suppliers-table__row:hover .suppliers-table__open {
   color: var(--color-text-secondary);
-  cursor: pointer;
+  transform: translateX(2px);
 }
 
-.suppliers-table__action:hover {
-  background: var(--color-surface-elevated);
-  border-color: var(--color-border-soft);
-  color: var(--color-text);
+@media (prefers-reduced-motion: reduce) {
+  .suppliers-table td,
+  .suppliers-table__name,
+  .suppliers-table__open {
+    transition: none;
+  }
 }
 
-@media (max-width: 1024px) {
-  .suppliers-table th:nth-child(6),
-  .suppliers-table td:nth-child(6) {
+@media (max-width: 1023px) {
+  .suppliers-table th:nth-child(3),
+  .suppliers-table td:nth-child(3) {
     display: none;
   }
 }
 
 @media (max-width: 767px) {
   .suppliers-table th:nth-child(2),
-  .suppliers-table td:nth-child(2),
-  .suppliers-table th:nth-child(3),
-  .suppliers-table td:nth-child(3),
-  .suppliers-table th:nth-child(5),
-  .suppliers-table td:nth-child(5) {
+  .suppliers-table td:nth-child(2) {
     display: none;
   }
 
-  /* En móvil el teléfono comparte el espacio con el nombre */
-  .suppliers-table th.suppliers-table__col-phone {
+  .suppliers-table th:first-child {
     width: auto;
+  }
+
+  .suppliers-table th,
+  .suppliers-table td {
+    padding-inline: 0.875rem;
   }
 }

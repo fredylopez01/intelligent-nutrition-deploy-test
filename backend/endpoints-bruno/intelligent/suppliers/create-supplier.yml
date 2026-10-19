@@ -1,0 +1,41 @@
+info:
+  name: create-supplier
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:3000/api/v1/suppliers
+  body:
+    type: json
+    data: "{\r
+
+      \  \"person\": {\r
+
+      \    \"documentTypeId\": \"55a45278-d11a-46d9-acb7-2b584b4fef21\",\r
+
+      \    \"documentNumber\": \"900123456\",\r
+
+      \    \"businessName\": \"Suplementos Colombia SAS\",\r
+
+      \    \"email\": \"contacto@suplementos.co\",\r
+
+      \    \"phone\": \"3000000000\",\r
+
+      \    \"address\": \"Calle 10 # 20-30\"\r
+
+      \  },\r
+
+      \  \"commercialName\": \"Suplementos Colombia\"\r
+
+      }"
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

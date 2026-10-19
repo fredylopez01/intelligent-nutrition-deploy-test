@@ -2,31 +2,42 @@ import { Transform } from "class-transformer";
 import {
   IsEmail,
   IsNotEmpty,
-  IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  ValidateIf,
 } from "class-validator";
 
 export class CreatePersonDto {
-  @IsOptional()
   @IsUUID()
-  documentTypeId?: string;
+  documentTypeId!: string;
 
-  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
+  @IsNotEmpty()
   @MaxLength(50)
-  documentNumber?: string;
+  documentNumber!: string;
 
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
-  firstName!: string;
+  firstName?: string;
 
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
-  lastName!: string;
+  lastName?: string;
+
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  businessName?: string;
 
   @Transform(({ value }) =>
     typeof value === "string" ? value.trim().toLowerCase() : value,
@@ -35,13 +46,15 @@ export class CreatePersonDto {
   @MaxLength(150)
   email!: string;
 
-  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
+  @IsNotEmpty()
   @MaxLength(30)
-  phone?: string;
+  phone!: string;
 
-  @IsOptional()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
+  @IsNotEmpty()
   @MaxLength(255)
-  address?: string;
+  address!: string;
 }

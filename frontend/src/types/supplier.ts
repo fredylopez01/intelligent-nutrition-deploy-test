@@ -13,6 +13,9 @@ export interface DocumentType {
 }
 
 export interface SupplierPerson {
+  documentTypeId?: string
+  firstName?: string | null
+  lastName?: string | null
   businessName: string | null
   documentNumber: string | null
   documentType: DocumentTypeRef | null
@@ -28,15 +31,20 @@ export interface Supplier {
   commercialName: string | null
 }
 
-export interface CreateSupplierPayload {
-  person: {
-    documentTypeId: string
-    documentNumber: string
-    businessName: string
-    email: string
-    phone: string
-    address?: string
-  }
+export interface CreateSupplierPersonPayload {
+  documentTypeId: string
+  documentNumber: string
+  businessName?: string
+  firstName?: string
+  lastName?: string
+  email: string
+  phone: string
+  address: string
+}
+
+export type CreateSupplierPayload = (
+  { person: CreateSupplierPersonPayload } | { personId: string }
+) & {
   commercialName: string
 }
 
@@ -52,8 +60,18 @@ export interface SuppliersListResponse {
   meta: PaginationMeta
 }
 
-export interface UpdateSupplierPayload {
-  commercialName?: string
+export interface UpdateSupplierPersonPayload {
+  documentTypeId?: string
+  documentNumber?: string
+  firstName?: string
+  lastName?: string
+  businessName?: string
+  email?: string
   phone?: string
   address?: string
+}
+
+export interface UpdateSupplierPayload {
+  person?: UpdateSupplierPersonPayload
+  commercialName?: string
 }

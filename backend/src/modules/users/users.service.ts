@@ -34,11 +34,15 @@ const userSelect = {
   person: {
     select: {
       id: true,
+      documentTypeId: true,
+      documentNumber: true,
       firstName: true,
       lastName: true,
+      businessName: true,
       email: true,
       phone: true,
       address: true,
+      documentType: { select: { code: true, name: true } },
     },
   },
   role: { select: { id: true, name: true } },
@@ -373,14 +377,16 @@ export class UsersService {
             person,
             normalizedEmail!,
           )
-        : await this.personsService.findAvailableForUserAccount(
-            transaction,
-            personId!,
-          );
+        : personId!;
+      const availablePersonId =
+        await this.personsService.findAvailableForUserAccount(
+          transaction,
+          resolvedPersonId,
+        );
 
       const createdUser = await transaction.userAccount.create({
         data: {
-          personId: resolvedPersonId!,
+          personId: availablePersonId,
           roleId,
           password: null,
           mustChangePassword: true,
@@ -399,14 +405,14 @@ export class UsersService {
 
       await this.recordUserAudit(transaction, currentUser, ipAddress, {
         action: "CREATE",
-        entityId: resolvedPersonId!,
+        entityId: availablePersonId,
         newData: {
           person: createdUser.person,
           role: createdUser.role,
           active: createdUser.active,
           branches: branches.map(({ id, name }) => ({ id, name })),
         },
-        reason: `Creación de cuenta para el usuario ${resolvedPersonId}`,
+        reason: `Creación de cuenta para el usuario ${availablePersonId}`,
       });
 
       for (const branch of branches) {
@@ -414,7 +420,7 @@ export class UsersService {
           action: "ASSIGN",
           entityId: resolvedPersonId!,
           newData: { branchId: branch.id, branchName: branch.name },
-          reason: `Asignación de la sede ${branch.name} al usuario ${resolvedPersonId}`,
+          reason: `Asignación de la sede ${branch.name} al usuario ${availablePersonId}`,
         });
       }
 
@@ -636,41 +642,27 @@ export class UsersService {
     if (!hasPersonChanges) {
       throw new BadRequestException("At least one field must be provided");
     }
-    const existingUser = await this.findUserById(userId);
-
-    const email = person?.email?.trim().toLowerCase();
-    if (email && email !== existingUser.person.email) {
-      const emailInUse = await this.prisma.userAccount.findFirst({
-        where: {
-          personId: { not: userId },
-          person: { is: { email } },
-        },
-        select: { personId: true },
-      });
-      if (emailInUse) {
-        throw new ConflictException(
-          "Email is already registered to a user account",
-        );
-      }
-    }
-
     const updatedUser = await this.prisma.$transaction(async (transaction) => {
       const oldPerson = await transaction.person.findUnique({
         where: { id: userId },
         select: {
           id: true,
+          documentTypeId: true,
+          documentNumber: true,
           firstName: true,
           lastName: true,
+          businessName: true,
           email: true,
           phone: true,
           address: true,
+          documentType: { select: { code: true, name: true } },
         },
       });
       if (!oldPerson) {
         throw new NotFoundException("User not found");
       }
 
-      const updatedPerson = await this.personsService.update(
+      const updatedPerson = await this.personsService.updateProfile(
         transaction,
         userId,
         person!,
@@ -688,16 +680,7 @@ export class UsersService {
         action: "UPDATE",
         entityId: userId,
         oldData: { person: oldPerson },
-        newData: {
-          person: {
-            id: updatedPerson.id,
-            firstName: updatedPerson.firstName,
-            lastName: updatedPerson.lastName,
-            email: updatedPerson.email,
-            phone: updatedPerson.phone,
-            address: updatedPerson.address,
-          },
-        },
+        newData: { person: updatedPerson },
         reason: `Actualización de datos personales del usuario ${userId}`,
       });
 

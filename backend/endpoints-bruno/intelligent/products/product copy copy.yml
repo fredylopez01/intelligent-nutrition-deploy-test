@@ -1,0 +1,29 @@
+info:
+  name: product copy copy
+  type: http
+  seq: 5
+
+http:
+  method: PATCH
+  url: http://localhost:3000/api/v1/products/824da023-6f14-4592-b1c7-412f6e81f770
+  body:
+    type: json
+    data: |-
+      {
+        "name": "Whey Protein",
+        "referenceCode": "WHEY-2KG-001",
+        "description": "",
+        "categoryId": "5b51944e-f050-4a8e-b653-020dc8aba861",
+        "unitOfMeasureId": "e12f162f-2b87-42ea-9c48-06eb99368e05",
+        "price": "145000.00"
+      }
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -5,9 +5,9 @@ services:
     restart: unless-stopped
 
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-intelligent_nutrition}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-intelligent_nutrition}
 
     ports:
       - "5432:5432"
@@ -17,13 +17,27 @@ services:
 
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U intelligent_nutrition -d intelligent_nutrition",
-        ]
+        ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 5s
       timeout: 5s
       retries: 5
+
+  backend-init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: init
+
+    container_name: intelligent-nutrition-backend-init
+    restart: "no"
+
+    environment:
+      DATABASE_URL: "${DATABASE_URL_DOCKER:-postgresql://${POSTGRES_USER:-intelligent_nutrition}:${POSTGRES_PASSWORD:-change_me}@postgres:5432/${POSTGRES_DB:-intelligent_nutrition}?schema=public}"
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?Set SEED_ADMIN_PASSWORD in the root .env file}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   backend:
     build:
@@ -34,7 +48,7 @@ services:
     restart: unless-stopped
 
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: "${DATABASE_URL_DOCKER:-postgresql://${POSTGRES_USER:-intelligent_nutrition}:${POSTGRES_PASSWORD:-change_me}@postgres:5432/${POSTGRES_DB:-intelligent_nutrition}?schema=public}"
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       RESEND_API_KEY: ${RESEND_API_KEY}
@@ -45,13 +59,35 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3000/api/v1/auth/google/callback}
       PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES: ${PASSWORD_RESET_TOKEN_EXPIRATION_MINUTES:-60}
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT}
+      STORAGE_BUCKET: ${STORAGE_BUCKET}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL}
+      STORAGE_REGION: ${STORAGE_REGION:-auto}
+      STORAGE_FORCE_PATH_STYLE: ${STORAGE_FORCE_PATH_STYLE:-false}
+      PRODUCT_IMAGE_LIMIT: ${PRODUCT_IMAGE_LIMIT:-5}
+      STORAGE_UPLOAD_URL_EXPIRES_IN: ${STORAGE_UPLOAD_URL_EXPIRES_IN:-300}
 
     ports:
       - "3000:3000"
 
     depends_on:
-      postgres:
-        condition: service_healthy
+      backend-init:
+        condition: service_completed_successfully
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/v1/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   frontend:
     build:
@@ -70,7 +106,8 @@ services:
       - "5173:80"
 
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:

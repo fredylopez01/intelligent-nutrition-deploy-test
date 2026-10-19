@@ -1,0 +1,47 @@
+info:
+  name: upload-image-to-bucket
+  type: http
+  seq: 2
+
+http:
+  method: PUT
+  url: https://products-images-dev.847fd2a5def0f90a7b33bfcc8a251e3a.r2.cloudflarestorage.com/products/824da023-6f14-4592-b1c7-412f6e81f770/fe4df70a-0df2-469e-ab06-c4b595368a62.webp?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=66a1805a6214634350716bc912123ecf%2F20261013%2Fauto%2Fs3%2Faws4_request&X-Amz-Date=20261013T154432Z&X-Amz-Expires=300&X-Amz-Signature=97caf041310a56a41c331f0995ca55033f242c9bc6b3d25f171c95ad0af9f9ca&X-Amz-SignedHeaders=content-length%3Bhost&x-amz-checksum-crc32=AAAAAA%3D%3D&x-amz-sdk-checksum-algorithm=CRC32&x-id=PutObject
+  params:
+    - name: X-Amz-Algorithm
+      value: AWS4-HMAC-SHA256
+      type: query
+    - name: X-Amz-Content-Sha256
+      value: UNSIGNED-PAYLOAD
+      type: query
+    - name: X-Amz-Credential
+      value: 66a1805a6214634350716bc912123ecf%2F20261013%2Fauto%2Fs3%2Faws4_request
+      type: query
+    - name: X-Amz-Date
+      value: 20261013T154432Z
+      type: query
+    - name: X-Amz-Expires
+      value: "300"
+      type: query
+    - name: X-Amz-Signature
+      value: 97caf041310a56a41c331f0995ca55033f242c9bc6b3d25f171c95ad0af9f9ca
+      type: query
+    - name: X-Amz-SignedHeaders
+      value: content-length%3Bhost
+      type: query
+    - name: x-amz-checksum-crc32
+      value: AAAAAA%3D%3D
+      type: query
+    - name: x-amz-sdk-checksum-algorithm
+      value: CRC32
+      type: query
+    - name: x-id
+      value: PutObject
+      type: query
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

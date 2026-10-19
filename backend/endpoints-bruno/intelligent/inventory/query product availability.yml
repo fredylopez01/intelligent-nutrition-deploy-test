@@ -1,0 +1,22 @@
+info:
+  name: query product availability
+  type: http
+  seq: 5
+
+http:
+  method: GET
+  url: http://localhost:3000/api/v1/inventory/availability?productId=315b23ca-8c30-4b05-933e-9df4e94cd086
+  params:
+    - name: productId
+      value: 315b23ca-8c30-4b05-933e-9df4e94cd086
+      type: query
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

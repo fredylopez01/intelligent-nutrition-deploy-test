@@ -7,13 +7,13 @@ import {
   MaxLength,
   ValidateNested,
 } from "class-validator";
-import { CreateSupplierPersonDto } from "./create-supplier-person.dto.js";
+import { CreatePersonDto } from "../../persons/dto/create-person.dto.js";
 
 export class CreateSupplierDto {
   @IsOptional()
   @ValidateNested()
-  @Type(() => CreateSupplierPersonDto)
-  person?: CreateSupplierPersonDto;
+  @Type(() => CreatePersonDto)
+  person?: CreatePersonDto;
 
   @IsOptional()
   @IsUUID()

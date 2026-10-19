@@ -6,7 +6,7 @@ import type {
   UpdateSupplierPayload,
 } from '../types/supplier'
 
-import { http } from './http'
+import { ApiError, http } from './http'
 import { MOCK_SUPPLIERS } from './mocks/suppliers.mock'
 
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true'
@@ -60,18 +60,28 @@ export const suppliersService = {
     return http.get<SuppliersListResponse>(`/suppliers${buildSuppliersQuery(params)}`, { token })
   },
 
+  getById: async (id: string, token: string | null): Promise<Supplier> => {
+    if (USE_MOCKS) {
+      await delay()
+      const target = MOCK_SUPPLIERS.find((s) => s.id === id)
+      if (!target) throw new ApiError('Supplier not found', 404)
+      return target
+    }
+    return http.get<Supplier>(`/suppliers/${id}`, { token })
+  },
+
   create: async (payload: CreateSupplierPayload, token: string | null): Promise<Supplier> => {
     if (USE_MOCKS) {
       await delay()
       return {
         id: `mock-${Date.now()}`,
         person: {
-          businessName: payload.person.businessName,
-          documentNumber: payload.person.documentNumber,
-          documentType: { code: 'CC', name: 'Cédula de Ciudadanía' },
-          email: payload.person.email,
-          phone: payload.person.phone,
-          address: payload.person.address ?? null,
+          businessName: 'person' in payload ? (payload.person.businessName ?? null) : null,
+          documentNumber: 'person' in payload ? payload.person.documentNumber : null,
+          documentType: { code: 'NIT', name: 'Número de Identificación Tributaria' },
+          email: 'person' in payload ? payload.person.email : null,
+          phone: 'person' in payload ? payload.person.phone : null,
+          address: 'person' in payload ? payload.person.address : null,
           active: true,
         },
         commercialName: payload.commercialName,
@@ -90,8 +100,7 @@ export const suppliersService = {
       const target = MOCK_SUPPLIERS.find((s) => s.id === id)
       if (!target) throw new Error('Proveedor no encontrado')
       if (payload.commercialName !== undefined) target.commercialName = payload.commercialName
-      if (payload.phone !== undefined) target.person.phone = payload.phone
-      if (payload.address !== undefined) target.person.address = payload.address
+      Object.assign(target.person, payload.person ?? {})
       return target
     }
     return http.patch<Supplier>(`/suppliers/${id}`, payload, { token })

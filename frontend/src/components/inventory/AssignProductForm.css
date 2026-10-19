@@ -1,0 +1,139 @@
+.assign-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+}
+
+.assign-form__step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.assign-form__step-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.assign-form__results {
+  display: flex;
+  flex-direction: column;
+  max-height: 248px;
+  margin: 0;
+  padding: 0.25rem;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 10px;
+  list-style: none;
+}
+
+.assign-form__result {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.assign-form__result:hover {
+  background: var(--color-surface-hover);
+}
+
+.assign-form__result:focus-visible,
+.assign-form__change:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
+}
+
+.assign-form__product-name {
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+
+.assign-form__product-meta {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--color-text-faint);
+}
+
+.assign-form__selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--color-border-outline);
+  border-radius: 10px;
+  background: var(--color-surface-elevated);
+}
+
+.assign-form__selected-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.assign-form__change {
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.assign-form__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-faint);
+}
+
+.assign-form__error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-danger);
+}
+
+.assign-form__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.assign-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.625rem;
+  padding-top: 0.25rem;
+}
+
+@media (max-width: 479px) {
+  .assign-form__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .assign-form__actions {
+    flex-direction: column-reverse;
+  }
+
+  .assign-form__actions .ui-button {
+    width: 100%;
+  }
+}

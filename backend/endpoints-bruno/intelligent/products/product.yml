@@ -1,0 +1,29 @@
+info:
+  name: product
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/api/v1/products
+  body:
+    type: json
+    data: |-
+      {
+        "name": "Whey Protein",
+        "referenceCode": "WHEY-1KG-001",
+        "description": "",
+        "categoryId": "627d545b-6277-4e4e-93a6-1bf7a9ddacb2",
+        "unitOfMeasureId": "ff686082-5860-44d3-a410-4d052ac2f29a",
+        "price": "145000.00"
+      }
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

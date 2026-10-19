@@ -1,70 +1,62 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import { CreateSupplierForm } from '../../components/suppliers/CreateSupplierForm'
-import { EditSupplierForm } from '../../components/suppliers/EditSupplierForm'
-import { SupplierDetail } from '../../components/suppliers/SupplierDetail'
 import { SuppliersTable } from '../../components/suppliers/SuppliersTable'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
+import { Pagination } from '../../components/ui/Pagination'
+import { ReloadButton } from '../../components/ui/ReloadButton'
+import { SearchBar } from '../../components/ui/SearchBar'
+import { usePagination } from '../../hooks/usePagination'
 import { useSuppliers } from '../../hooks/useSuppliers'
 import { AppLayout } from '../../layouts/AppLayout'
-import type { Supplier } from '../../types/supplier'
 
 import './SuppliersPage.css'
 
-const PAGE_SIZE = 10
-
-type ActiveFilter = 'todos' | 'activos' | 'inactivos'
-
-const ACTIVE_FILTER_VALUES: Record<ActiveFilter, boolean | undefined> = {
-  todos: undefined,
+const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
   activos: true,
   inactivos: false,
 }
 
+const FILTER_DEFAULTS = { estado: 'todos' }
+
 export function SuppliersPage() {
-  const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('todos')
+  const {
+    page,
+    search,
+    filters,
+    hasFilters,
+    params,
+    limitOptions,
+    setPage,
+    setLimit,
+    applySearch,
+    setFilter,
+    clearFilters,
+  } = usePagination({ filters: FILTER_DEFAULTS })
+  const location = useLocation()
   const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [viewingSupplier, setViewingSupplier] = useState<Supplier | null>(null)
-  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, suppliers, meta, error, refetch } = useSuppliers({
-    page,
-    limit: PAGE_SIZE,
-    search: search.trim() || undefined,
-    active: ACTIVE_FILTER_VALUES[activeFilter],
+    ...params,
+    active: ACTIVE_FILTER_VALUES[filters.estado],
   })
 
   const totalPages = meta?.totalPages ?? 0
+  const returnTo = `${location.pathname}${location.search}`
 
-  const handleSearchChange = (value: string) => {
-    setSearch(value)
-    setPage(1)
-  }
-
-  const handleActiveFilterChange = (value: ActiveFilter) => {
-    setActiveFilter(value)
-    setPage(1)
+  const handleSearch = (term: string) => {
+    if (term === search) void refetch()
+    else applySearch(term)
   }
 
   const handleOpenCreate = () => {
     setFeedbackMessage(null)
     setIsCreateOpen(true)
-  }
-
-  const handleOpenView = (supplier: Supplier) => {
-    setFeedbackMessage(null)
-    setViewingSupplier(supplier)
-  }
-
-  const handleOpenEdit = (supplier: Supplier) => {
-    setFeedbackMessage(null)
-    setEditingSupplier(supplier)
   }
 
   const handleSupplierCreated = () => {
@@ -75,12 +67,6 @@ export function SuppliersPage() {
     } else {
       setPage(1)
     }
-  }
-
-  const handleSupplierUpdated = () => {
-    setEditingSupplier(null)
-    setFeedbackMessage('Los cambios se guardaron correctamente.')
-    void refetch()
   }
 
   const renderList = () => {
@@ -106,14 +92,16 @@ export function SuppliersPage() {
     }
 
     if (suppliers.length === 0) {
-      const hasFilters = search.trim() !== '' || activeFilter !== 'todos'
       return hasFilters ? (
         <EmptyState
+          variant="sin-resultados"
           title="Ningún proveedor coincide con los filtros"
           description="Prueba con otro término de búsqueda o cambia el filtro de estado."
+          onClearFilters={clearFilters}
         />
       ) : (
         <EmptyState
+          variant="sin-registros"
           title="Todavía no hay proveedores registrados"
           description="Registra el primer proveedor para comenzar."
         >
@@ -122,22 +110,18 @@ export function SuppliersPage() {
       )
     }
 
-    return <SuppliersTable suppliers={suppliers} onView={handleOpenView} onEdit={handleOpenEdit} />
+    return <SuppliersTable suppliers={suppliers} returnTo={returnTo} />
   }
 
   return (
     <AppLayout title="Proveedores">
       <div className="suppliers-page__toolbar">
-        <label className="sr-only" htmlFor="suppliers-search">
-          Buscar por nombre, correo o documento
-        </label>
-        <input
+        <SearchBar
           id="suppliers-search"
-          type="search"
-          className="suppliers-page__search"
-          placeholder="Buscar por nombre, correo o documento"
+          label="Buscar por nombre o documento"
+          placeholder="Buscar por nombre, nombre comercial o documento"
           value={search}
-          onChange={(e) => handleSearchChange(e.target.value)}
+          onSearch={handleSearch}
         />
         <label className="sr-only" htmlFor="suppliers-active-filter">
           Filtrar por estado
@@ -145,13 +129,14 @@ export function SuppliersPage() {
         <select
           id="suppliers-active-filter"
           className="suppliers-page__filter"
-          value={activeFilter}
-          onChange={(e) => handleActiveFilterChange(e.target.value as ActiveFilter)}
+          value={filters.estado}
+          onChange={(e) => setFilter('estado', e.target.value)}
         >
           <option value="todos">Todos los estados</option>
           <option value="activos">Activos</option>
           <option value="inactivos">Inactivos</option>
         </select>
+        <ReloadButton onReload={() => void refetch()} loading={status === 'loading'} />
         <Button onClick={handleOpenCreate}>Registrar proveedor</Button>
       </div>
 
@@ -164,52 +149,30 @@ export function SuppliersPage() {
       <div className="suppliers-page__card">{renderList()}</div>
 
       <div className="suppliers-page__footer">
-        {status === 'success' && totalPages > 1 && (
-          <nav className="suppliers-page__pagination" aria-label="Paginación de proveedores">
-            <Button variant="outline" onClick={() => setPage((p) => p - 1)} disabled={page <= 1}>
-              Anterior
-            </Button>
-            <span className="suppliers-page__page-info">
-              Página {meta?.page ?? page} de {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= totalPages}
-            >
-              Siguiente
-            </Button>
-          </nav>
+        {status === 'success' && (
+          <Pagination
+            page={meta?.page ?? page}
+            totalPages={totalPages}
+            total={meta?.total}
+            limit={params.limit}
+            limitOptions={limitOptions}
+            label="Paginación de proveedores"
+            onChange={setPage}
+            onLimitChange={setLimit}
+          />
         )}
       </div>
 
-      <Modal open={isCreateOpen} title="Registrar proveedor" onClose={() => setIsCreateOpen(false)}>
+      <Modal
+        open={isCreateOpen}
+        title="Registrar proveedor"
+        description="Busca primero a la persona o empresa para no duplicarla. Si no existe, la registras desde cero."
+        onClose={() => setIsCreateOpen(false)}
+      >
         <CreateSupplierForm
           onCreated={handleSupplierCreated}
           onCancel={() => setIsCreateOpen(false)}
         />
-      </Modal>
-
-      <Modal
-        open={viewingSupplier !== null}
-        title="Detalle del proveedor"
-        onClose={() => setViewingSupplier(null)}
-      >
-        {viewingSupplier && <SupplierDetail supplier={viewingSupplier} />}
-      </Modal>
-
-      <Modal
-        open={editingSupplier !== null}
-        title="Editar proveedor"
-        onClose={() => setEditingSupplier(null)}
-      >
-        {editingSupplier && (
-          <EditSupplierForm
-            supplier={editingSupplier}
-            onUpdated={handleSupplierUpdated}
-            onCancel={() => setEditingSupplier(null)}
-          />
-        )}
       </Modal>
     </AppLayout>
   )

@@ -1,0 +1,29 @@
+info:
+  name: create-branch
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:3000/api/v1/branches
+  body:
+    type: json
+    data: "{\r
+
+      \    \"name\": \"Sede Makro\",\r
+
+      \    \"address\": \"Av. Universitaria #33-45\",\r
+
+      \    \"phone\": \"3214567809\"\r
+
+      }"
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

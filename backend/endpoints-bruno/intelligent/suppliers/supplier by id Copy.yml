@@ -1,0 +1,29 @@
+info:
+  name: supplier by id Copy
+  type: http
+  seq: 2
+
+http:
+  method: PATCH
+  url: http://localhost:3000/api/v1/suppliers/ec4cfd5a-c0d7-4cc5-97d7-5fb3bc269d9c
+  body:
+    type: json
+    data: "{\r
+
+      \    \"commercialName\": \"Suplementos Boyacá\",\r
+
+      \    \"phone\": \"32112365402\",\r
+
+      \    \"address\": \"Calle 10 # 20-30\"\r
+
+      }"
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

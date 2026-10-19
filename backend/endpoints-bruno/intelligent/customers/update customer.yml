@@ -1,0 +1,39 @@
+info:
+  name: update customer
+  type: http
+  seq: 2
+
+http:
+  method: PATCH
+  url: http://localhost:3000/api/v1/customers/0295b0f5-d89e-47f4-8729-09065b3a739c
+  body:
+    type: json
+    data: "{\r
+
+      \    \"person\": {\r
+
+      \        \"documentTypeId\": \"55a45278-d11a-46d9-acb7-2b584b4fef21\",\r
+
+      \        \"documentNumber\": \"753987162\", \r
+
+      \        \"businessName\": \"Colmedica S.A.S\",\r
+
+      \        \"email\": \"colmedica1@gmail.com\",\r
+
+      \        \"phone\": \"108005652\",\r
+
+      \        \"address\": \"Cl 1 # 12 -18\"\r
+
+      \    }\r
+
+      }"
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -11,6 +11,11 @@ import { DocumentTypesModule } from "./modules/document-types/document-types.mod
 import { AuditModule } from "./modules/audit/audit.module.js";
 import { BranchesModule } from "./modules/branches/branches.module.js";
 import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
+import { CustomersModule } from "./modules/customers/customers.module.js";
+import { CategoriesModule } from "./modules/categories/categories.module.js";
+import { UnitMeasureModule } from "./modules/unit-measure/unit-measure.module.js";
+import { ProductsModule } from "./modules/products/products.module.js";
+import { InventoryModule } from "./modules/inventory/inventory.module.js";
 
 @Module({
   imports: [
@@ -24,8 +29,13 @@ import { SuppliersModule } from "./modules/suppliers/suppliers.module.js";
     UsersModule,
     BranchesModule,
     SuppliersModule,
+    CustomersModule,
     AuditModule,
     HealthModule,
+    CategoriesModule,
+    UnitMeasureModule,
+    ProductsModule,
+    InventoryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

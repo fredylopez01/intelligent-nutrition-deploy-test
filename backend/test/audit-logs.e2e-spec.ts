@@ -12,6 +12,10 @@ import { PrismaService } from "../src/database/prisma/prisma.service.js";
 type RoleName = "SUPERADMIN" | "DEV" | "BRANCH_LEADER" | "BRANCH_ASSISTANT";
 
 const runId = Date.now().toString(36);
+const DOCUMENT_CODE = "CC-AUDIT-E2E";
+let documentTypeId: string;
+let documentSequence = 0;
+const nextDocumentNumber = () => `${runId}${(documentSequence += 1)}`;
 const reasonFor = (label: string) => `${runId} ${label}`;
 
 interface AuditLogItem {
@@ -68,6 +72,13 @@ describe("GET /api/v1/audit-logs (e2e)", () => {
     await app.init();
 
     prisma = app.get(PrismaService);
+    documentTypeId = (
+      await prisma.documentType.upsert({
+        where: { code: DOCUMENT_CODE },
+        update: { active: true },
+        create: { code: DOCUMENT_CODE, name: "Documento (e2e)" },
+      })
+    ).id;
     const jwtService = app.get(JwtService);
     const roleNames: RoleName[] = [
       "SUPERADMIN",
@@ -84,6 +95,10 @@ describe("GET /api/v1/audit-logs (e2e)", () => {
       });
       const person = await prisma.person.create({
         data: {
+          documentTypeId,
+          documentNumber: nextDocumentNumber(),
+          phone: "3000000000",
+          address: "Calle 1 # 2-3",
           firstName: roleName,
           lastName: "E2E",
           email: `${roleName.toLowerCase()}.audit.${runId}@e2e.test`,
@@ -102,6 +117,10 @@ describe("GET /api/v1/audit-logs (e2e)", () => {
 
     const affectedA = await prisma.person.create({
       data: {
+        documentTypeId,
+        documentNumber: nextDocumentNumber(),
+        phone: "3000000000",
+        address: "Calle 1 # 2-3",
         firstName: "Afectado",
         lastName: "A",
         email: `afectado.a.${runId}@e2e.test`,
@@ -109,6 +128,10 @@ describe("GET /api/v1/audit-logs (e2e)", () => {
     });
     const affectedB = await prisma.person.create({
       data: {
+        documentTypeId,
+        documentNumber: nextDocumentNumber(),
+        phone: "3000000000",
+        address: "Calle 1 # 2-3",
         firstName: "Afectado",
         lastName: "B",
         email: `afectado.b.${runId}@e2e.test`,
@@ -176,6 +199,9 @@ describe("GET /api/v1/audit-logs (e2e)", () => {
       where: { personId: { in: userIds } },
     });
     await prisma.person.deleteMany({ where: { id: { in: userIds } } });
+    await prisma.documentType.deleteMany({
+      where: { code: DOCUMENT_CODE },
+    });
     await app.close();
   });
 

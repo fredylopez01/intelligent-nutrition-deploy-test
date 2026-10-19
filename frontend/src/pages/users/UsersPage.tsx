@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Modal } from '../../components/ui/Modal'
+import { Pagination } from '../../components/ui/Pagination'
+import { ReloadButton } from '../../components/ui/ReloadButton'
+import { SearchBar } from '../../components/ui/SearchBar'
 import { AssignUserBranchForm } from '../../components/users/AssignUserBranchForm'
 import { CreateUserForm } from '../../components/users/CreateUserForm'
 import { UsersTable } from '../../components/users/UsersTable'
 import { UsersTableSkeleton } from '../../components/users/UsersTableSkeleton'
+import { usePagination } from '../../hooks/usePagination'
 import { useRoles } from '../../hooks/useRoles'
 import { useUsers } from '../../hooks/useUsers'
 import { AppLayout } from '../../layouts/AppLayout'
@@ -16,89 +20,50 @@ import { getRoleLabel } from '../../utils/format'
 
 import './UsersPage.css'
 
-const PAGE_SIZE = 10
+const SKELETON_ROWS = 10
 
-type ActiveFilter = 'todos' | 'activos' | 'inactivos'
-
-const ACTIVE_FILTER_VALUES: Record<ActiveFilter, boolean | undefined> = {
-  todos: undefined,
+const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
   activos: true,
   inactivos: false,
 }
 
-function parseActiveFilter(value: string | null): ActiveFilter {
-  return value === 'activos' || value === 'inactivos' ? value : 'todos'
-}
+const FILTER_DEFAULTS = { rol: 'todos', estado: 'todos' }
 
 export function UsersPage() {
   const location = useLocation()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const {
+    page,
+    search,
+    filters,
+    hasFilters,
+    params,
+    limitOptions,
+    setPage,
+    setLimit,
+    applySearch,
+    setFilter,
+    clearFilters,
+  } = usePagination({ filters: FILTER_DEFAULTS })
 
-  const page = Math.max(1, Number(searchParams.get('pagina')) || 1)
-  const roleFilter = searchParams.get('rol') ?? 'todos'
-  const activeFilter = parseActiveFilter(searchParams.get('estado'))
-  const urlSearch = searchParams.get('q') ?? ''
-
-  const [search, setSearch] = useState(urlSearch)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isAssignOpen, setIsAssignOpen] = useState(false)
   const [createdMessage, setCreatedMessage] = useState<string | null>(null)
 
   const { roles } = useRoles()
 
-  const updateParams = (changes: Record<string, string | null>, resetPage = true) => {
-    setSearchParams(
-      (previous) => {
-        const next = new URLSearchParams(previous)
-        for (const [key, value] of Object.entries(changes)) {
-          if (value === null || value === '' || value === 'todos') next.delete(key)
-          else next.set(key, value)
-        }
-        if (resetPage) next.delete('pagina')
-        return next
-      },
-      { replace: true },
-    )
-  }
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const term = search.trim()
-      if (term === urlSearch) return
-      setSearchParams(
-        (previous) => {
-          const next = new URLSearchParams(previous)
-          if (term) next.set('q', term)
-          else next.delete('q')
-          next.delete('pagina')
-          return next
-        },
-        { replace: true },
-      )
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [search, urlSearch, setSearchParams])
-
   const { status, users, meta, emptyMessage, error, refetch } = useUsers({
-    page,
-    limit: PAGE_SIZE,
-    active: ACTIVE_FILTER_VALUES[activeFilter],
-    search: urlSearch || undefined,
-    roleId: roleFilter === 'todos' ? undefined : roleFilter,
+    ...params,
+    active: ACTIVE_FILTER_VALUES[filters.estado],
+    roleId: filters.rol === 'todos' ? undefined : filters.rol,
   })
 
   const totalPages = meta?.totalPages ?? 0
-  const hasFilters = urlSearch !== '' || roleFilter !== 'todos' || activeFilter !== 'todos'
+
+  const handleSearch = (term: string) => {
+    if (term === search) refetch()
+    else applySearch(term)
+  }
   const returnTo = `${location.pathname}${location.search}`
-
-  const goToPage = (nextPage: number) => {
-    updateParams({ pagina: nextPage > 1 ? String(nextPage) : null }, false)
-  }
-
-  const clearFilters = () => {
-    setSearch('')
-    updateParams({ q: null, rol: null, estado: null })
-  }
 
   const handleOpenCreate = () => {
     setCreatedMessage(null)
@@ -109,11 +74,11 @@ export function UsersPage() {
     setIsCreateOpen(false)
     setCreatedMessage('El usuario quedó registrado. Le enviamos el correo de activación.')
     if (page === 1) refetch()
-    else goToPage(1)
+    else setPage(1)
   }
 
   const renderList = () => {
-    if (status === 'loading') return <UsersTableSkeleton rows={PAGE_SIZE} />
+    if (status === 'loading') return <UsersTableSkeleton rows={SKELETON_ROWS} />
 
     if (status === 'error') {
       return (
@@ -129,15 +94,14 @@ export function UsersPage() {
     if (users.length === 0) {
       return hasFilters ? (
         <EmptyState
+          variant="sin-resultados"
           title="Ningún usuario coincide con los filtros"
           description="Revisa el nombre o el correo, o quita los filtros de rol y estado."
-        >
-          <Button variant="outline" onClick={clearFilters}>
-            Quitar filtros
-          </Button>
-        </EmptyState>
+          onClearFilters={clearFilters}
+        />
       ) : (
         <EmptyState
+          variant="sin-registros"
           title="Todavía no hay usuarios registrados"
           description={
             emptyMessage ?? 'Registra la primera cuenta para que el equipo pueda entrar.'
@@ -155,16 +119,12 @@ export function UsersPage() {
     <AppLayout title="Usuarios">
       <div className="users-page__toolbar">
         <div className="users-page__filters">
-          <label className="sr-only" htmlFor="users-search">
-            Buscar por nombre o correo
-          </label>
-          <input
+          <SearchBar
             id="users-search"
-            type="search"
-            className="users-page__search"
+            label="Buscar por nombre o correo"
             placeholder="Buscar por nombre o correo"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onSearch={handleSearch}
           />
 
           <label className="sr-only" htmlFor="users-role-filter">
@@ -173,8 +133,8 @@ export function UsersPage() {
           <select
             id="users-role-filter"
             className="users-page__filter"
-            value={roleFilter}
-            onChange={(event) => updateParams({ rol: event.target.value })}
+            value={filters.rol}
+            onChange={(event) => setFilter('rol', event.target.value)}
           >
             <option value="todos">Todos los roles</option>
             {roles.map((role) => (
@@ -190,13 +150,15 @@ export function UsersPage() {
           <select
             id="users-active-filter"
             className="users-page__filter"
-            value={activeFilter}
-            onChange={(event) => updateParams({ estado: event.target.value })}
+            value={filters.estado}
+            onChange={(event) => setFilter('estado', event.target.value)}
           >
             <option value="todos">Todos los estados</option>
             <option value="activos">Activos</option>
             <option value="inactivos">Inactivos</option>
           </select>
+
+          <ReloadButton onReload={refetch} loading={status === 'loading'} />
         </div>
 
         <div className="users-page__actions">
@@ -222,22 +184,17 @@ export function UsersPage() {
             : 'Un usuario desactivado no puede ingresar, y su historial se conserva para auditoría.'}
         </p>
 
-        {status === 'success' && totalPages > 1 && (
-          <nav className="users-page__pagination" aria-label="Paginación de usuarios">
-            <Button variant="outline" onClick={() => goToPage(page - 1)} disabled={page <= 1}>
-              Anterior
-            </Button>
-            <span className="users-page__page-info">
-              Página {meta?.page ?? page} de {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              onClick={() => goToPage(page + 1)}
-              disabled={page >= totalPages}
-            >
-              Siguiente
-            </Button>
-          </nav>
+        {status === 'success' && (
+          <Pagination
+            page={meta?.page ?? page}
+            totalPages={totalPages}
+            total={meta?.total}
+            limit={params.limit}
+            limitOptions={limitOptions}
+            label="Paginación de usuarios"
+            onChange={setPage}
+            onLimitChange={setLimit}
+          />
         )}
       </div>
 

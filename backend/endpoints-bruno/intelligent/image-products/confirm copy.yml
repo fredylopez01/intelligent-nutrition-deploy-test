@@ -1,0 +1,30 @@
+info:
+  name: confirm copy
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: http://localhost:3000/api/v1/products/824da023-6f14-4592-b1c7-412f6e81f770/images
+  body:
+    type: json
+    data: |-
+      {
+        "storageKey": "products/824da023-6f14-4592-b1c7-412f6e81f770/02e9f67c-016a-43af-a6e6-f9055151127d.webp",
+        "url": "https://cdn-dev.intelligentnutrition.shop/products/824da023-6f14-4592-b1c7-412f6e81f770/02e9f67c-016a-43af-a6e6-f9055151127d.webp",
+        "fileName": "protein1.webp",
+        "mimeType": "image/webp",
+        "sizeBytes": 66236,
+        "isPrimary": true,
+        "sortOrder": 0
+      }
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

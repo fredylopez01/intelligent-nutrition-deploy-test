@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { branchesService } from '../../services/branches.service'
@@ -44,7 +45,11 @@ const makro: Branch = {
 
 async function openEditDialog() {
   const user = userEvent.setup()
-  render(<BranchesPage />)
+  render(
+    <MemoryRouter>
+      <BranchesPage />
+    </MemoryRouter>,
+  )
 
   await user.click(await screen.findByRole('button', { name: 'Acciones para Sede Makro' }))
   await user.click(screen.getByRole('menuitem', { name: 'Editar' }))

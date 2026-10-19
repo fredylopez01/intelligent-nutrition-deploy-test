@@ -201,19 +201,21 @@ npx prisma generate
 
 ### Opción A: Con Docker Compose (recomendada)
 
-Levanta **solo el backend y PostgreSQL** desde la raíz del proyecto:
+Levanta PostgreSQL, inicializa el esquema/datos y luego inicia el backend desde la raíz del proyecto:
 
 ```bash
 # Desde la raíz del repo
 docker compose up postgres backend --build -d
 ```
 
-Esto construye la imagen del backend usando `backend/Dockerfile` y arranca PostgreSQL con las credenciales del `docker-compose.yml`.
+Compose usa `DATABASE_URL_DOCKER` (host `postgres`), espera a que PostgreSQL esté healthy, ejecuta `prisma migrate deploy` y `prisma db seed` en `backend-init`, y solo después inicia el backend. `DATABASE_URL` con host `localhost` es para ejecutar Nest directamente en el host.
+
+Si falla la URL, una migración o el seed, revisa `docker compose logs backend-init`; Compose no inicia el backend hasta que esa etapa termine correctamente.
 
 **Verificar que está corriendo:**
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3000/api/v1/health
 # Esperado: {"status":"ok"}
 ```
 
@@ -344,23 +346,23 @@ Si la conexión falla, verifica que el **Inbound IP Restrictions** de la base de
 
 ### Tests unitarios (Jest + ESM)
 
-El proyecto usa **ESM nativo** (`"type": "module"`). Jest debe correr con el flag de VM modules:
+El proyecto usa **ESM nativo** (`"type": "module"`), por lo que Jest necesita el flag `--experimental-vm-modules`. Los scripts `test`, `test:watch`, `test:cov` y `test:debug` ya lo incluyen, así que no hace falta configurar variables de entorno:
 
 ```bash
 cd backend
-node --experimental-vm-modules node_modules/jest/bin/jest.js
-```
-
-O usando el script:
-
-```bash
 npm test
 ```
 
-**Nota:** El script `test` en `package.json` no incluye el flag de VM modules explícitamente, pero la configuración de Jest en `package.json` usa `useESM: true` y `extensionsToTreatAsEsm: [".ts"]`. Si experimentas errores de módulos, ejecuta manualmente:
+Para ejecutar un solo archivo o filtrar por nombre, pasa el filtro después de `--`:
 
 ```bash
-node --experimental-vm-modules node_modules/jest/bin/jest.js --config package.json
+npm test -- customers.service
+```
+
+Si invocas Jest directamente (por ejemplo `npx jest`), debes agregar el flag tú mismo:
+
+```bash
+node --experimental-vm-modules node_modules/jest/bin/jest.js customers.service
 ```
 
 ### Tests E2E
@@ -379,6 +381,12 @@ Luego ejecuta:
 
 ```bash
 npm run test:e2e
+```
+
+Para ejecutar únicamente la suite de listado y detalle de productos:
+
+```bash
+npm run test:e2e -- products-list.e2e-spec.ts
 ```
 
 Antes de correr, el script aplica las migraciones pendientes a la base de pruebas. Cada suite
@@ -404,7 +412,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile smoke 
 
 El smoke test verifica:
 
-1. `GET /health` responde 200 sin token
+1. `GET /api/v1/health` responde 200 sin token y comprueba PostgreSQL
 2. El body es `{ "status": "ok" }`
 3. El frontend responde 200 (cuando está desplegado)
 
@@ -487,7 +495,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test u
 
 ### Paso 3: Health Check
 
-Configura el **Health Check Path** como `/health`. Render lo usará para verificar que el servicio está vivo.
+Configura el **Health Check Path** como `/api/v1/health`. Render lo usará para verificar que el servicio y PostgreSQL estén disponibles.
 
 ### Paso 4: Desplegar
 
@@ -496,7 +504,7 @@ Haz clic en **Create Web Service**. Render construirá la imagen y desplegará.
 **Verificar despliegue:**
 
 ```bash
-curl https://tu-backend.onrender.com/health
+curl https://tu-backend.onrender.com/api/v1/health
 # Esperado: {"status":"ok"}
 ```
 
@@ -532,13 +540,19 @@ Sin el `"0.0.0.0"`, NestJS escucha solo en localhost y Render no puede enrutar t
 
 ### Jest falla con errores de módulos ESM
 
-El proyecto usa ESM nativo. Ejecuta Jest con:
+El proyecto usa ESM nativo. Ejecuta las pruebas con los scripts del proyecto, que ya incluyen el flag `--experimental-vm-modules`:
+
+```bash
+npm test
+```
+
+El error `Must use import to load ES Module` aparece cuando se invoca Jest directamente (`npx jest`, `jest`) sin ese flag. En ese caso usa `npm test` o ejecuta:
 
 ```bash
 node --experimental-vm-modules node_modules/jest/bin/jest.js
 ```
 
-O verifica que el flag esté incluido en la ejecución del pipeline.
+En el pipeline, ejecuta `npm test` en lugar de invocar `jest` directamente.
 
 ### `prisma generate` falla en CI
 

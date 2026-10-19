@@ -1,0 +1,28 @@
+opencollection: 1.0.0
+
+info:
+  name: intelligent
+config:
+  proxy:
+    inherit: true
+    config:
+      protocol: http
+      hostname: ""
+      port: ""
+      auth:
+        username: ""
+        password: ""
+      bypassProxy: ""
+
+request:
+  variables:
+    - name: json_web_token_15kq
+      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYTBmZDg5MS1iNzY4LTQ3MjItYWFlZC1iZjI3ODlhYmViNzUiLCJpYXQiOjE3OTIxODc4MzgsImV4cCI6MTc5MjE5MTQzOH0.1OViPe1W70cWKRtpSFCZ6i6VuUbJw1di7upKPfUhte0
+    - name: url-back
+      value: ""
+bundled: false
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

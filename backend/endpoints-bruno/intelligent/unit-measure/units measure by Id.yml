@@ -1,0 +1,18 @@
+info:
+  name: units measure by Id
+  type: http
+  seq: 3
+
+http:
+  method: GET
+  url: http://localhost:3000/api/v1/unit-measure/5a896154-e3a4-4a13-9edf-621d7228c6b0
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
