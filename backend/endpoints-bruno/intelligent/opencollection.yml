@@ -17,9 +17,9 @@ config:
 request:
   variables:
     - name: json_web_token_15kq
-      value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYTBmZDg5MS1iNzY4LTQ3MjItYWFlZC1iZjI3ODlhYmViNzUiLCJpYXQiOjE3OTIxODc4MzgsImV4cCI6MTc5MjE5MTQzOH0.1OViPe1W70cWKRtpSFCZ6i6VuUbJw1di7upKPfUhte0
+      value:
     - name: url-back
-      value: ""
+      value: "http://localhost:3000/api/v1"
 bundled: false
 extensions:
   bruno:

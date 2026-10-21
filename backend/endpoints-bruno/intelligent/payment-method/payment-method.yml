@@ -1,0 +1,25 @@
+info:
+  name: payment-method
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/api/v1/payment-methods
+  body:
+    type: json
+    data: |-
+      {
+        "code": "NEQUI",
+        "name": "Nequi"
+      }
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
