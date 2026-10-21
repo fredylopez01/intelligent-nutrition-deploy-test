@@ -12,9 +12,12 @@ interface PaymentMethodRecord {
 }
 
 const prismaMock = {
+  $transaction: jest.fn<AsyncMock>(),
   paymentMethod: {
     findUnique: jest.fn<AsyncMock>(),
     create: jest.fn<AsyncMock>(),
+    count: jest.fn<AsyncMock>(),
+    findMany: jest.fn<AsyncMock>(),
   },
 };
 
@@ -57,6 +60,11 @@ describe("PaymentMethodsService", () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    prismaMock.$transaction.mockImplementation((operations) =>
+      Promise.all(operations as Promise<unknown>[]),
+    );
+    prismaMock.paymentMethod.count.mockResolvedValue(0);
+    prismaMock.paymentMethod.findMany.mockResolvedValue([]);
     prismaMock.paymentMethod.findUnique.mockResolvedValue(null);
     prismaMock.paymentMethod.create.mockResolvedValue(buildPaymentMethod());
 
@@ -170,6 +178,149 @@ describe("PaymentMethodsService", () => {
       );
 
       expect(error).toBe(rejection);
+    });
+  });
+
+  describe("findAll", () => {
+    const defaultQuery = { page: 1, limit: 10 };
+
+    it("returns the page of payment methods with its metadata", async () => {
+      const rows = [
+        buildPaymentMethod(),
+        buildPaymentMethod({
+          id: "66666666-6666-4666-8666-666666666666",
+          code: "CARD",
+          name: "Tarjeta",
+        }),
+      ];
+      prismaMock.paymentMethod.count.mockResolvedValue(rows.length);
+      prismaMock.paymentMethod.findMany.mockResolvedValue(rows);
+
+      const result = await service.findAll(defaultQuery);
+
+      expect(result).toEqual({
+        data: rows,
+        meta: { page: 1, limit: 10, total: 2, totalPages: 1 },
+      });
+    });
+
+    it("computes skip and take from the page and limit", async () => {
+      await service.findAll({ page: 3, limit: 5 });
+
+      const [{ skip, take }] = prismaMock.paymentMethod.findMany.mock
+        .calls[0] as [{ skip: number; take: number }];
+      expect(skip).toBe(10);
+      expect(take).toBe(5);
+    });
+
+    it("orders by name and then by code", async () => {
+      await service.findAll(defaultQuery);
+
+      const [{ orderBy }] = prismaMock.paymentMethod.findMany.mock.calls[0] as [
+        { orderBy: unknown },
+      ];
+      expect(orderBy).toEqual([{ name: "asc" }, { code: "asc" }]);
+    });
+
+    it("selects the public fields", async () => {
+      await service.findAll(defaultQuery);
+
+      const [{ select }] = prismaMock.paymentMethod.findMany.mock.calls[0] as [
+        { select: unknown },
+      ];
+      expect(select).toEqual({
+        id: true,
+        code: true,
+        name: true,
+        active: true,
+        createdAt: true,
+        updatedAt: true,
+      });
+    });
+
+    it("uses an empty filter when there are no query params", async () => {
+      await service.findAll(defaultQuery);
+
+      expect(prismaMock.paymentMethod.count).toHaveBeenCalledWith({
+        where: {},
+      });
+      expect(prismaMock.paymentMethod.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {} }),
+      );
+    });
+
+    it.each([true, false])("filters by active %s", async (active) => {
+      await service.findAll({ ...defaultQuery, active });
+
+      expect(prismaMock.paymentMethod.count).toHaveBeenCalledWith({
+        where: { active },
+      });
+      expect(prismaMock.paymentMethod.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { active } }),
+      );
+    });
+
+    it("searches by code and name ignoring case", async () => {
+      const expectedWhere = {
+        OR: [
+          { code: { contains: "ne", mode: "insensitive" } },
+          { name: { contains: "ne", mode: "insensitive" } },
+        ],
+      };
+
+      await service.findAll({ ...defaultQuery, search: "ne" });
+
+      expect(prismaMock.paymentMethod.count).toHaveBeenCalledWith({
+        where: expectedWhere,
+      });
+      expect(prismaMock.paymentMethod.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expectedWhere }),
+      );
+    });
+
+    it("combines the active filter with the search", async () => {
+      const expectedWhere = {
+        active: true,
+        OR: [
+          { code: { contains: "ne", mode: "insensitive" } },
+          { name: { contains: "ne", mode: "insensitive" } },
+        ],
+      };
+
+      await service.findAll({ ...defaultQuery, active: true, search: "ne" });
+
+      expect(prismaMock.paymentMethod.count).toHaveBeenCalledWith({
+        where: expectedWhere,
+      });
+    });
+
+    it("does not filter when the search is empty", async () => {
+      await service.findAll({ ...defaultQuery, search: "" });
+
+      expect(prismaMock.paymentMethod.count).toHaveBeenCalledWith({
+        where: {},
+      });
+    });
+
+    it.each([
+      [0, 0],
+      [10, 1],
+      [11, 2],
+      [21, 3],
+    ])("computes totalPages for %i records", async (total, totalPages) => {
+      prismaMock.paymentMethod.count.mockResolvedValue(total);
+
+      const result = await service.findAll(defaultQuery);
+
+      expect(result.meta).toEqual({ page: 1, limit: 10, total, totalPages });
+    });
+
+    it("reads the count and the page in a single transaction", async () => {
+      await service.findAll(defaultQuery);
+
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+      const [operations] = prismaMock.$transaction.mock.calls[0] as [unknown[]];
+      expect(operations).toHaveLength(2);
     });
   });
 });
