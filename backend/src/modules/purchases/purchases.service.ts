@@ -268,10 +268,7 @@ export class PurchasesService {
           purchaseNumber: true,
           status: true,
           purchaseAt: true,
-          subtotal: true,
           total: true,
-          observation: true,
-          createdAt: true,
           supplier: {
             select: {
               personId: true,
