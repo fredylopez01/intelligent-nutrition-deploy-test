@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { jest, describe, beforeEach, it, expect } from "@jest/globals";
 import { PaymentMethodsController } from "./payment-methods.controller.js";
 import { ROLES_KEY } from "../../common/decorators/roles.decorator.js";
+import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import type { PaymentMethodsService } from "./payment-methods.service.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
@@ -11,6 +12,12 @@ const serviceMock = { create: jest.fn<AsyncMock>() };
 const createdAt = new Date("2026-10-21T13:30:00.000Z");
 
 const validPayload = { code: "NEQUI", name: "Nequi" };
+
+const currentUser: AuthenticatedUser = {
+  id: "admin-user-id",
+  active: true,
+  role: { name: "SUPERADMIN" },
+};
 
 describe("PaymentMethodsController", () => {
   let controller: PaymentMethodsController;
@@ -33,10 +40,18 @@ describe("PaymentMethodsController", () => {
     };
     serviceMock.create.mockResolvedValue(paymentMethod);
 
-    const result = await controller.create(validPayload);
+    const result = await controller.create(
+      validPayload,
+      currentUser,
+      "127.0.0.1",
+    );
 
     expect(serviceMock.create).toHaveBeenCalledTimes(1);
-    expect(serviceMock.create).toHaveBeenCalledWith(validPayload);
+    expect(serviceMock.create).toHaveBeenCalledWith(
+      validPayload,
+      currentUser,
+      "127.0.0.1",
+    );
     expect(result).toBe(paymentMethod);
   });
 
@@ -44,7 +59,9 @@ describe("PaymentMethodsController", () => {
     const error = new Error("conflict");
     serviceMock.create.mockRejectedValue(error);
 
-    await expect(controller.create(validPayload)).rejects.toBe(error);
+    await expect(
+      controller.create(validPayload, currentUser, "127.0.0.1"),
+    ).rejects.toBe(error);
   });
 
   it("is restricted to the SUPERADMIN role", () => {
