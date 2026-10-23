@@ -1,6 +1,8 @@
 import { jest, describe, beforeEach, it, expect } from "@jest/globals";
+import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
+type TransactionOperation = (client: unknown) => Promise<unknown>;
 
 interface PaymentMethodRecord {
   id: string;
@@ -12,13 +14,23 @@ interface PaymentMethodRecord {
 }
 
 const prismaMock = {
-  $transaction: jest.fn<AsyncMock>(),
+  $transaction:
+    jest.fn<
+      (
+        operation: TransactionOperation | Array<Promise<unknown>>,
+      ) => Promise<unknown>
+    >(),
   paymentMethod: {
     findUnique: jest.fn<AsyncMock>(),
+    findFirst: jest.fn<AsyncMock>(),
     create: jest.fn<AsyncMock>(),
     count: jest.fn<AsyncMock>(),
     findMany: jest.fn<AsyncMock>(),
   },
+};
+
+const auditMock = {
+  createAuditLog: jest.fn<AsyncMock>(),
 };
 
 jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
@@ -29,8 +41,15 @@ const { Test } = await import("@nestjs/testing");
 const { PaymentMethodsService } = await import("./payment-methods.service.js");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
+const { AuditService } = await import("../audit/audit.service.js");
 
 const createdAt = new Date("2026-10-21T13:30:00.000Z");
+
+const currentUser: AuthenticatedUser = {
+  id: "admin-user-id",
+  active: true,
+  role: { name: "SUPERADMIN" },
+};
 
 function buildPaymentMethod(
   overrides: Partial<PaymentMethodRecord> = {},
@@ -60,18 +79,21 @@ describe("PaymentMethodsService", () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    prismaMock.$transaction.mockImplementation((operations) =>
-      Promise.all(operations as Promise<unknown>[]),
+    prismaMock.$transaction.mockImplementation((operation) =>
+      Array.isArray(operation) ? Promise.all(operation) : operation(prismaMock),
     );
     prismaMock.paymentMethod.count.mockResolvedValue(0);
     prismaMock.paymentMethod.findMany.mockResolvedValue([]);
     prismaMock.paymentMethod.findUnique.mockResolvedValue(null);
+    prismaMock.paymentMethod.findFirst.mockResolvedValue(null);
     prismaMock.paymentMethod.create.mockResolvedValue(buildPaymentMethod());
+    auditMock.createAuditLog.mockResolvedValue({});
 
     const module = await Test.createTestingModule({
       providers: [
         PaymentMethodsService,
         { provide: PrismaService, useValue: prismaMock },
+        { provide: AuditService, useValue: auditMock },
       ],
     }).compile();
 
@@ -83,10 +105,14 @@ describe("PaymentMethodsService", () => {
       const paymentMethod = buildPaymentMethod();
       prismaMock.paymentMethod.create.mockResolvedValue(paymentMethod);
 
-      const result: unknown = await service.create({
-        code: "NEQUI",
-        name: "Nequi",
-      });
+      const result: unknown = await service.create(
+        {
+          code: "NEQUI",
+          name: "Nequi",
+        },
+        currentUser,
+        "127.0.0.1",
+      );
 
       expect(prismaMock.paymentMethod.create).toHaveBeenCalledWith({
         data: { code: "NEQUI", name: "Nequi" },
@@ -100,10 +126,22 @@ describe("PaymentMethodsService", () => {
         },
       });
       expect(result).toBe(paymentMethod);
+      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+        {
+          userId: "admin-user-id",
+          action: "CREATE",
+          entity: "PAYMENT_METHOD",
+          entityId: paymentMethod.id,
+          newData: paymentMethod,
+          reason: "Creación del método de pago Nequi",
+          ipAddress: "127.0.0.1",
+        },
+        prismaMock,
+      );
     });
 
     it("leaves the active flag to the database default", async () => {
-      await service.create({ code: "NEQUI", name: "Nequi" });
+      await service.create({ code: "NEQUI", name: "Nequi" }, currentUser);
 
       const [{ data }] = prismaMock.paymentMethod.create.mock.calls[0] as [
         { data: Record<string, unknown> },
@@ -113,7 +151,7 @@ describe("PaymentMethodsService", () => {
     });
 
     it("checks the code before inserting", async () => {
-      await service.create({ code: "NEQUI", name: "Nequi" });
+      await service.create({ code: "NEQUI", name: "Nequi" }, currentUser);
 
       expect(prismaMock.paymentMethod.findUnique).toHaveBeenCalledWith({
         where: { code: "NEQUI" },
@@ -132,7 +170,7 @@ describe("PaymentMethodsService", () => {
       });
 
       await expect(
-        service.create({ code: "NEQUI", name: "Nequi" }),
+        service.create({ code: "NEQUI", name: "Nequi" }, currentUser),
       ).rejects.toMatchObject({
         status: 409,
         response: {
@@ -142,17 +180,19 @@ describe("PaymentMethodsService", () => {
         },
       });
       expect(prismaMock.paymentMethod.create).not.toHaveBeenCalled();
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
     });
 
     it("maps a unique constraint violation to a code conflict", async () => {
       prismaMock.paymentMethod.create.mockRejectedValue({ code: "P2002" });
 
       await expect(
-        service.create({ code: "NEQUI", name: "Nequi" }),
+        service.create({ code: "NEQUI", name: "Nequi" }, currentUser),
       ).rejects.toMatchObject({
         status: 409,
         response: { code: "PAYMENT_METHOD_CODE_ALREADY_EXISTS" },
       });
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
     });
 
     it("does not hide unexpected database errors", async () => {
@@ -160,7 +200,7 @@ describe("PaymentMethodsService", () => {
       prismaMock.paymentMethod.create.mockRejectedValue(error);
 
       await expect(
-        service.create({ code: "NEQUI", name: "Nequi" }),
+        service.create({ code: "NEQUI", name: "Nequi" }, currentUser),
       ).rejects.toBe(error);
     });
 
@@ -174,7 +214,7 @@ describe("PaymentMethodsService", () => {
       prismaMock.paymentMethod.create.mockRejectedValue(rejection);
 
       const error = await rejectionOf(
-        service.create({ code: "NEQUI", name: "Nequi" }),
+        service.create({ code: "NEQUI", name: "Nequi" }, currentUser),
       );
 
       expect(error).toBe(rejection);
