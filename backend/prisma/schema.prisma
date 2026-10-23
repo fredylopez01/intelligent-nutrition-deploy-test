@@ -80,6 +80,7 @@ model UserAccount {
   auditLogs         AuditLog[]
   createdImages     ProductImage[] @relation("ProductImageCreatedBy")
   inventoryMovements InventoryMovement[]
+  purchases          Purchase[]
 
   @@map("user_account")
 }
@@ -103,7 +104,8 @@ model Supplier {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  person Person @relation(fields: [personId], references: [id])
+  person    Person     @relation(fields: [personId], references: [id])
+  purchases Purchase[]
 
   @@map("supplier")
 }
@@ -209,11 +211,12 @@ model Product {
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  category      Category       @relation(fields: [categoryId], references: [id])
-  unitOfMeasure UnitMeasure    @relation(fields: [unitOfMeasureId], references: [id])
-  images        ProductImage[]
-  inventories   BranchInventory[]
-  movements     InventoryMovement[]
+  category        Category         @relation(fields: [categoryId], references: [id])
+  unitOfMeasure   UnitMeasure      @relation(fields: [unitOfMeasureId], references: [id])
+  images          ProductImage[]
+  inventories     BranchInventory[]
+  movements       InventoryMovement[]
+  purchaseDetails PurchaseDetail[]
 
   @@index([categoryId])
   @@index([unitOfMeasureId])
@@ -284,6 +287,7 @@ model InventoryMovement {
   branch         Branch?     @relation("InventoryMovementDestinationBranch", fields: [branchId], references: [id])
   originBranch   Branch?     @relation("InventoryMovementOriginBranch", fields: [originBranchId], references: [id])
   user           UserAccount @relation(fields: [userId], references: [personId])
+  purchase       Purchase?   @relation(fields: [purchaseId], references: [id])
 
   @@index([productId])
   @@index([branchId])
@@ -292,4 +296,53 @@ model InventoryMovement {
   @@index([movementAt])
   @@index([movementType])
   @@map("inventory_movement")
+}
+
+enum PurchaseStatus {
+  PENDING_RECEIPT
+  PARTIALLY_RECEIVED
+  FULLY_RECEIVED
+}
+
+model Purchase {
+  id             String         @id @default(uuid()) @db.Uuid
+  purchaseNumber String         @unique @map("purchase_number") @db.VarChar(30)
+  supplierId     String         @map("supplier_id") @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  purchaseAt     DateTime       @default(now()) @map("purchase_at") @db.Timestamp(6)
+  subtotal       Decimal        @db.Decimal(12, 2)
+  total          Decimal        @db.Decimal(12, 2)
+  observation    String?        @db.Text
+  status         PurchaseStatus @default(PENDING_RECEIPT)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  supplier  Supplier            @relation(fields: [supplierId], references: [personId])
+  user      UserAccount         @relation(fields: [userId], references: [personId])
+  details   PurchaseDetail[]
+  movements InventoryMovement[]
+
+  @@index([supplierId])
+  @@index([userId])
+  @@index([purchaseAt])
+  @@map("purchase")
+}
+
+model PurchaseDetail {
+  id                String  @id @default(uuid()) @db.Uuid
+  purchaseId        String  @map("purchase_id") @db.Uuid
+  productId         String  @map("product_id") @db.Uuid
+  requestedQuantity Int     @map("requested_quantity")
+  receivedQuantity  Int     @default(0) @map("received_quantity")
+  unitPrice         Decimal @map("unit_price") @db.Decimal(12, 2)
+  subtotal          Decimal @db.Decimal(12, 2)
+  observation       String? @db.Text
+  received          Boolean @default(false)
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@index([purchaseId])
+  @@index([productId])
+  @@map("purchase_detail")
 }

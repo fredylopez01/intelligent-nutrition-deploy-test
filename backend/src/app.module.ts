@@ -17,6 +17,7 @@ import { UnitMeasureModule } from "./modules/unit-measure/unit-measure.module.js
 import { ProductsModule } from "./modules/products/products.module.js";
 import { InventoryModule } from "./modules/inventory/inventory.module.js";
 import { PaymentMethodsModule } from "./modules/payment-methods/payment-methods.module.js";
+import { PurchasesModule } from "./modules/purchases/purchases.module.js";
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { PaymentMethodsModule } from "./modules/payment-methods/payment-methods.
     ProductsModule,
     InventoryModule,
     PaymentMethodsModule,
+    PurchasesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
