@@ -9,6 +9,7 @@ import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { UpdateCountsDto } from "./dto/update-counts.dto.js";
+import { ListClosuresQueryDto } from "./dto/list-closures-query.dto.js";
 
 @Injectable()
 export class InventoryClosuresService {
@@ -308,6 +309,197 @@ export class InventoryClosuresService {
         })),
       };
     });
+  }
+
+  async confirm(
+    closureId: string,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const closure = await tx.inventoryClosure.findUnique({
+        where: { id: closureId },
+        select: {
+          id: true,
+          branchId: true,
+          status: true,
+          locked: true,
+          details: {
+            select: {
+              id: true,
+              productId: true,
+              systemQuantity: true,
+              physicalQuantity: true,
+              difference: true,
+              observation: true,
+              product: {
+                select: {
+                  name: true,
+                  referenceCode: true,
+                  unitOfMeasure: { select: { abreviation: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!closure) {
+        throw new NotFoundException({
+          code: "CLOSURE_NOT_FOUND",
+          message: "Inventory closure not found.",
+        });
+      }
+
+      this.assertBranchScope(closure.branchId, currentUser);
+
+      if (closure.status !== "PENDING") {
+        throw new UnprocessableEntityException({
+          code: "CLOSURE_NOT_PENDING",
+          message: "Inventory closure is not in PENDING status.",
+        });
+      }
+
+      const missing = closure.details.filter((d) => d.physicalQuantity === null);
+      if (missing.length > 0) {
+        throw new UnprocessableEntityException({
+          code: "COUNTS_INCOMPLETE",
+          message: "All items must have a physical count before confirming.",
+          details: {
+            missingProducts: missing.map((d) => d.productId),
+          },
+        });
+      }
+
+      const now = new Date();
+
+      const updated = await tx.inventoryClosure.update({
+        where: { id: closureId },
+        data: {
+          status: "CONFIRMED",
+          confirmed: true,
+          locked: true,
+          closedAt: now,
+        },
+        select: {
+          id: true,
+          branchId: true,
+          closureDate: true,
+          status: true,
+          confirmed: true,
+          locked: true,
+          closedAt: true,
+          details: {
+            select: {
+              productId: true,
+              systemQuantity: true,
+              physicalQuantity: true,
+              difference: true,
+              observation: true,
+              product: {
+                select: {
+                  name: true,
+                  referenceCode: true,
+                  unitOfMeasure: { select: { abreviation: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: "UPDATE",
+          entity: "INVENTORY_CLOSURE",
+          entityId: closureId,
+          newData: {
+            status: "CONFIRMED",
+            confirmedAt: now.toISOString(),
+          },
+          reason: `Inventory closure ${closureId} confirmed`,
+          ipAddress,
+        },
+        tx,
+      );
+
+      return {
+        id: updated.id,
+        branchId: updated.branchId,
+        closureDate: updated.closureDate,
+        status: updated.status,
+        confirmed: updated.confirmed,
+        locked: updated.locked,
+        closedAt: updated.closedAt,
+        items: updated.details.map((d) => ({
+          productId: d.productId,
+          productName: d.product.name,
+          referenceCode: d.product.referenceCode,
+          unit: d.product.unitOfMeasure.abreviation,
+          systemQuantity: d.systemQuantity,
+          physicalQuantity: d.physicalQuantity,
+          difference: d.difference,
+          observation: d.observation,
+        })),
+      };
+    });
+  }
+
+  async findAll(query: ListClosuresQueryDto) {
+    const { page, limit, branchId, status, from, to } = query;
+
+    const where: any = {};
+    if (branchId) where.branchId = branchId;
+    if (status) where.status = status;
+    if (from || to) {
+      where.closureDate = {};
+      if (from) where.closureDate.gte = new Date(`${from}T00:00:00Z`);
+      if (to) where.closureDate.lte = new Date(`${to}T23:59:59.999Z`);
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [total, closures] = await this.prisma.$transaction([
+      this.prisma.inventoryClosure.count({ where }),
+      this.prisma.inventoryClosure.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { closureDate: "desc" },
+        select: {
+          id: true,
+          branchId: true,
+          closureDate: true,
+          status: true,
+          confirmed: true,
+          locked: true,
+          closedAt: true,
+          branch: { select: { name: true } },
+          _count: { select: { details: true } },
+        },
+      }),
+    ]);
+
+    return {
+      data: closures.map((c) => ({
+        id: c.id,
+        branchId: c.branchId,
+        branchName: c.branch.name,
+        closureDate: c.closureDate,
+        status: c.status,
+        confirmed: c.confirmed,
+        locked: c.locked,
+        closedAt: c.closedAt,
+        itemsCount: c._count.details,
+      })),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
   }
 
   private assertBranchScope(branchId: string, currentUser: AuthenticatedUser) {
