@@ -81,6 +81,7 @@ model UserAccount {
   createdImages     ProductImage[] @relation("ProductImageCreatedBy")
   inventoryMovements InventoryMovement[]
   purchases          Purchase[]
+  inventoryClosures  InventoryClosure[]
 
   @@map("user_account")
 }
@@ -119,10 +120,11 @@ model Branch {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  userAssignments UserBranch[]
-  branchInventories BranchInventory[]
-  inventoryMovements   InventoryMovement[] @relation("InventoryMovementDestinationBranch")
-  originMovements      InventoryMovement[] @relation("InventoryMovementOriginBranch")
+  userAssignments    UserBranch[]
+  branchInventories  BranchInventory[]
+  inventoryMovements InventoryMovement[] @relation("InventoryMovementDestinationBranch")
+  originMovements    InventoryMovement[] @relation("InventoryMovementOriginBranch")
+  inventoryClosures  InventoryClosure[]
 
   @@map("branch")
 }
@@ -212,11 +214,12 @@ model Product {
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   category        Category         @relation(fields: [categoryId], references: [id])
-  unitOfMeasure   UnitMeasure      @relation(fields: [unitOfMeasureId], references: [id])
+  unitOfMeasure   UnitMeasure            @relation(fields: [unitOfMeasureId], references: [id])
   images          ProductImage[]
   inventories     BranchInventory[]
   movements       InventoryMovement[]
   purchaseDetails PurchaseDetail[]
+  closureDetails  InventoryClosureDetail[]
 
   @@index([categoryId])
   @@index([unitOfMeasureId])
@@ -345,4 +348,50 @@ model PurchaseDetail {
   @@index([purchaseId])
   @@index([productId])
   @@map("purchase_detail")
+}
+
+enum InventoryClosureStatus {
+  PENDING
+  CONFIRMED
+  NOT_CONFIRMED
+}
+
+model InventoryClosure {
+  id          String                 @id @default(uuid()) @db.Uuid
+  branchId    String                 @map("branch_id") @db.Uuid
+  userId      String?                @map("user_id") @db.Uuid
+  closureDate DateTime               @map("closure_date") @db.Date
+  status      InventoryClosureStatus @default(PENDING)
+  confirmed   Boolean                @default(false)
+  locked      Boolean                @default(false)
+  closedAt    DateTime?              @map("closed_at") @db.Timestamp(6)
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  branch  Branch                  @relation(fields: [branchId], references: [id])
+  user    UserAccount?            @relation(fields: [userId], references: [personId])
+  details InventoryClosureDetail[]
+
+  @@unique([branchId, closureDate])
+  @@index([branchId])
+  @@index([closureDate])
+  @@map("inventory_closure")
+}
+
+model InventoryClosureDetail {
+  id               String   @id @default(uuid()) @db.Uuid
+  closureId        String   @map("closure_id") @db.Uuid
+  productId        String   @map("product_id") @db.Uuid
+  systemQuantity   Int      @map("system_quantity")
+  physicalQuantity Int?     @map("physical_quantity")
+  difference       Int?
+  observation      String?  @db.Text
+
+  closure InventoryClosure @relation(fields: [closureId], references: [id])
+  product Product          @relation(fields: [productId], references: [id])
+
+  @@unique([closureId, productId])
+  @@index([closureId])
+  @@index([productId])
+  @@map("inventory_closure_detail")
 }
