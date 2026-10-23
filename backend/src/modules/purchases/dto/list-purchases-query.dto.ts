@@ -1,11 +1,11 @@
 import { Transform, Type } from "class-transformer";
 import {
-  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -35,11 +35,11 @@ export class ListPurchasesQueryDto {
   status?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: "from must be a date in YYYY-MM-DD format" })
   from?: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: "to must be a date in YYYY-MM-DD format" })
   to?: string;
 
   @IsOptional()
