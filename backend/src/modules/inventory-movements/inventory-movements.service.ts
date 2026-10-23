@@ -9,6 +9,7 @@ import { AuditService } from "../audit/audit.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CreateTransferDto } from "./dto/create-transfer.dto.js";
 import { AdjustmentType, CreateAdjustmentDto } from "./dto/create-adjustment.dto.js";
+import { ListInventoryMovementsQueryDto } from "./dto/list-inventory-movements-query.dto.js";
 
 @Injectable()
 export class InventoryMovementsService {
@@ -449,6 +450,192 @@ export class InventoryMovementsService {
         items: movements,
       };
     });
+  }
+
+  async findAll(query: ListInventoryMovementsQueryDto, currentUser: AuthenticatedUser) {
+    const { page, limit, branchId, productId, movementType, from, to } = query;
+
+    const roleName = currentUser.role?.name;
+    const isScopedRole =
+      roleName === "BRANCH_LEADER" || roleName === "BRANCH_ASSISTANT";
+    const userBranchIds = (currentUser.branches ?? []).map((b) => b.id);
+
+    if (branchId && isScopedRole && !userBranchIds.includes(branchId)) {
+      throw new ForbiddenException({
+        code: "FORBIDDEN_BRANCH",
+        message: "You do not have access to this branch.",
+      });
+    }
+
+    const where: any = {};
+
+    if (movementType) where.movementType = movementType;
+    if (productId) where.productId = productId;
+    if (from || to) {
+      where.movementAt = {};
+      if (from) where.movementAt.gte = new Date(`${from}T00:00:00Z`);
+      if (to) where.movementAt.lte = new Date(`${to}T23:59:59.999Z`);
+    }
+
+    if (branchId) {
+      where.OR = [{ branchId }, { originBranchId: branchId }];
+    } else if (isScopedRole && userBranchIds.length > 0) {
+      where.OR = [
+        { branchId: { in: userBranchIds } },
+        { originBranchId: { in: userBranchIds } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [total, movements] = await this.prisma.$transaction([
+      this.prisma.inventoryMovement.count({ where }),
+      this.prisma.inventoryMovement.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { movementAt: "desc" },
+        select: {
+          id: true,
+          movementType: true,
+          quantity: true,
+          movementAt: true,
+          observation: true,
+          product: {
+            select: {
+              id: true,
+              name: true,
+              referenceCode: true,
+            },
+          },
+          branch: {
+            select: { id: true, name: true },
+          },
+          originBranch: {
+            select: { id: true, name: true },
+          },
+          user: {
+            select: {
+              personId: true,
+              person: { select: { firstName: true, lastName: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data: movements.map((m) => ({
+        id: m.id,
+        movementType: m.movementType,
+        quantity: m.quantity,
+        movementAt: m.movementAt,
+        observation: m.observation,
+        product: {
+          id: m.product.id,
+          name: m.product.name,
+          referenceCode: m.product.referenceCode,
+        },
+        branch: m.branch ? { id: m.branch.id, name: m.branch.name } : null,
+        originBranch: m.originBranch
+          ? { id: m.originBranch.id, name: m.originBranch.name }
+          : null,
+        user: {
+          id: m.user.personId,
+          fullName: [m.user.person.firstName, m.user.person.lastName]
+            .filter(Boolean)
+            .join(" "),
+        },
+      })),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findOne(movementId: string, currentUser: AuthenticatedUser) {
+    const movement = await this.prisma.inventoryMovement.findUnique({
+      where: { id: movementId },
+      select: {
+        id: true,
+        movementType: true,
+        quantity: true,
+        movementAt: true,
+        observation: true,
+        product: {
+          select: {
+            id: true,
+            name: true,
+            referenceCode: true,
+            unitOfMeasure: { select: { abreviation: true } },
+          },
+        },
+        branch: {
+          select: { id: true, name: true },
+        },
+        originBranch: {
+          select: { id: true, name: true },
+        },
+        user: {
+          select: {
+            personId: true,
+            person: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+
+    if (!movement) {
+      throw new NotFoundException({
+        code: "MOVEMENT_NOT_FOUND",
+        message: "Inventory movement not found.",
+      });
+    }
+
+    const roleName = currentUser.role?.name;
+    const isScopedRole =
+      roleName === "BRANCH_LEADER" || roleName === "BRANCH_ASSISTANT";
+
+    if (isScopedRole) {
+      const userBranchIds = (currentUser.branches ?? []).map((b) => b.id);
+      const involvedBranches = [movement.branch?.id, movement.originBranch?.id].filter(Boolean);
+      const hasAccess = involvedBranches.some((id) => userBranchIds.includes(id!));
+      if (!hasAccess) {
+        throw new ForbiddenException({
+          code: "FORBIDDEN_BRANCH",
+          message: "You do not have access to this movement.",
+        });
+      }
+    }
+
+    return {
+      id: movement.id,
+      movementType: movement.movementType,
+      quantity: movement.quantity,
+      movementAt: movement.movementAt,
+      observation: movement.observation,
+      product: {
+        id: movement.product.id,
+        name: movement.product.name,
+        referenceCode: movement.product.referenceCode,
+        unit: movement.product.unitOfMeasure.abreviation,
+      },
+      branch: movement.branch
+        ? { id: movement.branch.id, name: movement.branch.name }
+        : null,
+      originBranch: movement.originBranch
+        ? { id: movement.originBranch.id, name: movement.originBranch.name }
+        : null,
+      user: {
+        id: movement.user.personId,
+        fullName: [movement.user.person.firstName, movement.user.person.lastName]
+          .filter(Boolean)
+          .join(" "),
+      },
+    };
   }
 
   private assertBranchScope(branchId: string, currentUser: AuthenticatedUser) {
