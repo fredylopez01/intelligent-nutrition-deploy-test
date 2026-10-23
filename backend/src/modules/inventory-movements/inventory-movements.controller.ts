@@ -6,10 +6,21 @@ import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUse
 import { CreateTransferDto } from "./dto/create-transfer.dto.js";
 import { CreateAdjustmentDto } from "./dto/create-adjustment.dto.js";
 import { ListInventoryMovementsQueryDto } from "./dto/list-inventory-movements-query.dto.js";
+import { CreateMovementDto } from "./dto/create-movement.dto.js";
 
 @Controller("inventory-movements")
 export class InventoryMovementsController {
   constructor(private readonly inventoryMovementsService: InventoryMovementsService) {}
+
+  @Post()
+  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER")
+  createMovement(
+    @Body() dto: CreateMovementDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.inventoryMovementsService.createMovement(dto, currentUser, ipAddress);
+  }
 
   @Post("transfers")
   @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER")
