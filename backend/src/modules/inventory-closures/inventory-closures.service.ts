@@ -8,6 +8,7 @@ import {
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
+import { UpdateCountsDto } from "./dto/update-counts.dto.js";
 
 @Injectable()
 export class InventoryClosuresService {
@@ -154,6 +155,150 @@ export class InventoryClosuresService {
         locked: closure.locked,
         closedAt: closure.closedAt,
         items: closure.details.map((d) => ({
+          productId: d.productId,
+          productName: d.product.name,
+          referenceCode: d.product.referenceCode,
+          unit: d.product.unitOfMeasure.abreviation,
+          physicalQuantity: d.physicalQuantity,
+          observation: d.observation,
+        })),
+      };
+    });
+  }
+
+  async updateCounts(
+    closureId: string,
+    dto: UpdateCountsDto,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const closure = await tx.inventoryClosure.findUnique({
+        where: { id: closureId },
+        select: {
+          id: true,
+          branchId: true,
+          status: true,
+          locked: true,
+          details: {
+            select: {
+              id: true,
+              productId: true,
+              systemQuantity: true,
+            },
+          },
+        },
+      });
+
+      if (!closure) {
+        throw new NotFoundException({
+          code: "CLOSURE_NOT_FOUND",
+          message: "Inventory closure not found.",
+        });
+      }
+
+      this.assertBranchScope(closure.branchId, currentUser);
+
+      if (closure.status !== "PENDING") {
+        throw new UnprocessableEntityException({
+          code: "CLOSURE_NOT_PENDING",
+          message: "Inventory closure is not in PENDING status.",
+        });
+      }
+
+      if (closure.locked) {
+        throw new UnprocessableEntityException({
+          code: "CLOSURE_LOCKED",
+          message: "Inventory closure is locked.",
+        });
+      }
+
+      const productIds = dto.counts.map((c) => c.productId);
+      const uniqueIds = new Set(productIds);
+      if (uniqueIds.size !== productIds.length) {
+        throw new UnprocessableEntityException({
+          code: "DUPLICATED_PRODUCT",
+          message: "Counts contain duplicated products.",
+        });
+      }
+
+      const detailMap = new Map(
+        closure.details.map((d) => [d.productId, d]),
+      );
+
+      for (const count of dto.counts) {
+        if (!detailMap.has(count.productId)) {
+          throw new UnprocessableEntityException({
+            code: "PRODUCT_NOT_IN_CLOSURE",
+            message: `Product ${count.productId} is not part of this closure.`,
+          });
+        }
+      }
+
+      for (const count of dto.counts) {
+        const detail = detailMap.get(count.productId)!;
+        const difference = count.physicalQuantity - detail.systemQuantity;
+        await tx.inventoryClosureDetail.update({
+          where: { id: detail.id },
+          data: {
+            physicalQuantity: count.physicalQuantity,
+            difference,
+            observation: count.observation ?? null,
+          },
+        });
+      }
+
+      const updated = await tx.inventoryClosure.findUnique({
+        where: { id: closureId },
+        select: {
+          id: true,
+          branchId: true,
+          closureDate: true,
+          status: true,
+          confirmed: true,
+          locked: true,
+          closedAt: true,
+          details: {
+            select: {
+              productId: true,
+              physicalQuantity: true,
+              observation: true,
+              product: {
+                select: {
+                  name: true,
+                  referenceCode: true,
+                  unitOfMeasure: { select: { abreviation: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: "UPDATE",
+          entity: "INVENTORY_CLOSURE",
+          entityId: closureId,
+          newData: {
+            countsUpdated: dto.counts.length,
+          },
+          reason: `Physical counts updated for closure ${closureId}`,
+          ipAddress,
+        },
+        tx,
+      );
+
+      return {
+        id: updated!.id,
+        branchId: updated!.branchId,
+        closureDate: updated!.closureDate,
+        status: updated!.status,
+        confirmed: updated!.confirmed,
+        locked: updated!.locked,
+        closedAt: updated!.closedAt,
+        items: updated!.details.map((d) => ({
           productId: d.productId,
           productName: d.product.name,
           referenceCode: d.product.referenceCode,
