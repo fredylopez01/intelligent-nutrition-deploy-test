@@ -18,6 +18,7 @@ import { ProductsModule } from "./modules/products/products.module.js";
 import { InventoryModule } from "./modules/inventory/inventory.module.js";
 import { PaymentMethodsModule } from "./modules/payment-methods/payment-methods.module.js";
 import { PurchasesModule } from "./modules/purchases/purchases.module.js";
+import { InventoryClosuresModule } from "./modules/inventory-closures/inventory-closures.module.js";
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { PurchasesModule } from "./modules/purchases/purchases.module.js";
     InventoryModule,
     PaymentMethodsModule,
     PurchasesModule,
+    InventoryClosuresModule,
   ],
   controllers: [AppController],
   providers: [AppService],
