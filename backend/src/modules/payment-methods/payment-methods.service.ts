@@ -175,57 +175,99 @@ export class PaymentMethodsService {
     currentUser: AuthenticatedUser,
     ipAddress?: string,
   ) {
-    const { name } = updatePaymentMethodDto;
+    const { code, name } = updatePaymentMethodDto;
 
-    return await this.prisma.$transaction(async (transaction) => {
-      const existingPaymentMethod = await transaction.paymentMethod.findUnique({
-        where: { id: paymentMethodId },
-        select: paymentMethodSelect,
-      });
+    try {
+      return await this.prisma.$transaction(async (transaction) => {
+        const existingPaymentMethod =
+          await transaction.paymentMethod.findUnique({
+            where: { id: paymentMethodId },
+            select: paymentMethodSelect,
+          });
 
-      if (!existingPaymentMethod) {
-        throw paymentMethodNotFound();
-      }
+        if (!existingPaymentMethod) {
+          throw paymentMethodNotFound();
+        }
 
-      if (existingPaymentMethod.name === name) {
-        return existingPaymentMethod;
-      }
+        const changes: { code?: string; name?: string } = {};
 
-      const paymentMethodWithSameName =
-        await transaction.paymentMethod.findFirst({
-          where: {
-            id: { not: paymentMethodId },
-            name: { equals: name, mode: "insensitive" },
-          },
-          select: { id: true },
+        if (code !== undefined && code !== existingPaymentMethod.code) {
+          const paymentMethodWithSameCode =
+            await transaction.paymentMethod.findUnique({
+              where: { code },
+              select: { id: true },
+            });
+
+          if (paymentMethodWithSameCode) {
+            throw paymentMethodCodeAlreadyExists();
+          }
+
+          changes.code = code;
+        }
+
+        if (name !== undefined && name !== existingPaymentMethod.name) {
+          const paymentMethodWithSameName =
+            await transaction.paymentMethod.findFirst({
+              where: {
+                id: { not: paymentMethodId },
+                name: { equals: name, mode: "insensitive" },
+              },
+              select: { id: true },
+            });
+
+          if (paymentMethodWithSameName) {
+            throw paymentMethodNameAlreadyExists();
+          }
+
+          changes.name = name;
+        }
+
+        if (changes.code === undefined && changes.name === undefined) {
+          return existingPaymentMethod;
+        }
+
+        const updatedPaymentMethod = await transaction.paymentMethod.update({
+          where: { id: paymentMethodId },
+          data: changes,
+          select: paymentMethodSelect,
         });
 
-      if (paymentMethodWithSameName) {
-        throw paymentMethodNameAlreadyExists();
+        const oldData: { code?: string; name?: string } = {};
+        const newData: { code?: string; name?: string } = {};
+
+        if (changes.code !== undefined) {
+          oldData.code = existingPaymentMethod.code;
+          newData.code = updatedPaymentMethod.code;
+        }
+
+        if (changes.name !== undefined) {
+          oldData.name = existingPaymentMethod.name;
+          newData.name = updatedPaymentMethod.name;
+        }
+
+        await this.auditService.createAuditLog(
+          {
+            userId: currentUser.id,
+            action: "UPDATE",
+            entity: "PAYMENT_METHOD",
+            entityId: paymentMethodId,
+            oldData,
+            newData,
+            reason: `Actualización del método de pago ${updatedPaymentMethod.name}`,
+            ipAddress,
+          },
+          transaction,
+        );
+
+        return updatedPaymentMethod;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw paymentMethodCodeAlreadyExists();
       }
 
-      const updatedPaymentMethod = await transaction.paymentMethod.update({
-        where: { id: paymentMethodId },
-        data: { name },
-        select: paymentMethodSelect,
-      });
-
-      await this.auditService.createAuditLog(
-        {
-          userId: currentUser.id,
-          action: "UPDATE",
-          entity: "PAYMENT_METHOD",
-          entityId: paymentMethodId,
-          oldData: { name: existingPaymentMethod.name },
-          newData: { name: updatedPaymentMethod.name },
-          reason: `Actualización del método de pago ${updatedPaymentMethod.name}`,
-          ipAddress,
-        },
-        transaction,
-      );
-
-      return updatedPaymentMethod;
-    });
+      throw error;
+    }
   }
 
   async updateStatus(
