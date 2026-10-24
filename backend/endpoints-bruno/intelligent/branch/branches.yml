@@ -1,7 +1,7 @@
 info:
   name: branches
   type: http
-  seq: 18
+  seq: 4
 
 http:
   method: GET
