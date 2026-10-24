@@ -14,6 +14,7 @@ import { Roles } from "../../common/decorators/roles.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CreateBranchDto } from "./dto/create-branch.dto.js";
 import { ListBranchesQueryDto } from "./dto/list-branches-query.dto.js";
+import { ListSellableProductsQueryDto } from "./dto/list-sellable-products-query.dto.js";
 import { UpdateBranchDto } from "./dto/update-branch.dto.js";
 import { UpdateBranchStatusDto } from "./dto/update-branch-status.dto.js";
 import { BranchesService } from "./branches.service.js";
@@ -75,5 +76,14 @@ export class BranchesController {
       currentUser,
       ipAddress,
     );
+  }
+
+  @Get(":id/sellable-products")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  findSellableProducts(
+    @Param("id", new ParseUUIDPipe()) branchId: string,
+    @Query() query: ListSellableProductsQueryDto,
+  ) {
+    return this.branchesService.findSellableProducts(branchId, query);
   }
 }
