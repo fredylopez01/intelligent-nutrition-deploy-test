@@ -14,6 +14,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CreatePurchaseDto } from "./dto/create-purchase.dto.js";
 import { ListPurchasesQueryDto } from "./dto/list-purchases-query.dto.js";
+import { ReceivePurchaseDto } from "./dto/receive-purchase.dto.js";
 
 @Controller("purchases")
 export class PurchasesController {
@@ -43,5 +44,21 @@ export class PurchasesController {
   @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER")
   findOne(@Param("purchaseId", new ParseUUIDPipe()) purchaseId: string) {
     return this.purchasesService.findOne(purchaseId);
+  }
+
+  @Post(":purchaseId/receipts")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
+  receive(
+    @Param("purchaseId", new ParseUUIDPipe()) purchaseId: string,
+    @Body() receivePurchaseDto: ReceivePurchaseDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.purchasesService.receive(
+      purchaseId,
+      receivePurchaseDto,
+      currentUser,
+      ipAddress,
+    );
   }
 }
