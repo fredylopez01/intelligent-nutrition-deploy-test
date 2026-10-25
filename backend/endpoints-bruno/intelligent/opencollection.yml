@@ -17,7 +17,7 @@ config:
 request:
   variables:
     - name: json_web_token_15kq
-      value:
+      value: ""
     - name: url-back
       value: http://localhost:3000/api/v1
 bundled: false

@@ -20,6 +20,7 @@ import { PaymentMethodsModule } from "./modules/payment-methods/payment-methods.
 import { PurchasesModule } from "./modules/purchases/purchases.module.js";
 import { InventoryClosuresModule } from "./modules/inventory-closures/inventory-closures.module.js";
 import { InventoryMovementsModule } from "./modules/inventory-movements/inventory-movements.module.js";
+import { SalesModule } from "./modules/sales/sales.module.js";
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { InventoryMovementsModule } from "./modules/inventory-movements/inventor
     PurchasesModule,
     InventoryClosuresModule,
     InventoryMovementsModule,
+    SalesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
