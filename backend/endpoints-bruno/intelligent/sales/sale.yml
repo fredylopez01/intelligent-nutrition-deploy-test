@@ -1,0 +1,42 @@
+info:
+  name: sale
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{url-back}}/sales"
+  body:
+    type: json
+    data: |-
+      {
+        "branchId": "47a5b98e-531e-43af-8de9-fffe102fcba4",
+        "customerId": null,
+        "items": [
+          {
+            "productId": "cf3ef88a-5f7f-4aeb-ae59-c42c1a9b3a84",
+            "quantity": 1,
+            "discountAmount": "0.00",
+            "taxAmount": "0.00"
+          }
+        ],
+        "discountAmount": "0.00",
+        "taxAmount": "0.00",
+        "payments": [
+          {
+            "paymentMethodId": "334eca4a-39a1-4aa6-8d7c-ed0d48a217fc",
+            "amount": "87900.00",
+            "reference": null
+          }
+        ]
+      }
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
