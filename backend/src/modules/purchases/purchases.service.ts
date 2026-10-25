@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -9,6 +10,7 @@ import { AuditService } from "../audit/audit.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CreatePurchaseDto } from "./dto/create-purchase.dto.js";
 import { ListPurchasesQueryDto } from "./dto/list-purchases-query.dto.js";
+import { ReceivePurchaseDto } from "./dto/receive-purchase.dto.js";
 
 const purchaseDetailSelect = {
   id: true,
@@ -76,10 +78,7 @@ function formatPurchaseResponse(purchase: any) {
     },
     user: {
       id: purchase.user.personId,
-      fullName: [
-        purchase.user.person.firstName,
-        purchase.user.person.lastName,
-      ]
+      fullName: [purchase.user.person.firstName, purchase.user.person.lastName]
         .filter(Boolean)
         .join(" "),
     },
@@ -125,7 +124,7 @@ export class PurchasesService {
       });
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       const supplier = await tx.supplier.findUnique({
         where: { personId: supplierId },
         select: { personId: true, active: true },
@@ -143,14 +142,16 @@ export class PurchasesService {
         });
       }
 
-      const products = await tx.product.findMany({
+      const products = await (tx as any).product.findMany({
         where: { id: { in: productIds } },
         select: { id: true, active: true, name: true },
       });
-      const productMap = new Map(products.map((p) => [p.id, p]));
+      const productMap = new Map<string, any>(
+        (products as any[]).map((p) => [p.id, p]),
+      );
 
       for (const item of items) {
-        const product = productMap.get(item.productId);
+        const product: any = productMap.get(item.productId);
         if (!product) {
           throw new NotFoundException({
             code: "PRODUCT_NOT_FOUND",
@@ -180,15 +181,13 @@ export class PurchasesService {
       });
 
       const purchaseSubtotal =
-        detailsData.reduce(
-          (acc, d) => acc + Math.round(d.subtotal * 100),
-          0,
-        ) / 100;
+        detailsData.reduce((acc, d) => acc + Math.round(d.subtotal * 100), 0) /
+        100;
       const purchaseTotal = purchaseSubtotal;
 
-      const purchaseNumber = await this.generatePurchaseNumber(tx);
+      const purchaseNumber = await this.generatePurchaseNumber(tx as any);
 
-      const purchase = await tx.purchase.create({
+      const purchase: any = await (tx as any).purchase.create({
         data: {
           purchaseNumber,
           supplierId,
@@ -257,8 +256,8 @@ export class PurchasesService {
     const skip = (page - 1) * limit;
 
     const [total, purchases] = await this.prisma.$transaction([
-      this.prisma.purchase.count({ where }),
-      this.prisma.purchase.findMany({
+      (this.prisma as any).purchase.count({ where }),
+      (this.prisma as any).purchase.findMany({
         where,
         skip,
         take: limit,
@@ -305,7 +304,7 @@ export class PurchasesService {
   }
 
   async findOne(purchaseId: string) {
-    const purchase = await this.prisma.purchase.findUnique({
+    const purchase: any = await (this.prisma as any).purchase.findUnique({
       where: { id: purchaseId },
       select: purchaseSelect,
     });
@@ -320,6 +319,209 @@ export class PurchasesService {
     return formatPurchaseResponse(purchase);
   }
 
+  async receive(
+    purchaseId: string,
+    dto: ReceivePurchaseDto,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    const { items } = dto;
+
+    const detailIds = items.map((i) => i.purchaseDetailId);
+    const uniqueDetailIds = new Set(detailIds);
+    if (uniqueDetailIds.size !== detailIds.length) {
+      throw new UnprocessableEntityException({
+        code: "DUPLICATED_PURCHASE_DETAIL",
+        message: "Items contain duplicated purchase details.",
+      });
+    }
+
+    return this.prisma.$transaction(async (tx: any) => {
+      const purchase: any = await (tx as any).purchase.findUnique({
+        where: { id: purchaseId },
+        select: {
+          id: true,
+          purchaseNumber: true,
+          status: true,
+          supplierId: true,
+          subtotal: true,
+          total: true,
+          observation: true,
+          purchaseAt: true,
+          createdAt: true,
+          updatedAt: true,
+          details: {
+            select: {
+              id: true,
+              productId: true,
+              requestedQuantity: true,
+              receivedQuantity: true,
+              unitPrice: true,
+              subtotal: true,
+              received: true,
+              observation: true,
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  referenceCode: true,
+                },
+              },
+            },
+          },
+          supplier: {
+            select: {
+              personId: true,
+              commercialName: true,
+              person: { select: { businessName: true } },
+            },
+          },
+          user: {
+            select: {
+              personId: true,
+              person: { select: { firstName: true, lastName: true } },
+            },
+          },
+        },
+      });
+
+      if (!purchase) {
+        throw new NotFoundException({
+          code: "PURCHASE_NOT_FOUND",
+          message: "Purchase not found.",
+        });
+      }
+
+      if (purchase.status === "FULLY_RECEIVED") {
+        throw new ConflictException({
+          code: "PURCHASE_ALREADY_RECEIVED",
+          message: "Purchase is already fully received.",
+        });
+      }
+
+      const detailMap = new Map<string, any>(
+        (purchase.details as any[]).map((d) => [d.id, d]),
+      );
+      const receivedNowByDetail = new Map<string, number>();
+      const observationsByDetail = new Map<string, string | undefined>();
+
+      for (const item of items) {
+        const detail: any = detailMap.get(item.purchaseDetailId);
+        if (!detail) {
+          throw new NotFoundException({
+            code: "PURCHASE_DETAIL_NOT_FOUND",
+            message: `Purchase detail ${item.purchaseDetailId} not found.`,
+          });
+        }
+
+        const newAccumulated = detail.receivedQuantity + item.receivedQuantity;
+        if (newAccumulated > detail.requestedQuantity) {
+          throw new UnprocessableEntityException({
+            code: "RECEIVED_EXCEEDS_REQUESTED",
+            message: "Received quantity exceeds requested quantity.",
+          });
+        }
+
+        receivedNowByDetail.set(detail.id, item.receivedQuantity);
+        observationsByDetail.set(detail.id, item.observation);
+      }
+
+      const movementsData: Array<{
+        productId: string;
+        quantity: number;
+        purchaseDetailId: string;
+      }> = [];
+
+      for (const detail of purchase.details as any[]) {
+        const receivedNow = receivedNowByDetail.get(detail.id) ?? 0;
+        if (receivedNow === 0) {
+          continue;
+        }
+
+        const newReceivedQuantity = detail.receivedQuantity + receivedNow;
+        const isComplete = newReceivedQuantity === detail.requestedQuantity;
+        const itemObservation = observationsByDetail.get(detail.id);
+
+        await (tx as any).purchaseDetail.update({
+          where: { id: detail.id },
+          data: {
+            receivedQuantity: newReceivedQuantity,
+            received: isComplete,
+            ...(itemObservation !== undefined
+              ? { observation: itemObservation }
+              : {}),
+          },
+        });
+
+        movementsData.push({
+          productId: detail.productId,
+          quantity: receivedNow,
+          purchaseDetailId: detail.id,
+        });
+
+        await (tx as any).inventoryMovement.create({
+          data: {
+            productId: detail.productId,
+            branchId: null,
+            originBranchId: null,
+            userId: currentUser.id,
+            movementType: "ENTRY",
+            quantity: receivedNow,
+            observation: itemObservation ?? null,
+            purchaseId,
+          },
+        });
+      }
+
+      const updatedDetails: any[] = await (tx as any).purchaseDetail.findMany({
+        where: { purchaseId },
+        select: { receivedQuantity: true, requestedQuantity: true },
+      });
+
+      const allComplete = updatedDetails.every(
+        (d: any) => d.receivedQuantity === d.requestedQuantity,
+      );
+
+      await (tx as any).purchase.update({
+        where: { id: purchaseId },
+        data: {
+          status: allComplete ? "FULLY_RECEIVED" : "PARTIALLY_RECEIVED",
+        },
+      });
+
+      const fullPurchase: any = await (tx as any).purchase.findUnique({
+        where: { id: purchaseId },
+        select: purchaseSelect,
+      });
+
+      if (!fullPurchase) {
+        throw new NotFoundException({
+          code: "PURCHASE_NOT_FOUND",
+          message: "Purchase not found.",
+        });
+      }
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: "RECEIVE",
+          entity: "PURCHASE",
+          entityId: purchaseId,
+          newData: {
+            purchaseNumber: purchase.purchaseNumber,
+            status: fullPurchase.status,
+            receivedNow: movementsData,
+          },
+          reason: `Purchase order ${purchase.purchaseNumber} receipt registered`,
+          ipAddress,
+        },
+        tx,
+      );
+
+      return formatPurchaseResponse(fullPurchase);
+    });
+  }
+
   private async generatePurchaseNumber(
     tx: Parameters<Parameters<PrismaService["$transaction"]>[0]>[0],
   ): Promise<string> {
@@ -327,7 +529,7 @@ export class PurchasesService {
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
     const prefix = `C-${dateStr}-`;
 
-    const lastPurchase = await tx.purchase.findFirst({
+    const lastPurchase: any = await (tx as any).purchase.findFirst({
       where: { purchaseNumber: { startsWith: prefix } },
       orderBy: { purchaseNumber: "desc" },
       select: { purchaseNumber: true },
