@@ -1,0 +1,47 @@
+info:
+  name: sales
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: "{{url-back}}/sales"
+  params:
+    - name: page
+      value: "1"
+      type: query
+      disabled: true
+    - name: limit
+      value: "20"
+      type: query
+      disabled: true
+    - name: branchId
+      value: <uuid>
+      type: query
+      disabled: true
+    - name: status
+      value: COMPLETED
+      type: query
+      disabled: true
+    - name: from
+      value: 2026-10-01
+      type: query
+      disabled: true
+    - name: to
+      value: 2026-10-07
+      type: query
+      disabled: true
+    - name: search
+      value: V-2026
+      type: query
+      disabled: true
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

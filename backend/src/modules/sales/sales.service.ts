@@ -5,10 +5,12 @@ import {
   UnprocessableEntityException,
 } from "@nestjs/common";
 import { Prisma } from "../../../generated/prisma/client.js";
+import type { SaleStatus } from "../../../generated/prisma/enums.js";
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CreateSaleDto } from "./dto/create-sale.dto.js";
+import { ListSalesQueryDto } from "./dto/list-sales-query.dto.js";
 
 const saleSelect = {
   id: true,
@@ -496,6 +498,166 @@ export class SalesService {
 
       return formatSaleResponse(sale);
     });
+  }
+
+  async findAll(query: ListSalesQueryDto, currentUser: AuthenticatedUser) {
+    const {
+      page,
+      limit,
+      branchId,
+      status,
+      from,
+      to,
+      productId,
+      customerId,
+      search,
+    } = query;
+
+    const roleName = currentUser.role?.name;
+    const isScopedRole =
+      roleName === "BRANCH_LEADER" || roleName === "BRANCH_ASSISTANT";
+
+    if (isScopedRole) {
+      if (!branchId) {
+        throw new ForbiddenException({
+          code: "BRANCH_REQUIRED",
+          message: "branchId is required for this role.",
+        });
+      }
+
+      const userBranchIds = (currentUser.branches ?? []).map(
+        (branch) => branch.id,
+      );
+      if (!userBranchIds.includes(branchId)) {
+        throw new ForbiddenException({
+          code: "BRANCH_OUT_OF_SCOPE",
+          message: "You do not have access to this branch",
+        });
+      }
+    }
+
+    const saleAtFilter: Prisma.DateTimeFilter = {};
+    if (from) {
+      saleAtFilter.gte = new Date(`${from}T00:00:00Z`);
+    }
+    if (to) {
+      saleAtFilter.lte = new Date(`${to}T23:59:59.999Z`);
+    }
+
+    const where: Prisma.SaleWhereInput = {
+      ...(branchId ? { branchId } : {}),
+      ...(status ? { status: status as SaleStatus } : {}),
+      ...(customerId ? { customerId } : {}),
+      ...(from || to ? { saleAt: saleAtFilter } : {}),
+      ...(productId ? { details: { some: { productId } } } : {}),
+      ...(search
+        ? { saleNumber: { contains: search, mode: "insensitive" } }
+        : {}),
+    };
+
+    const skip = (page - 1) * limit;
+
+    const [total, sales] = await this.prisma.$transaction([
+      this.prisma.sale.count({ where }),
+      this.prisma.sale.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { saleAt: "desc" },
+        select: {
+          id: true,
+          saleNumber: true,
+          status: true,
+          saleAt: true,
+          subtotal: true,
+          discountAmount: true,
+          taxAmount: true,
+          total: true,
+          reversalReason: true,
+          reversedAt: true,
+          branch: {
+            select: { id: true, name: true },
+          },
+          user: {
+            select: {
+              personId: true,
+              person: { select: { firstName: true, lastName: true } },
+            },
+          },
+          customer: {
+            select: { personId: true, fullName: true },
+          },
+          _count: { select: { details: true } },
+        },
+      }),
+    ]);
+
+    return {
+      data: sales.map((sale) => ({
+        id: sale.id,
+        saleNumber: sale.saleNumber,
+        status: sale.status,
+        branch: {
+          id: sale.branch.id,
+          name: sale.branch.name,
+        },
+        user: {
+          id: sale.user.personId,
+          fullName: [sale.user.person.firstName, sale.user.person.lastName]
+            .filter(Boolean)
+            .join(" "),
+        },
+        customer: sale.customer
+          ? {
+              id: sale.customer.personId,
+              fullName: sale.customer.fullName,
+            }
+          : null,
+        saleAt: sale.saleAt,
+        subtotal: Number(sale.subtotal).toFixed(2),
+        discountAmount: Number(sale.discountAmount).toFixed(2),
+        taxAmount: Number(sale.taxAmount).toFixed(2),
+        total: Number(sale.total).toFixed(2),
+        reversalReason: sale.reversalReason,
+        reversedAt: sale.reversedAt,
+        itemsCount: sale._count.details,
+      })),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async findOne(saleId: string, currentUser: AuthenticatedUser) {
+    const sale = await this.prisma.sale.findUnique({
+      where: { id: saleId },
+      select: saleSelect,
+    });
+
+    if (!sale) {
+      throw new NotFoundException({
+        code: "SALE_NOT_FOUND",
+        message: "Sale not found.",
+      });
+    }
+
+    const roleName = currentUser.role?.name;
+    if (roleName === "BRANCH_LEADER" || roleName === "BRANCH_ASSISTANT") {
+      const userBranchIds = (currentUser.branches ?? []).map(
+        (branch) => branch.id,
+      );
+      if (!userBranchIds.includes(sale.branch.id)) {
+        throw new ForbiddenException({
+          code: "BRANCH_OUT_OF_SCOPE",
+          message: "You do not have access to this branch",
+        });
+      }
+    }
+
+    return formatSaleResponse(sale);
   }
 
   private async generateSaleNumber(
