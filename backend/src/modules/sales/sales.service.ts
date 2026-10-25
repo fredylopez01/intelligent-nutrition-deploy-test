@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -11,6 +12,7 @@ import { AuditService } from "../audit/audit.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CreateSaleDto } from "./dto/create-sale.dto.js";
 import { ListSalesQueryDto } from "./dto/list-sales-query.dto.js";
+import { ReverseSaleDto } from "./dto/reverse-sale.dto.js";
 
 const saleSelect = {
   id: true,
@@ -658,6 +660,174 @@ export class SalesService {
     }
 
     return formatSaleResponse(sale);
+  }
+
+  async reverse(
+    saleId: string,
+    dto: ReverseSaleDto,
+    currentUser: AuthenticatedUser,
+    ipAddress?: string,
+  ) {
+    const { reason } = dto;
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1) Cargar la venta con detalles
+      const sale = await tx.sale.findUnique({
+        where: { id: saleId },
+        select: {
+          id: true,
+          saleNumber: true,
+          status: true,
+          branchId: true,
+          saleAt: true,
+          total: true,
+          details: {
+            select: {
+              id: true,
+              productId: true,
+              quantity: true,
+            },
+          },
+        },
+      });
+
+      if (!sale) {
+        throw new NotFoundException({
+          code: "SALE_NOT_FOUND",
+          message: "Sale not found.",
+        });
+      }
+
+      // 2) Scope por sucursal (mismo criterio que create / findOne)
+      this.assertBranchScope(sale.branchId, currentUser);
+
+      // 3) Estado: solo COMPLETED puede reversarse
+      if (sale.status === "REVERSED") {
+        throw new ConflictException({
+          code: "SALE_ALREADY_REVERSED",
+          message: "Sale is already reversed.",
+        });
+      }
+      if (sale.status !== "COMPLETED") {
+        throw new ConflictException({
+          code: "SALE_NOT_REVERSIBLE",
+          message: `Only COMPLETED sales can be reversed. Current status: ${sale.status}.`,
+        });
+      }
+
+      const saleDate = new Date(sale.saleAt);
+      const closureDate = new Date(saleDate);
+      closureDate.setUTCHours(0, 0, 0, 0);
+
+      const closure = await tx.inventoryClosure.findUnique({
+        where: {
+          branchId_closureDate: {
+            branchId: sale.branchId,
+            closureDate,
+          },
+        },
+        select: { status: true, locked: true },
+      });
+
+      if (closure && (closure.status === "CONFIRMED" || closure.locked)) {
+        throw new UnprocessableEntityException({
+          code: "SALE_DAY_CLOSED",
+          message:
+            "The sale belongs to a closed day; use a SUPERADMIN adjustment instead.",
+        });
+      }
+
+      for (const detail of sale.details) {
+        await tx.$queryRaw`
+          SELECT id FROM branch_inventory
+          WHERE branch_id = ${sale.branchId}::uuid
+            AND product_id = ${detail.productId}::uuid
+          FOR UPDATE
+        `;
+
+        const lots = await tx.branchInventory.findMany({
+          where: {
+            branchId: sale.branchId,
+            productId: detail.productId,
+          },
+          select: { id: true, quantity: true, expirationDate: true },
+          orderBy: { expirationDate: "asc" },
+        });
+
+        if (lots.length === 0) {
+          throw new UnprocessableEntityException({
+            code: "SALE_REVERSAL_NO_INVENTORY",
+            message: `No branch inventory record found for product ${detail.productId} in branch ${sale.branchId}. Cannot restore stock.`,
+          });
+        }
+
+        const targetLot = lots[0];
+
+        await tx.branchInventory.update({
+          where: { id: targetLot.id },
+          data: { quantity: { increment: detail.quantity } },
+        });
+        await tx.inventoryMovement.create({
+          data: {
+            productId: detail.productId,
+            branchId: sale.branchId,
+            originBranchId: null,
+            userId: currentUser.id,
+            movementType: "ENTRY",
+            quantity: detail.quantity,
+            observation: `Reversal of sale ${sale.saleNumber}: ${reason}`,
+            saleId: sale.id,
+            purchaseId: null,
+          },
+        });
+      }
+
+      await tx.sale.update({
+        where: { id: sale.id },
+        data: {
+          status: "REVERSED",
+          reversalReason: reason,
+          reversedAt: new Date(),
+        },
+      });
+
+      await this.auditService.createAuditLog(
+        {
+          userId: currentUser.id,
+          action: "REVERSE",
+          entity: "SALE",
+          entityId: sale.id,
+          oldData: {
+            status: "COMPLETED",
+          },
+          newData: {
+            saleNumber: sale.saleNumber,
+            status: "REVERSED",
+            reason,
+            restoredItems: sale.details.map((d) => ({
+              productId: d.productId,
+              quantity: d.quantity,
+            })),
+          },
+          reason,
+          ipAddress,
+        },
+        tx,
+      );
+      const updatedSale = await tx.sale.findUnique({
+        where: { id: sale.id },
+        select: saleSelect,
+      });
+
+      if (!updatedSale) {
+        throw new NotFoundException({
+          code: "SALE_NOT_FOUND",
+          message: "Sale not found.",
+        });
+      }
+
+      return formatSaleResponse(updatedSale);
+    });
   }
 
   private async generateSaleNumber(

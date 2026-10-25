@@ -14,6 +14,7 @@ import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUse
 import { CreateSaleDto } from "./dto/create-sale.dto.js";
 import { ListSalesQueryDto } from "./dto/list-sales-query.dto.js";
 import { SalesService } from "./sales.service.js";
+import { ReverseSaleDto } from "./dto/reverse-sale.dto.js";
 
 @Controller("sales")
 export class SalesController {
@@ -45,5 +46,21 @@ export class SalesController {
     @Ip() ipAddress: string,
   ) {
     return this.salesService.create(createSaleDto, currentUser, ipAddress);
+  }
+
+  @Post(":saleId/reverse")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
+  reverse(
+    @Param("saleId", new ParseUUIDPipe()) saleId: string,
+    @Body() reverseSaleDto: ReverseSaleDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Ip() ipAddress: string,
+  ) {
+    return this.salesService.reverse(
+      saleId,
+      reverseSaleDto,
+      currentUser,
+      ipAddress,
+    );
   }
 }
