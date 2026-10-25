@@ -631,6 +631,35 @@ export class SalesService {
     };
   }
 
+  async findOne(saleId: string, currentUser: AuthenticatedUser) {
+    const sale = await this.prisma.sale.findUnique({
+      where: { id: saleId },
+      select: saleSelect,
+    });
+
+    if (!sale) {
+      throw new NotFoundException({
+        code: "SALE_NOT_FOUND",
+        message: "Sale not found.",
+      });
+    }
+
+    const roleName = currentUser.role?.name;
+    if (roleName === "BRANCH_LEADER" || roleName === "BRANCH_ASSISTANT") {
+      const userBranchIds = (currentUser.branches ?? []).map(
+        (branch) => branch.id,
+      );
+      if (!userBranchIds.includes(sale.branch.id)) {
+        throw new ForbiddenException({
+          code: "BRANCH_OUT_OF_SCOPE",
+          message: "You do not have access to this branch",
+        });
+      }
+    }
+
+    return formatSaleResponse(sale);
+  }
+
   private async generateSaleNumber(
     tx: Parameters<Parameters<PrismaService["$transaction"]>[0]>[0],
     branchId: string,

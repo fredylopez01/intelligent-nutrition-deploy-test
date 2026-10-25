@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Ip, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Ip,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from "@nestjs/common";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import { Roles } from "../../common/decorators/roles.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
@@ -17,6 +26,15 @@ export class SalesController {
     @CurrentUser() currentUser: AuthenticatedUser,
   ) {
     return this.salesService.findAll(query, currentUser);
+  }
+
+  @Get(":saleId")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  findOne(
+    @Param("saleId", new ParseUUIDPipe()) saleId: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ) {
+    return this.salesService.findOne(saleId, currentUser);
   }
 
   @Post()
