@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Ip,
   Param,
   ParseUUIDPipe,
@@ -49,6 +50,7 @@ export class SalesController {
   }
 
   @Post(":saleId/reverse")
+  @HttpCode(200)
   @Roles("SUPERADMIN", "BRANCH_LEADER")
   reverse(
     @Param("saleId", new ParseUUIDPipe()) saleId: string,
