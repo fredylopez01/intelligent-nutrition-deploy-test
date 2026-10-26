@@ -6,7 +6,9 @@ import { PurchasesController } from "./purchases.controller.js";
 import { RolesGuard } from "../../common/guards/roles.guard.js";
 import { ROLES_KEY } from "../../common/decorators/roles.decorator.js";
 
-function handlerWithRoles(methodName: "create" | "findAll" | "findOne") {
+function handlerWithRoles(
+  methodName: "create" | "findAll" | "findOne" | "receive",
+) {
   const method: unknown = Object.getOwnPropertyDescriptor(
     PurchasesController.prototype,
     methodName,
@@ -176,4 +178,63 @@ describe("GET /purchases role guards", () => {
       );
     },
   );
+});
+
+describe("POST /purchases/:purchaseId/receipts role guard", () => {
+  const guard = new RolesGuard(new Reflector());
+  const endpoint = handlerWithRoles("receive");
+
+  const contextFor = (user: AuthenticatedUser) =>
+    ({
+      getArgs: () => [{ user }],
+      getArgByIndex: () => undefined,
+      switchToRpc: () => ({
+        getData: () => undefined,
+        getContext: () => undefined,
+      }),
+      switchToHttp: () => ({
+        getRequest: () => ({ user }),
+        getResponse: () => undefined,
+        getNext: () => undefined,
+      }),
+      switchToWs: () => ({
+        getClient: () => undefined,
+        getData: () => undefined,
+        getPattern: () => "",
+      }),
+      getType: () => "http",
+      getClass: () => PurchasesController,
+      getHandler: () => endpoint.handler,
+    }) as ExecutionContext;
+
+  it.each(["SUPERADMIN", "BRANCH_LEADER"])(
+    "allows the %s role to register receipts",
+    (roleName) => {
+      const user: AuthenticatedUser = {
+        id: "authorized-user",
+        active: true,
+        role: { name: roleName },
+      };
+
+      expect(guard.canActivate(contextFor(user))).toBe(true);
+    },
+  );
+
+  it("denies users without receipt permissions", () => {
+    const user: AuthenticatedUser = {
+      id: "assistant-user",
+      active: true,
+      role: { name: "BRANCH_ASSISTANT" },
+    };
+
+    expect(() => guard.canActivate(contextFor(user))).toThrow(
+      expect.objectContaining({
+        status: 403,
+        response: expect.objectContaining({
+          code: "INSUFFICIENT_PERMISSIONS",
+        }),
+      }),
+    );
+    expect(endpoint.roles).toEqual(["SUPERADMIN", "BRANCH_LEADER"]);
+  });
 });
