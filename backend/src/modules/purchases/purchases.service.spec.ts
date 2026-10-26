@@ -10,7 +10,14 @@ const transactionMock = {
   purchase: {
     findFirst: jest.fn<AsyncMock>(),
     create: jest.fn<AsyncMock>(),
+    findUnique: jest.fn<AsyncMock>(),
+    update: jest.fn<AsyncMock>(),
   },
+  purchaseDetail: {
+    update: jest.fn<AsyncMock>(),
+    findMany: jest.fn<AsyncMock>(),
+  },
+  inventoryMovement: { create: jest.fn<AsyncMock>() },
 };
 
 const prismaMock = {
@@ -431,6 +438,218 @@ describe("PurchasesService.findOne", () => {
           subtotal: "20.00",
         },
       ],
+    });
+  });
+
+  describe("PurchasesService.receive", () => {
+    let service: InstanceType<typeof PurchasesService>;
+
+    const purchaseWithReceivedQuantity = (
+      status: string,
+      receivedQuantity: number,
+    ) => ({
+      id: "purchase-1",
+      purchaseNumber: "C-20261024-0001",
+      status,
+      supplierId: "supplier-1",
+      purchaseAt: new Date("2026-10-24T10:00:00.000Z"),
+      subtotal: 50,
+      total: 50,
+      observation: null,
+      createdAt: new Date("2026-10-24T10:00:00.000Z"),
+      updatedAt: new Date("2026-10-24T10:00:00.000Z"),
+      supplier: {
+        personId: "supplier-1",
+        commercialName: "Proveedor Uno",
+        person: { businessName: null },
+      },
+      user: {
+        personId: currentUser.id,
+        person: { firstName: "Ana", lastName: "Pruebas" },
+      },
+      details: [
+        {
+          id: "detail-1",
+          productId: "product-1",
+          requestedQuantity: 5,
+          receivedQuantity,
+          unitPrice: 10,
+          subtotal: 50,
+          received: receivedQuantity === 5,
+          observation: null,
+          product: { name: "Producto uno", referenceCode: "P-001" },
+        },
+      ],
+    });
+
+    beforeEach(async () => {
+      jest.clearAllMocks();
+      prismaMock.$transaction.mockImplementation((operation) =>
+        Array.isArray(operation)
+          ? Promise.all(operation)
+          : operation(transactionMock),
+      );
+      transactionMock.purchaseDetail.update.mockResolvedValue({});
+      transactionMock.purchaseDetail.findMany.mockResolvedValue([
+        { receivedQuantity: 5, requestedQuantity: 5 },
+      ]);
+      transactionMock.purchase.update.mockResolvedValue({});
+      transactionMock.inventoryMovement.create.mockResolvedValue({});
+      auditMock.createAuditLog.mockResolvedValue({});
+
+      const module = await Test.createTestingModule({
+        providers: [
+          PurchasesService,
+          { provide: PrismaService, useValue: prismaMock },
+          { provide: AuditService, useValue: auditMock },
+        ],
+      }).compile();
+      service = module.get(PurchasesService);
+    });
+
+    it("records received stock as an ENTRY movement and completes the purchase", async () => {
+      transactionMock.purchase.findUnique
+        .mockResolvedValueOnce(
+          purchaseWithReceivedQuantity("PENDING_RECEIPT", 0),
+        )
+        .mockResolvedValueOnce(
+          purchaseWithReceivedQuantity("FULLY_RECEIVED", 5),
+        );
+
+      const result = await service.receive(
+        "purchase-1",
+        {
+          items: [
+            {
+              purchaseDetailId: "detail-1",
+              receivedQuantity: 5,
+              observation: "Entrega completa",
+            },
+          ],
+        },
+        currentUser,
+        "127.0.0.1",
+      );
+
+      expect(transactionMock.purchaseDetail.update).toHaveBeenCalledWith({
+        where: { id: "detail-1" },
+        data: {
+          receivedQuantity: 5,
+          received: true,
+          observation: "Entrega completa",
+        },
+      });
+      expect(transactionMock.inventoryMovement.create).toHaveBeenCalledWith({
+        data: {
+          productId: "product-1",
+          branchId: null,
+          originBranchId: null,
+          userId: currentUser.id,
+          movementType: "ENTRY",
+          quantity: 5,
+          observation: "Entrega completa",
+          purchaseId: "purchase-1",
+        },
+      });
+      expect(transactionMock.purchase.update).toHaveBeenCalledWith({
+        where: { id: "purchase-1" },
+        data: { status: "FULLY_RECEIVED" },
+      });
+      expect(result).toMatchObject({
+        id: "purchase-1",
+        status: "FULLY_RECEIVED",
+        items: [{ receivedQuantity: 5, received: true }],
+      });
+      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: "RECEIVE",
+          entity: "PURCHASE",
+          entityId: "purchase-1",
+          ipAddress: "127.0.0.1",
+        }),
+        transactionMock,
+      );
+    });
+
+    it("marks a purchase as partially received and registers only the received quantity", async () => {
+      transactionMock.purchase.findUnique
+        .mockResolvedValueOnce(
+          purchaseWithReceivedQuantity("PENDING_RECEIPT", 1),
+        )
+        .mockResolvedValueOnce(
+          purchaseWithReceivedQuantity("PARTIALLY_RECEIVED", 3),
+        );
+      transactionMock.purchaseDetail.findMany.mockResolvedValue([
+        { receivedQuantity: 3, requestedQuantity: 5 },
+      ]);
+
+      const result = await service.receive(
+        "purchase-1",
+        {
+          items: [{ purchaseDetailId: "detail-1", receivedQuantity: 2 }],
+        },
+        currentUser,
+      );
+
+      expect(transactionMock.purchaseDetail.update).toHaveBeenCalledWith({
+        where: { id: "detail-1" },
+        data: { receivedQuantity: 3, received: false },
+      });
+      expect(transactionMock.inventoryMovement.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            movementType: "ENTRY",
+            quantity: 2,
+            purchaseId: "purchase-1",
+          }),
+        }),
+      );
+      expect(transactionMock.purchase.update).toHaveBeenCalledWith({
+        where: { id: "purchase-1" },
+        data: { status: "PARTIALLY_RECEIVED" },
+      });
+      expect(result).toMatchObject({
+        status: "PARTIALLY_RECEIVED",
+        items: [{ receivedQuantity: 3, received: false }],
+      });
+    });
+
+    it("throws PURCHASE_ALREADY_RECEIVED for a fully received purchase", async () => {
+      transactionMock.purchase.findUnique.mockResolvedValue(
+        purchaseWithReceivedQuantity("FULLY_RECEIVED", 5),
+      );
+
+      await expect(
+        service.receive(
+          "purchase-1",
+          { items: [{ purchaseDetailId: "detail-1", receivedQuantity: 1 }] },
+          currentUser,
+        ),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: { code: "PURCHASE_ALREADY_RECEIVED" },
+      });
+
+      expect(transactionMock.purchaseDetail.update).not.toHaveBeenCalled();
+      expect(transactionMock.inventoryMovement.create).not.toHaveBeenCalled();
+    });
+
+    it("throws PURCHASE_NOT_FOUND when the purchase does not exist", async () => {
+      transactionMock.purchase.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.receive(
+          "missing-purchase",
+          { items: [{ purchaseDetailId: "detail-1", receivedQuantity: 1 }] },
+          currentUser,
+        ),
+      ).rejects.toMatchObject({
+        status: 404,
+        response: { code: "PURCHASE_NOT_FOUND" },
+      });
+
+      expect(transactionMock.purchaseDetail.update).not.toHaveBeenCalled();
+      expect(transactionMock.inventoryMovement.create).not.toHaveBeenCalled();
     });
   });
 
