@@ -17,7 +17,7 @@ const auth = vi.hoisted(() => ({
 }))
 
 vi.mock('../../services/sales.service', () => ({
-  salesService: { list: vi.fn(), get: vi.fn() },
+  salesService: { list: vi.fn(), get: vi.fn(), reverse: vi.fn() },
 }))
 
 vi.mock('../../services/branches.service', () => ({
@@ -42,6 +42,7 @@ vi.mock('../../layouts/AppLayout', () => ({
 
 const list = vi.mocked(salesService.list)
 const get = vi.mocked(salesService.get)
+const reverse = vi.mocked(salesService.reverse)
 
 const completed = buildSaleSummary()
 const reversed = buildSaleSummary({
@@ -112,16 +113,24 @@ describe('SalesPage', () => {
     )
   })
 
-  it('opens the detail of a sale', async () => {
+  it('opens the detail and reverses a completed sale', async () => {
+    reverse.mockResolvedValue(buildSale({ status: 'REVERSED' }))
     const { user } = renderPage()
 
     await user.click(await screen.findByRole('button', { name: 'Ver la venta V-20261026-0001' }))
+    await user.click(await screen.findByRole('button', { name: /Reversar por/ }))
+    await user.type(screen.getByLabelText('Motivo de la reversión'), 'Sabor equivocado')
+    await user.click(screen.getByRole('button', { name: 'Reversar venta' }))
 
-    expect(await screen.findByRole('dialog', { name: 'Venta V-20261026-0001' })).toBeInTheDocument()
-    expect(get).toHaveBeenCalledWith('sale-1', 'test-token')
+    expect(
+      await screen.findByText(
+        'La venta V-20261026-0001 quedó reversada y sus unidades volvieron al inventario de Centro.',
+      ),
+    ).toBeInTheDocument()
+    expect(list).toHaveBeenCalledTimes(2)
   })
 
-  it('shows the reason of a reversed sale', async () => {
+  it('does not offer to reverse a reversed sale', async () => {
     get.mockResolvedValue(
       buildSale({ id: 'sale-2', status: 'REVERSED', reversalReason: 'Error de cobro' }),
     )
@@ -130,6 +139,7 @@ describe('SalesPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Ver la venta V-20261026-0002' }))
 
     expect(await screen.findByText('Error de cobro')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Reversar por/ })).not.toBeInTheDocument()
   })
 
   it('shows every branch to the superadmin', async () => {

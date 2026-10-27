@@ -28,4 +28,7 @@ export const salesService = {
     http.get<SalesListResponse>(`/sales${buildQuery(params)}`, { token }),
 
   get: (saleId: string, token: string | null) => http.get<Sale>(`/sales/${saleId}`, { token }),
+
+  reverse: (saleId: string, reason: string, token: string | null) =>
+    http.post<Sale>(`/sales/${saleId}/reverse`, { reason }, { token }),
 }
