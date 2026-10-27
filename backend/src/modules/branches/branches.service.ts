@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -299,7 +300,19 @@ export class BranchesService {
   async findSellableProducts(
     branchId: string,
     query: ListSellableProductsQueryDto,
+    currentUser?: AuthenticatedUser,
   ) {
+    const roleName = currentUser?.role?.name;
+    if (
+      (roleName === "BRANCH_LEADER" || roleName === "BRANCH_ASSISTANT") &&
+      !(currentUser?.branches ?? []).some((branch) => branch.id === branchId)
+    ) {
+      throw new ForbiddenException({
+        code: "BRANCH_SCOPE_VIOLATION",
+        message: "You do not have access to this branch.",
+      });
+    }
+
     const branch = await this.prisma.branch.findUnique({
       where: { id: branchId },
       select: { id: true },
@@ -366,6 +379,7 @@ export class BranchesService {
           name: true,
           referenceCode: true,
           price: true,
+          unitOfMeasure: { select: { abreviation: true } },
           images: {
             select: {
               url: true,
@@ -395,6 +409,7 @@ export class BranchesService {
       primaryImageUrl: this.getPrimaryImageUrl(product.images),
       price: product.price.toFixed(2),
       availableQuantity: quantityMap.get(product.id) ?? 0,
+      unit: product.unitOfMeasure.abreviation,
       category: product.category,
     }));
 

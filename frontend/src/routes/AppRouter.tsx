@@ -24,6 +24,7 @@ import { LoginPage } from '../pages/LoginPage'
 import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
 import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
 import { PaymentMethodsPage } from '../pages/pos/PaymentMethodsPage'
+import { PosPage } from '../pages/pos/PosPage'
 import { SettingsPage } from '../pages/settings/SettingsPage'
 import { SupplierDetailPage } from '../pages/suppliers/SupplierDetailPage'
 import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
@@ -137,6 +138,14 @@ export function AppRouter() {
         }
       />
 
+      <Route
+        path="/pos"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/pos']}>
+            <PosPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/pos/metodos-pago"
         element={

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -15,7 +16,10 @@ import { ListSalesQueryDto } from "./dto/list-sales-query.dto.js";
 import { ReverseSaleDto } from "./dto/reverse-sale.dto.js";
 import { LowStockService } from "../notifications/low-stock.service.js";
 import { startOfTodayUtc } from "../../common/utils/expiration.util.js";
-import { businessDate } from "../../common/utils/business-day.util.js";
+import {
+  businessDate,
+  businessDayBounds,
+} from "../../common/utils/business-day.util.js";
 
 const saleSelect = {
   id: true,
@@ -136,11 +140,7 @@ export class SalesService {
     private readonly lowStockService: LowStockService,
   ) {}
 
-  async create(
-    dto: CreateSaleDto,
-    currentUser: AuthenticatedUser,
-    ipAddress?: string,
-  ) {
+  async create(dto: CreateSaleDto, currentUser: AuthenticatedUser) {
     const { branchId, customerId, items, payments } = dto;
 
     this.assertBranchScope(branchId, currentUser);
@@ -444,13 +444,6 @@ export class SalesService {
         select: saleSelect,
       });
 
-      const lowStockAlerts: Array<{
-        productId: string;
-        productName: string;
-        availableQuantity: number;
-        minimumStock: number;
-      }> = [];
-
       for (const item of items) {
         let remainingToDiscount = item.quantity;
 
@@ -484,44 +477,7 @@ export class SalesService {
 
           remainingToDiscount -= taken;
         }
-
-        const lots = lotsByProduct.get(item.productId) ?? [];
-        const availableQuantity =
-          lots.reduce((sum, lot) => sum + lot.quantity, 0) - item.quantity;
-        const minimumStock = lots.reduce(
-          (max, lot) => Math.max(max, lot.minimumStock),
-          0,
-        );
-
-        if (availableQuantity < minimumStock) {
-          lowStockAlerts.push({
-            productId: item.productId,
-            productName: productMap.get(item.productId)!.name,
-            availableQuantity,
-            minimumStock,
-          });
-        }
       }
-
-      await this.auditService.createAuditLog(
-        {
-          userId: currentUser.id,
-          action: "CREATE",
-          entity: "SALE",
-          entityId: sale.id,
-          newData: {
-            saleNumber: sale.saleNumber,
-            branchId,
-            customerId: customerId ?? null,
-            itemsCount: items.length,
-            total: toMoney(totalCents),
-            lowStockAlerts,
-          },
-          reason: `Sale ${sale.saleNumber} created at ${branch.name}`,
-          ipAddress,
-        },
-        tx,
-      );
 
       await this.lowStockService.notifyCrossings(tx, branchId, stockBefore);
 
@@ -548,7 +504,7 @@ export class SalesService {
 
     if (isScopedRole) {
       if (!branchId) {
-        throw new ForbiddenException({
+        throw new BadRequestException({
           code: "BRANCH_REQUIRED",
           message: "branchId is required for this role.",
         });
@@ -559,7 +515,7 @@ export class SalesService {
       );
       if (!userBranchIds.includes(branchId)) {
         throw new ForbiddenException({
-          code: "BRANCH_OUT_OF_SCOPE",
+          code: "BRANCH_SCOPE_VIOLATION",
           message: "You do not have access to this branch",
         });
       }
@@ -567,10 +523,10 @@ export class SalesService {
 
     const saleAtFilter: Prisma.DateTimeFilter = {};
     if (from) {
-      saleAtFilter.gte = new Date(`${from}T00:00:00Z`);
+      saleAtFilter.gte = businessDayBounds(from).start;
     }
     if (to) {
-      saleAtFilter.lte = new Date(`${to}T23:59:59.999Z`);
+      saleAtFilter.lte = businessDayBounds(to).end;
     }
 
     const where: Prisma.SaleWhereInput = {
@@ -680,7 +636,7 @@ export class SalesService {
       );
       if (!userBranchIds.includes(sale.branch.id)) {
         throw new ForbiddenException({
-          code: "BRANCH_OUT_OF_SCOPE",
+          code: "BRANCH_SCOPE_VIOLATION",
           message: "You do not have access to this branch",
         });
       }
@@ -926,7 +882,10 @@ export class SalesService {
     branchId: string,
     now: Date,
   ): Promise<string> {
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+    const dateStr = businessDate(now)
+      .toISOString()
+      .slice(0, 10)
+      .replace(/-/g, "");
     const prefix = `V-${dateStr}-`;
 
     const lastSale = await tx.sale.findFirst({
@@ -953,7 +912,7 @@ export class SalesService {
       const hasAccess = branches.some((branch) => branch.id === branchId);
       if (!hasAccess) {
         throw new ForbiddenException({
-          code: "BRANCH_OUT_OF_SCOPE",
+          code: "BRANCH_SCOPE_VIOLATION",
           message: "You do not have access to this branch",
         });
       }

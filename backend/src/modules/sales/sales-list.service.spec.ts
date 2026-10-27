@@ -248,7 +248,7 @@ describe("SalesService read operations (GET /sales)", () => {
       );
     });
 
-    it("filters by from and to dates with UTC day boundaries", async () => {
+    it("filters by from and to dates with Bogota day boundaries", async () => {
       await service.findAll(
         {
           page: 1,
@@ -262,8 +262,8 @@ describe("SalesService read operations (GET /sales)", () => {
       expect(prismaMock.sale.count).toHaveBeenCalledWith({
         where: {
           saleAt: {
-            gte: new Date("2026-10-01T00:00:00Z"),
-            lte: new Date("2026-10-31T23:59:59.999Z"),
+            gte: new Date("2026-10-01T05:00:00.000Z"),
+            lte: new Date("2026-11-01T04:59:59.999Z"),
           },
         },
       });
@@ -271,8 +271,8 @@ describe("SalesService read operations (GET /sales)", () => {
         expect.objectContaining({
           where: {
             saleAt: {
-              gte: new Date("2026-10-01T00:00:00Z"),
-              lte: new Date("2026-10-31T23:59:59.999Z"),
+              gte: new Date("2026-10-01T05:00:00.000Z"),
+              lte: new Date("2026-11-01T04:59:59.999Z"),
             },
           },
         }),
@@ -286,7 +286,7 @@ describe("SalesService read operations (GET /sales)", () => {
       );
 
       expect(prismaMock.sale.count).toHaveBeenCalledWith({
-        where: { saleAt: { gte: new Date("2026-10-01T00:00:00Z") } },
+        where: { saleAt: { gte: new Date("2026-10-01T05:00:00.000Z") } },
       });
 
       jest.clearAllMocks();
@@ -300,7 +300,7 @@ describe("SalesService read operations (GET /sales)", () => {
       );
 
       expect(prismaMock.sale.count).toHaveBeenCalledWith({
-        where: { saleAt: { lte: new Date("2026-10-31T23:59:59.999Z") } },
+        where: { saleAt: { lte: new Date("2026-11-01T04:59:59.999Z") } },
       });
     });
 
@@ -347,7 +347,7 @@ describe("SalesService read operations (GET /sales)", () => {
       await expect(
         service.findAll({ page: 1, limit: 20 }, leaderUser),
       ).rejects.toMatchObject({
-        status: 403,
+        status: 400,
         response: { code: "BRANCH_REQUIRED" },
       });
 
@@ -362,7 +362,7 @@ describe("SalesService read operations (GET /sales)", () => {
         ),
       ).rejects.toMatchObject({
         status: 403,
-        response: { code: "BRANCH_OUT_OF_SCOPE" },
+        response: { code: "BRANCH_SCOPE_VIOLATION" },
       });
 
       expect(prismaMock.$transaction).not.toHaveBeenCalled();
@@ -469,7 +469,7 @@ describe("SalesService read operations (GET /sales)", () => {
 
       await expect(service.findOne(saleId, leaderUser)).rejects.toMatchObject({
         status: 403,
-        response: { code: "BRANCH_OUT_OF_SCOPE" },
+        response: { code: "BRANCH_SCOPE_VIOLATION" },
       });
     });
   });

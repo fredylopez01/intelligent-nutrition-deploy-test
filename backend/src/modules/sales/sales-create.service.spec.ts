@@ -31,7 +31,6 @@ const secondLotId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const productBLotId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 const saleDate = new Date("2026-10-26T15:30:00.000Z");
-const ipAddress = "127.0.0.1";
 
 const productA = {
   id: productAId,
@@ -120,28 +119,6 @@ type SaleCreateData = {
   payments: { create: Array<Record<string, unknown>> };
 };
 
-type AuditPayload = {
-  userId: string;
-  action: string;
-  entity: string;
-  entityId: string;
-  newData: {
-    saleNumber: string;
-    branchId: string;
-    customerId: string | null;
-    itemsCount: number;
-    total: string;
-    lowStockAlerts: Array<{
-      productId: string;
-      productName: string;
-      availableQuantity: number;
-      minimumStock: number;
-    }>;
-  };
-  reason: string;
-  ipAddress?: string;
-};
-
 const superadmin: AuthenticatedUser = {
   id: userId,
   active: true,
@@ -211,12 +188,6 @@ const createdSaleData = (): SaleCreateData => {
   return args.data;
 };
 
-const auditPayload = (): AuditPayload => {
-  const [payload] = auditMock.createAuditLog.mock
-    .calls[0] as unknown as Array<AuditPayload>;
-  return payload;
-};
-
 const rawQueryText = (): string => {
   const [strings] = transactionMock.$queryRaw.mock.calls[0] as unknown as [
     string[],
@@ -279,25 +250,19 @@ describe("SalesService.create", () => {
 
   describe("branch scope", () => {
     it("allows a superadmin without assigned branches", async () => {
-      await expect(
-        service.create(baseDto, superadmin, ipAddress),
-      ).resolves.toBeDefined();
+      await expect(service.create(baseDto, superadmin)).resolves.toBeDefined();
     });
 
     it("allows a branch leader assigned to the sale branch", async () => {
       const leader = userWithRole("BRANCH_LEADER", [branchId]);
 
-      await expect(
-        service.create(baseDto, leader, ipAddress),
-      ).resolves.toBeDefined();
+      await expect(service.create(baseDto, leader)).resolves.toBeDefined();
     });
 
     it("allows a branch assistant assigned to the sale branch", async () => {
       const assistant = userWithRole("BRANCH_ASSISTANT", [branchId]);
 
-      await expect(
-        service.create(baseDto, assistant, ipAddress),
-      ).resolves.toBeDefined();
+      await expect(service.create(baseDto, assistant)).resolves.toBeDefined();
     });
 
     it.each(["BRANCH_LEADER", "BRANCH_ASSISTANT"])(
@@ -305,11 +270,9 @@ describe("SalesService.create", () => {
       async (roleName) => {
         const user = userWithRole(roleName, [otherBranchId]);
 
-        await expect(
-          service.create(baseDto, user, ipAddress),
-        ).rejects.toMatchObject({
+        await expect(service.create(baseDto, user)).rejects.toMatchObject({
           status: 403,
-          response: { code: "BRANCH_OUT_OF_SCOPE" },
+          response: { code: "BRANCH_SCOPE_VIOLATION" },
         });
 
         expect(prismaMock.$transaction).not.toHaveBeenCalled();
@@ -319,9 +282,7 @@ describe("SalesService.create", () => {
     it("rejects a role that cannot register sales", async () => {
       const dev = userWithRole("DEV", [branchId]);
 
-      await expect(
-        service.create(baseDto, dev, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(baseDto, dev)).rejects.toMatchObject({
         status: 403,
         response: { code: "FORBIDDEN" },
       });
@@ -341,9 +302,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "37.05" }],
       };
 
-      await expect(
-        service.create(dto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(dto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: { code: "DUPLICATED_PRODUCT" },
       });
@@ -356,9 +315,7 @@ describe("SalesService.create", () => {
     it("rejects when the branch does not exist", async () => {
       transactionMock.branch.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.create(baseDto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(baseDto, superadmin)).rejects.toMatchObject({
         status: 404,
         response: { code: "BRANCH_NOT_FOUND" },
       });
@@ -373,9 +330,7 @@ describe("SalesService.create", () => {
         active: false,
       });
 
-      await expect(
-        service.create(baseDto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(baseDto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: { code: "BRANCH_INACTIVE" },
       });
@@ -391,9 +346,7 @@ describe("SalesService.create", () => {
         locked: false,
       });
 
-      await expect(
-        service.create(baseDto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(baseDto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: { code: "INVENTORY_CLOSED" },
       });
@@ -407,9 +360,7 @@ describe("SalesService.create", () => {
         locked: true,
       });
 
-      await expect(
-        service.create(baseDto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(baseDto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: { code: "INVENTORY_CLOSED" },
       });
@@ -421,13 +372,11 @@ describe("SalesService.create", () => {
         locked: false,
       });
 
-      await expect(
-        service.create(baseDto, superadmin, ipAddress),
-      ).resolves.toBeDefined();
+      await expect(service.create(baseDto, superadmin)).resolves.toBeDefined();
     });
 
     it("looks up the closure with the date normalized to UTC midnight", async () => {
-      await service.create(baseDto, superadmin, ipAddress);
+      await service.create(baseDto, superadmin);
 
       expect(transactionMock.inventoryClosure.findUnique).toHaveBeenCalledWith({
         where: {
@@ -446,7 +395,7 @@ describe("SalesService.create", () => {
       transactionMock.customer.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.create({ ...baseDto, customerId }, superadmin, ipAddress),
+        service.create({ ...baseDto, customerId }, superadmin),
       ).rejects.toMatchObject({
         status: 404,
         response: { code: "CUSTOMER_NOT_FOUND" },
@@ -462,7 +411,7 @@ describe("SalesService.create", () => {
       });
 
       await expect(
-        service.create({ ...baseDto, customerId }, superadmin, ipAddress),
+        service.create({ ...baseDto, customerId }, superadmin),
       ).rejects.toMatchObject({
         status: 422,
         response: { code: "CUSTOMER_INACTIVE" },
@@ -470,7 +419,7 @@ describe("SalesService.create", () => {
     });
 
     it("skips the customer lookup when the sale has no customer", async () => {
-      await service.create(baseDto, superadmin, ipAddress);
+      await service.create(baseDto, superadmin);
 
       expect(transactionMock.customer.findUnique).not.toHaveBeenCalled();
       expect(createdSaleData().customerId).toBeNull();
@@ -481,9 +430,7 @@ describe("SalesService.create", () => {
     it("rejects a product that does not exist", async () => {
       transactionMock.product.findMany.mockResolvedValue([]);
 
-      await expect(
-        service.create(baseDto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(baseDto, superadmin)).rejects.toMatchObject({
         status: 404,
         response: {
           code: "PRODUCT_NOT_FOUND",
@@ -499,9 +446,7 @@ describe("SalesService.create", () => {
         { ...productA, active: false },
       ]);
 
-      await expect(
-        service.create(baseDto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(baseDto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: {
           code: "PRODUCT_INACTIVE",
@@ -515,9 +460,7 @@ describe("SalesService.create", () => {
     it("rejects a payment method that does not exist", async () => {
       transactionMock.paymentMethod.findMany.mockResolvedValue([]);
 
-      await expect(
-        service.create(baseDto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(baseDto, superadmin)).rejects.toMatchObject({
         status: 404,
         response: {
           code: "PAYMENT_METHOD_NOT_FOUND",
@@ -533,9 +476,7 @@ describe("SalesService.create", () => {
         { ...cashMethod, active: false },
       ]);
 
-      await expect(
-        service.create(baseDto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(baseDto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: {
           code: "PAYMENT_METHOD_INACTIVE",
@@ -553,7 +494,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "37.05" }],
       };
 
-      await service.create(dto, superadmin, ipAddress);
+      await service.create(dto, superadmin);
 
       expect(transactionMock.product.findMany).toHaveBeenCalledWith({
         where: { id: { in: [productAId] } },
@@ -584,7 +525,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "21.20" }],
       };
 
-      await service.create(dto, superadmin, ipAddress);
+      await service.create(dto, superadmin);
 
       expect(createdSaleData()).toMatchObject({
         subtotal: "24.70",
@@ -601,7 +542,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "26.20" }],
       };
 
-      await service.create(dto, superadmin, ipAddress);
+      await service.create(dto, superadmin);
 
       expect(createdSaleData()).toMatchObject({
         subtotal: "24.70",
@@ -624,7 +565,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "23.70" }],
       };
 
-      await service.create(dto, superadmin, ipAddress);
+      await service.create(dto, superadmin);
 
       expect(createdSaleData()).toMatchObject({
         subtotal: "24.70",
@@ -635,7 +576,7 @@ describe("SalesService.create", () => {
     });
 
     it("persists the money values as two-decimal strings", async () => {
-      await service.create(baseDto, superadmin, ipAddress);
+      await service.create(baseDto, superadmin);
 
       const data = createdSaleData();
       expect(data.subtotal).toBe("24.70");
@@ -655,9 +596,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "1.00" }],
       };
 
-      await expect(
-        service.create(dto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(dto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: {
           code: "DISCOUNT_EXCEEDS_SUBTOTAL",
@@ -679,9 +618,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "1.00" }],
       };
 
-      await expect(
-        service.create(dto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(dto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: {
           code: "DISCOUNT_EXCEEDS_SUBTOTAL",
@@ -698,9 +635,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "0.00" }],
       };
 
-      await expect(
-        service.create(dto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(dto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: {
           code: "PAYMENT_AMOUNT_INVALID",
@@ -717,9 +652,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "20.00" }],
       };
 
-      await expect(
-        service.create(dto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(dto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: {
           code: "PAYMENT_TOTAL_MISMATCH",
@@ -741,7 +674,7 @@ describe("SalesService.create", () => {
         ],
       };
 
-      await service.create(dto, superadmin, ipAddress);
+      await service.create(dto, superadmin);
 
       expect(createdSaleData().payments.create).toEqual([
         {
@@ -764,9 +697,7 @@ describe("SalesService.create", () => {
         { id: firstLotId, quantity: 1, minimumStock: 2 },
       ]);
 
-      await expect(
-        service.create(baseDto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(baseDto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: {
           code: "INSUFFICIENT_STOCK",
@@ -806,9 +737,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "25.20" }],
       };
 
-      await expect(
-        service.create(dto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
+      await expect(service.create(dto, superadmin)).rejects.toMatchObject({
         status: 422,
         response: {
           code: "INSUFFICIENT_STOCK",
@@ -831,7 +760,7 @@ describe("SalesService.create", () => {
     });
 
     it("locks the branch inventory rows of every product", async () => {
-      await service.create(baseDto, superadmin, ipAddress);
+      await service.create(baseDto, superadmin);
 
       expect(transactionMock.$queryRaw).toHaveBeenCalledTimes(1);
       expect(rawQueryText()).toContain("FOR UPDATE");
@@ -856,7 +785,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "37.05" }],
       };
 
-      await service.create(dto, superadmin, ipAddress);
+      await service.create(dto, superadmin);
 
       expect(transactionMock.branchInventory.findMany).toHaveBeenCalledWith({
         where: {
@@ -899,7 +828,7 @@ describe("SalesService.create", () => {
         payments: [{ paymentMethodId: cashMethodId, amount: "12.55" }],
       };
 
-      await service.create(dto, superadmin, ipAddress);
+      await service.create(dto, superadmin);
 
       expect(transactionMock.inventoryMovement.create).toHaveBeenCalledTimes(2);
       expect(transactionMock.inventoryMovement.create).toHaveBeenCalledWith({
@@ -927,7 +856,7 @@ describe("SalesService.create", () => {
     });
 
     it("numbers the first sale of the day", async () => {
-      await service.create(baseDto, superadmin, ipAddress);
+      await service.create(baseDto, superadmin);
 
       expect(createdSaleData().saleNumber).toBe("V-20261026-0001");
       expect(transactionMock.sale.findFirst).toHaveBeenCalledWith({
@@ -945,13 +874,13 @@ describe("SalesService.create", () => {
         saleNumber: "V-20261026-0007",
       });
 
-      await service.create(baseDto, superadmin, ipAddress);
+      await service.create(baseDto, superadmin);
 
       expect(createdSaleData().saleNumber).toBe("V-20261026-0008");
     });
 
     it("stores the sale as completed for the current user", async () => {
-      await service.create(baseDto, superadmin, ipAddress);
+      await service.create(baseDto, superadmin);
 
       expect(createdSaleData()).toMatchObject({
         branchId,
@@ -1007,7 +936,7 @@ describe("SalesService.create", () => {
         }),
       );
 
-      const result = await service.create(baseDto, superadmin, ipAddress);
+      const result = await service.create(baseDto, superadmin);
 
       expect(result).toEqual({
         id: saleId,
@@ -1062,52 +991,9 @@ describe("SalesService.create", () => {
     });
 
     it("returns a null customer when the sale has none", async () => {
-      const result = await service.create(baseDto, superadmin, ipAddress);
+      const result = await service.create(baseDto, superadmin);
 
       expect(result.customer).toBeNull();
-    });
-  });
-
-  describe("audit log", () => {
-    it("records the sale creation inside the transaction", async () => {
-      await service.create(baseDto, superadmin, ipAddress);
-
-      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
-        {
-          userId,
-          action: "CREATE",
-          entity: "SALE",
-          entityId: saleId,
-          newData: {
-            saleNumber: "V-20261026-0001",
-            branchId,
-            customerId: null,
-            itemsCount: 1,
-            total: "24.70",
-            lowStockAlerts: [],
-          },
-          reason: "Sale V-20261026-0001 created at Sede Centro",
-          ipAddress,
-        },
-        transactionMock,
-      );
-    });
-
-    it("reports the products that end below the minimum stock", async () => {
-      transactionMock.branchInventory.findMany.mockResolvedValue([
-        { id: firstLotId, quantity: 3, minimumStock: 2 },
-      ]);
-
-      await service.create(baseDto, superadmin, ipAddress);
-
-      expect(auditPayload().newData.lowStockAlerts).toEqual([
-        {
-          productId: productAId,
-          productName: "Proteína",
-          availableQuantity: 1,
-          minimumStock: 2,
-        },
-      ]);
     });
   });
 
@@ -1116,22 +1002,17 @@ describe("SalesService.create", () => {
       const error = new Error("sale insert failed");
       transactionMock.sale.create.mockRejectedValue(error);
 
-      await expect(service.create(baseDto, superadmin, ipAddress)).rejects.toBe(
-        error,
-      );
+      await expect(service.create(baseDto, superadmin)).rejects.toBe(error);
 
       expect(transactionMock.branchInventory.update).not.toHaveBeenCalled();
       expect(transactionMock.inventoryMovement.create).not.toHaveBeenCalled();
       expect(auditMock.createAuditLog).not.toHaveBeenCalled();
     });
 
-    it("propagates a failure while writing the audit log", async () => {
-      const error = new Error("audit unavailable");
-      auditMock.createAuditLog.mockRejectedValue(error);
+    it("does not write an audit log for a new sale", async () => {
+      await service.create(baseDto, superadmin);
 
-      await expect(service.create(baseDto, superadmin, ipAddress)).rejects.toBe(
-        error,
-      );
+      expect(auditMock.createAuditLog).not.toHaveBeenCalled();
     });
   });
 });

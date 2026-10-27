@@ -331,7 +331,7 @@ describe("POST /sales/:saleId/reverse role guard", () => {
     } as ExecutionContext;
   };
 
-  it.each(["SUPERADMIN", "BRANCH_LEADER"])(
+  it.each(["SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT"])(
     "allows the %s role to reverse a sale",
     (roleName) => {
       expect(guard.canActivate(contextFor(roleName))).toBe(true);
@@ -339,7 +339,7 @@ describe("POST /sales/:saleId/reverse role guard", () => {
   );
 
   it("denies roles without permission to reverse sales", () => {
-    expect(() => guard.canActivate(contextFor("BRANCH_ASSISTANT"))).toThrow(
+    expect(() => guard.canActivate(contextFor("DEV"))).toThrow(
       expect.objectContaining({
         status: 403,
         response: expect.objectContaining({
@@ -347,6 +347,10 @@ describe("POST /sales/:saleId/reverse role guard", () => {
         }),
       }),
     );
-    expect(requiredRoles).toEqual(["SUPERADMIN", "BRANCH_LEADER"]);
+    expect(requiredRoles).toEqual([
+      "SUPERADMIN",
+      "BRANCH_LEADER",
+      "BRANCH_ASSISTANT",
+    ]);
   });
 });
