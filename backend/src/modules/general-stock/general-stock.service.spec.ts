@@ -31,7 +31,7 @@ describe("GeneralStockService", () => {
   beforeEach(() => {
     jest.useFakeTimers({ now: new Date("2026-10-25T15:00:00.000Z") });
     jest.resetAllMocks();
-    service = new GeneralStockService(prisma as never);
+    service = new GeneralStockService(prisma as never, {} as never);
   });
 
   afterEach(() => {
