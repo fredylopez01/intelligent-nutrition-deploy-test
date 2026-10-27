@@ -44,6 +44,10 @@ export const createPaymentMethodSchema = z.object({
 export type CreatePaymentMethodValues = z.input<typeof createPaymentMethodSchema>
 export type CreatePaymentMethodData = z.output<typeof createPaymentMethodSchema>
 
+export const editPaymentMethodSchema = z.object({ name: nameSchema })
+
+export type EditPaymentMethodValues = z.infer<typeof editPaymentMethodSchema>
+
 export type PaymentMethodConflictField = 'code' | 'name'
 
 export function paymentMethodConflict(
@@ -63,6 +67,12 @@ export function resolvePaymentMethodError(error: unknown, fallback: string): str
   if (!(error instanceof ApiError)) return fallback
   const conflict = paymentMethodConflict(error)
   if (conflict) return conflict.message
+  switch (error.code) {
+    case 'ALREADY_IN_STATE':
+      return 'El método de pago ya tenía ese estado. Recarga el listado para ver su estado actual.'
+    case 'PAYMENT_METHOD_NOT_FOUND':
+      return 'Este método de pago ya no existe. Recarga el listado.'
+  }
   if (error.status === 403) return 'No tienes permiso para realizar esta acción.'
   if (error.status === 404) return 'Este método de pago ya no existe. Recarga el listado.'
   if (error.status === 400) return 'Revisa los datos: hay un campo que el servidor no aceptó.'

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { CreatePaymentMethodForm } from '../../components/payment-methods/CreatePaymentMethodForm'
+import { EditPaymentMethodForm } from '../../components/payment-methods/EditPaymentMethodForm'
 import { PaymentMethodsTable } from '../../components/payment-methods/PaymentMethodsTable'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
@@ -9,14 +10,16 @@ import { Modal } from '../../components/ui/Modal'
 import { Pagination } from '../../components/ui/Pagination'
 import { ReloadButton } from '../../components/ui/ReloadButton'
 import { SearchBar } from '../../components/ui/SearchBar'
+import { StatusConfirmation } from '../../components/ui/StatusConfirmation'
 import { TableSkeleton } from '../../components/ui/TableSkeleton'
 import { useAuth } from '../../hooks/useAuth'
 import { usePagination } from '../../hooks/usePagination'
 import { usePaymentMethods } from '../../hooks/usePaymentMethods'
 import { AppLayout } from '../../layouts/AppLayout'
+import { paymentMethodsService } from '../../services/paymentMethods.service'
 import type { PaymentMethod } from '../../types/paymentMethod'
 import { hasRole } from '../../utils/categories'
-import { PAYMENT_METHOD_MANAGE_ROLES } from '../../utils/paymentMethods'
+import { PAYMENT_METHOD_MANAGE_ROLES, resolvePaymentMethodError } from '../../utils/paymentMethods'
 
 import '../catalog/CatalogPage.css'
 
@@ -30,7 +33,7 @@ const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
 const FILTER_DEFAULTS = { estado: 'todos' }
 
 export function PaymentMethodsPage() {
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const canManage = hasRole(PAYMENT_METHOD_MANAGE_ROLES, user?.role.name)
 
   const {
@@ -47,6 +50,8 @@ export function PaymentMethodsPage() {
     clearFilters,
   } = usePagination({ filters: FILTER_DEFAULTS })
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [editingMethod, setEditingMethod] = useState<PaymentMethod | null>(null)
+  const [statusMethod, setStatusMethod] = useState<PaymentMethod | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, paymentMethods, meta, error, refetch } = usePaymentMethods({
@@ -71,6 +76,27 @@ export function PaymentMethodsPage() {
     )
     if (page === 1) refetch()
     else setPage(1)
+  }
+
+  const handleUpdated = (paymentMethod: PaymentMethod) => {
+    setEditingMethod(null)
+    setFeedbackMessage(`El método ${paymentMethod.code} ahora se llama ${paymentMethod.name}.`)
+    refetch()
+  }
+
+  const handleChangeStatus = async (paymentMethod: PaymentMethod) => {
+    await paymentMethodsService.updateStatus(
+      paymentMethod.id,
+      { active: !paymentMethod.active },
+      token,
+    )
+    setStatusMethod(null)
+    setFeedbackMessage(
+      paymentMethod.active
+        ? `${paymentMethod.name} quedó inactivo: ya no aparece en el punto de venta.`
+        : `${paymentMethod.name} quedó activo y vuelve a aparecer en el punto de venta.`,
+    )
+    refetch()
   }
 
   const renderList = () => {
@@ -108,7 +134,20 @@ export function PaymentMethodsPage() {
       )
     }
 
-    return <PaymentMethodsTable paymentMethods={paymentMethods} />
+    return (
+      <PaymentMethodsTable
+        paymentMethods={paymentMethods}
+        canManage={canManage}
+        onEdit={(paymentMethod) => {
+          setFeedbackMessage(null)
+          setEditingMethod(paymentMethod)
+        }}
+        onToggleStatus={(paymentMethod) => {
+          setFeedbackMessage(null)
+          setStatusMethod(paymentMethod)
+        }}
+      />
+    )
   }
 
   return (
@@ -175,6 +214,49 @@ export function PaymentMethodsPage() {
           onCreated={handleCreated}
           onCancel={() => setIsCreateOpen(false)}
         />
+      </Modal>
+
+      <Modal
+        open={editingMethod !== null}
+        title="Editar método de pago"
+        onClose={() => setEditingMethod(null)}
+      >
+        {editingMethod && (
+          <EditPaymentMethodForm
+            paymentMethod={editingMethod}
+            onUpdated={handleUpdated}
+            onCancel={() => setEditingMethod(null)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={statusMethod !== null}
+        title={
+          statusMethod?.active
+            ? '¿Desactivar este método de pago?'
+            : '¿Activar este método de pago?'
+        }
+        description={
+          statusMethod?.active
+            ? `${statusMethod.name} dejará de aparecer en el punto de venta. Las ventas que ya se pagaron con él lo conservan.`
+            : `${statusMethod?.name} volverá a aparecer en el punto de venta para cobrar.`
+        }
+        onClose={() => setStatusMethod(null)}
+      >
+        {statusMethod && (
+          <StatusConfirmation
+            active={statusMethod.active}
+            onConfirm={() => handleChangeStatus(statusMethod)}
+            onCancel={() => setStatusMethod(null)}
+            resolveError={(error) =>
+              resolvePaymentMethodError(
+                error,
+                'No fue posible cambiar el estado del método de pago. Intenta de nuevo.',
+              )
+            }
+          />
+        )}
       </Modal>
     </AppLayout>
   )

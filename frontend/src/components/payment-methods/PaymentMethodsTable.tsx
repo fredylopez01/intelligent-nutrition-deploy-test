@@ -1,4 +1,5 @@
 import type { PaymentMethod } from '../../types/paymentMethod'
+import { RowActions } from '../ui/RowActions'
 
 import '../users/StatusBadge.css'
 import '../categories/CategoriesTable.css'
@@ -6,9 +7,17 @@ import './PaymentMethodsTable.css'
 
 interface PaymentMethodsTableProps {
   paymentMethods: PaymentMethod[]
+  canManage: boolean
+  onEdit: (paymentMethod: PaymentMethod) => void
+  onToggleStatus: (paymentMethod: PaymentMethod) => void
 }
 
-export function PaymentMethodsTable({ paymentMethods }: PaymentMethodsTableProps) {
+export function PaymentMethodsTable({
+  paymentMethods,
+  canManage,
+  onEdit,
+  onToggleStatus,
+}: PaymentMethodsTableProps) {
   return (
     <table className="categories-table units-table payment-methods-table">
       <caption className="sr-only">Métodos de pago disponibles en el punto de venta</caption>
@@ -19,6 +28,11 @@ export function PaymentMethodsTable({ paymentMethods }: PaymentMethodsTableProps
           <th scope="col" className="categories-table__col-status">
             Estado
           </th>
+          {canManage && (
+            <th scope="col" className="categories-table__col-actions">
+              <span className="sr-only">Acciones</span>
+            </th>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -40,6 +54,21 @@ export function PaymentMethodsTable({ paymentMethods }: PaymentMethodsTableProps
                 {paymentMethod.active ? 'Activo' : 'Inactivo'}
               </span>
             </td>
+            {canManage && (
+              <td className="categories-table__col-actions">
+                <RowActions
+                  label={`Acciones para ${paymentMethod.name}`}
+                  actions={[
+                    { label: 'Editar nombre', onSelect: () => onEdit(paymentMethod) },
+                    {
+                      label: paymentMethod.active ? 'Desactivar' : 'Activar',
+                      tone: paymentMethod.active ? 'danger' : undefined,
+                      onSelect: () => onToggleStatus(paymentMethod),
+                    },
+                  ]}
+                />
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

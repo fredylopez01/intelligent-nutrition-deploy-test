@@ -25,3 +25,7 @@ export interface CreatePaymentMethodPayload {
   code: string
   name: string
 }
+
+export interface UpdatePaymentMethodPayload {
+  name: string
+}

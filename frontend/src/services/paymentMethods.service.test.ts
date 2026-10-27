@@ -46,4 +46,28 @@ describe('paymentMethodsService', () => {
       { token: 'token' },
     )
   })
+
+  it('updates only the name', async () => {
+    vi.mocked(http.patch).mockResolvedValue({ id: 'pm-1' })
+
+    await paymentMethodsService.update('pm-1', { name: 'Nequi QR' }, 'token')
+
+    expect(http.patch).toHaveBeenCalledWith(
+      '/payment-methods/pm-1',
+      { name: 'Nequi QR' },
+      { token: 'token' },
+    )
+  })
+
+  it('changes the state through the status endpoint', async () => {
+    vi.mocked(http.patch).mockResolvedValue({ message: 'ok' })
+
+    await paymentMethodsService.updateStatus('pm-1', { active: false }, 'token')
+
+    expect(http.patch).toHaveBeenCalledWith(
+      '/payment-methods/pm-1/status',
+      { active: false },
+      { token: 'token' },
+    )
+  })
 })
