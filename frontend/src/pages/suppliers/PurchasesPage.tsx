@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { PurchaseDetail } from '../../components/purchases/PurchaseDetail'
 import { PurchaseForm } from '../../components/purchases/PurchaseForm'
 import { PurchasesTable } from '../../components/purchases/PurchasesTable'
+import { ReceiptForm } from '../../components/purchases/ReceiptForm'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -19,8 +20,13 @@ import { useSupplierOptions } from '../../hooks/useSupplierOptions'
 import { AppLayout } from '../../layouts/AppLayout'
 import { purchasesService } from '../../services/purchases.service'
 import type { Purchase, PurchaseStatus, PurchaseSummary } from '../../types/purchase'
+import { hasRole } from '../../utils/categories'
 import { formatPrice } from '../../utils/products'
-import { PURCHASE_STATUS_LABELS, resolvePurchaseError } from '../../utils/purchases'
+import {
+  PURCHASE_RECEIVE_ROLES,
+  PURCHASE_STATUS_LABELS,
+  resolvePurchaseError,
+} from '../../utils/purchases'
 
 import '../inventory/InventoryPage.css'
 import '../inventory/MovementsPage.css'
@@ -30,6 +36,8 @@ const STATUS_OPTIONS: PurchaseStatus[] = ['PENDING_RECEIPT', 'PARTIALLY_RECEIVED
 const LIMIT_OPTIONS = [20, 50, 100]
 
 export function PurchasesPage() {
+  const { user } = useAuth()
+  const canReceive = hasRole(PURCHASE_RECEIVE_ROLES, user?.role.name)
   const supplierOptions = useSupplierOptions()
   const [, setSearchParams] = useSearchParams()
   const { search, filters, params, limitOptions, setPage, setLimit, applySearch, setFilter } =
@@ -79,6 +87,16 @@ export function PurchasesPage() {
     )
     if (params.page === 1) refetch()
     else setPage(1)
+  }
+
+  const handleReceived = (purchase: Purchase) => {
+    setViewing(null)
+    setFeedback(
+      purchase.status === 'FULLY_RECEIVED'
+        ? `La compra ${purchase.purchaseNumber} quedó recibida completa y sus unidades entraron al stock general.`
+        : `Recepción registrada: la compra ${purchase.purchaseNumber} sigue pendiente de las unidades que faltan.`,
+    )
+    refetch()
   }
 
   const renderList = () => {
@@ -245,7 +263,14 @@ export function PurchasesPage() {
         size="wide"
         onClose={() => setViewing(null)}
       >
-        {viewing && <PurchaseDialog summary={viewing} onClose={() => setViewing(null)} />}
+        {viewing && (
+          <PurchaseDialog
+            summary={viewing}
+            canReceive={canReceive}
+            onReceived={handleReceived}
+            onClose={() => setViewing(null)}
+          />
+        )}
       </Modal>
     </AppLayout>
   )
@@ -253,14 +278,17 @@ export function PurchasesPage() {
 
 interface PurchaseDialogProps {
   summary: PurchaseSummary
+  canReceive: boolean
+  onReceived: (purchase: Purchase) => void
   onClose: () => void
 }
 
-function PurchaseDialog({ summary, onClose }: PurchaseDialogProps) {
+function PurchaseDialog({ summary, canReceive, onReceived, onClose }: PurchaseDialogProps) {
   const { token } = useAuth()
   const [result, setResult] = useState<{ purchase: Purchase | null; error: string | null } | null>(
     null,
   )
+  const [receiving, setReceiving] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -289,13 +317,30 @@ function PurchaseDialog({ summary, onClose }: PurchaseDialogProps) {
     )
   }
   if (result.error || !result.purchase) return <Alert tone="error">{result.error}</Alert>
+  if (receiving) {
+    return (
+      <ReceiptForm
+        purchase={result.purchase}
+        onReceived={onReceived}
+        onCancel={() => setReceiving(false)}
+      />
+    )
+  }
   return (
     <div className="sale-detail">
       <PurchaseDetail purchase={result.purchase} />
+      {!canReceive && result.purchase.status !== 'FULLY_RECEIVED' && (
+        <p className="sale-detail__meta">
+          La recepción la confirma el superadmin, porque las unidades entran al stock general.
+        </p>
+      )}
       <div className="sale-detail__actions">
         <Button variant="outline" onClick={onClose}>
           Cerrar
         </Button>
+        {canReceive && result.purchase.status !== 'FULLY_RECEIVED' && (
+          <Button onClick={() => setReceiving(true)}>Registrar recepción</Button>
+        )}
       </div>
     </div>
   )

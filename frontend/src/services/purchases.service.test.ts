@@ -46,4 +46,21 @@ describe('purchasesService', () => {
 
     expect(http.post).toHaveBeenCalledWith('/purchases', payload, { token: 'token' })
   })
+
+  it('registers a receipt with the lots', async () => {
+    vi.mocked(http.post).mockResolvedValue({})
+    const items = [
+      { purchaseDetailId: 'detail-whey', receivedQuantity: 5, expirationDate: '2027-06-30' },
+    ]
+
+    await purchasesService.receive('purchase-1', items, 'token')
+
+    expect(http.post).toHaveBeenCalledWith(
+      '/purchases/purchase-1/receipts',
+      { items },
+      {
+        token: 'token',
+      },
+    )
+  })
 })
