@@ -7,6 +7,7 @@ import {
   jest,
 } from "@jest/globals";
 import type { ListConsolidatedQueryDto } from "./dto/list-consolidated-query.dto.js";
+import { startOfTodayUtc } from "../../common/utils/expiration.util.js";
 import { LowStockService } from "../notifications/low-stock.service.js";
 import { GeneralStockService } from "../general-stock/general-stock.service.js";
 
@@ -80,7 +81,7 @@ describe("InventoryService aggregated queries", () => {
       referenceCode: "WHEY-2LB-001",
     };
 
-    it("requests only active branches ordered by name, filtered by product", async () => {
+    it("requests only active branches ordered by name, filtered by product and non-expired lots", async () => {
       prismaMock.product.findUnique.mockResolvedValue(product);
       prismaMock.branch.findMany.mockResolvedValue([]);
 
@@ -96,11 +97,29 @@ describe("InventoryService aggregated queries", () => {
           id: true,
           name: true,
           branchInventories: {
-            where: { productId },
+            where: {
+              productId,
+              expirationDate: { gte: startOfTodayUtc() },
+            },
             select: { quantity: true },
           },
         },
         orderBy: { name: "asc" },
+      });
+    });
+
+    it("leaves out the excluded branch when excludeBranchId is sent", async () => {
+      prismaMock.product.findUnique.mockResolvedValue(product);
+      prismaMock.branch.findMany.mockResolvedValue([]);
+
+      await service.getAvailability(productId, "branch-centro");
+
+      const [args] = prismaMock.branch.findMany.mock.calls[0] as [
+        { where: unknown },
+      ];
+      expect(args.where).toEqual({
+        active: true,
+        id: { not: "branch-centro" },
       });
     });
 
