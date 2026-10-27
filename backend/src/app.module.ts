@@ -21,6 +21,7 @@ import { PurchasesModule } from "./modules/purchases/purchases.module.js";
 import { InventoryClosuresModule } from "./modules/inventory-closures/inventory-closures.module.js";
 import { InventoryMovementsModule } from "./modules/inventory-movements/inventory-movements.module.js";
 import { SalesModule } from "./modules/sales/sales.module.js";
+import { GeneralStockModule } from "./modules/general-stock/general-stock.module.js";
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { SalesModule } from "./modules/sales/sales.module.js";
     InventoryClosuresModule,
     InventoryMovementsModule,
     SalesModule,
+    GeneralStockModule,
   ],
   controllers: [AppController],
   providers: [AppService],

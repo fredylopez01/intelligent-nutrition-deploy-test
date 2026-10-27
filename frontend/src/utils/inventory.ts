@@ -103,7 +103,7 @@ export const assignProductSchema = z.object({
   minimumStock: stockAmountSchema('Escribe el stock mínimo (puede ser 0).', 'El stock mínimo'),
   expirationDate: z
     .string()
-    .min(1, 'Elige la fecha de vencimiento del lote.')
+    .min(1, 'Elige el lote del stock general.')
     .refine(
       (value) => value >= todayInputValue(),
       'La fecha de vencimiento no puede ser anterior a hoy.',
@@ -141,6 +141,14 @@ export function assignFieldError(
         field: 'quantity',
         message: 'No hay existencias suficientes para asignar esa cantidad.',
       }
+    case 'INSUFFICIENT_GENERAL_STOCK':
+      return {
+        field: 'quantity',
+        message:
+          'El stock general ya no tiene esa cantidad de este lote. Cambia la cantidad o elige otro lote.',
+      }
+    case 'LOT_EXPIRED':
+      return { field: 'expirationDate', message: 'Ese lote ya está vencido. Elige otro lote.' }
   }
   return null
 }

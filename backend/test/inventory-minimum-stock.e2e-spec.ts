@@ -272,6 +272,15 @@ describe("PATCH /api/v1/branches/:branchId/inventory/:productId (e2e)", () => {
             ],
           },
         });
+        await prisma.notification.deleteMany({
+          where: {
+            OR: [
+              { productId: { in: productIds } },
+              { branchId: { in: branchIds } },
+              { userId: { in: personIds } },
+            ],
+          },
+        });
         await prisma.branchInventory.deleteMany({
           where: { productId: { in: productIds } },
         });

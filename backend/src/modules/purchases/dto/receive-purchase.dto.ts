@@ -2,6 +2,7 @@ import { Type } from "class-transformer";
 import {
   ArrayMinSize,
   IsArray,
+  IsDateString,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -19,6 +20,12 @@ export class ReceivePurchaseItemDto {
   @IsInt()
   @Min(0)
   receivedQuantity!: number;
+
+  @IsDateString(
+    { strict: true },
+    { message: "expirationDate must be a valid ISO 8601 date (YYYY-MM-DD)" },
+  )
+  expirationDate!: string;
 
   @IsOptional()
   @IsString()

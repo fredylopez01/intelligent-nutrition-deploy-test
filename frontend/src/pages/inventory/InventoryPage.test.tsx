@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { branchesService } from '../../services/branches.service'
 import { categoriesService } from '../../services/categories.service'
+import { generalStockService } from '../../services/generalStock.service'
 import { ApiError } from '../../services/http'
 import { inventoryService } from '../../services/inventory.service'
 import { productsService } from '../../services/products.service'
@@ -47,6 +48,10 @@ vi.mock('../../services/categories.service', () => ({
 
 vi.mock('../../services/units.service', () => ({
   unitsService: { list: vi.fn() },
+}))
+
+vi.mock('../../services/generalStock.service', () => ({
+  generalStockService: { getByProduct: vi.fn() },
 }))
 
 vi.mock('../../services/products.service', () => ({
@@ -332,6 +337,17 @@ describe('InventoryPage', () => {
   })
 
   it('assigns a product to the branch and reloads the inventory', async () => {
+    vi.mocked(generalStockService.getByProduct).mockResolvedValue({
+      product: {
+        id: 'product-whey',
+        name: 'Whey Protein 2 lb',
+        referenceCode: 'WHEY-2LB-001',
+        active: true,
+        unitOfMeasure: { abbreviation: 'und' },
+      },
+      totalQuantity: 100,
+      lots: [{ id: 'gs-1', expirationDate: '2027-12-31', quantity: 100, expired: false }],
+    })
     listProducts.mockResolvedValue(optionsPage([buildProduct()]))
     getProductInBranch.mockRejectedValue(
       new ApiError('Not assigned', 404, undefined, 'PRODUCT_NOT_ASSIGNED'),
@@ -356,7 +372,9 @@ describe('InventoryPage', () => {
     await user.type(within(dialog).getByLabelText('Cantidad inicial'), '20')
     await user.clear(within(dialog).getByLabelText('Stock mínimo'))
     await user.type(within(dialog).getByLabelText('Stock mínimo'), '5')
-    await user.type(within(dialog).getByLabelText('Fecha de vencimiento'), '2027-12-31')
+    const lot = within(dialog).getByLabelText('Lote del stock general')
+    await waitFor(() => expect(lot).toBeEnabled())
+    await user.selectOptions(lot, '2027-12-31')
     await user.click(within(dialog).getByRole('button', { name: 'Asignar a la sede' }))
 
     expect(

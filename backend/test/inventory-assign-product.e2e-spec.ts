@@ -243,6 +243,16 @@ describe("POST /api/v1/branches/:branchId/inventory (e2e)", () => {
     await prisma.branchInventory.deleteMany({
       where: { productId: { in: productIds } },
     });
+    await prisma.generalStock.deleteMany({
+      where: { productId: { in: productIds } },
+    });
+    await prisma.generalStock.create({
+      data: {
+        productId,
+        quantity: 1000,
+        expirationDate: new Date("2027-12-31T00:00:00.000Z"),
+      },
+    });
   });
 
   afterAll(async () => {
@@ -272,6 +282,17 @@ describe("POST /api/v1/branches/:branchId/inventory (e2e)", () => {
         });
         await prisma.branchInventory.deleteMany({
           where: { productId: { in: productIds } },
+        });
+        await prisma.generalStock.deleteMany({
+          where: { productId: { in: productIds } },
+        });
+        await prisma.notification.deleteMany({
+          where: {
+            OR: [
+              { productId: { in: productIds } },
+              { userId: { in: personIds } },
+            ],
+          },
         });
         await prisma.userBranch.deleteMany({
           where: { userId: { in: personIds } },
@@ -492,6 +513,32 @@ describe("POST /api/v1/branches/:branchId/inventory (e2e)", () => {
   });
 
   describe("business rules", () => {
+    it("takes the assigned quantity from the matching general stock lot", async () => {
+      await postAssign(branchId, validPayload({ quantity: 20 }), tokens.SUPERADMIN).expect(201);
+
+      const lot = await prisma!.generalStock.findUnique({
+        where: {
+          productId_expirationDate: {
+            productId,
+            expirationDate: new Date("2027-12-31T00:00:00.000Z"),
+          },
+        },
+      });
+      expect(lot?.quantity).toBe(980);
+    });
+
+    it("returns 422 INSUFFICIENT_GENERAL_STOCK when the general stock has no units of that lot", async () => {
+      const response = await postAssign(
+        branchId,
+        validPayload({ quantity: 5, expirationDate: "2028-01-31T00:00:00.000Z" }),
+        tokens.SUPERADMIN,
+      ).expect(422);
+
+      expect(errorOf(response.body).code).toBe("INSUFFICIENT_GENERAL_STOCK");
+      const lots = await prisma!.branchInventory.count({ where: { branchId, productId } });
+      expect(lots).toBe(0);
+    });
+
     it("returns 404 BRANCH_NOT_FOUND when the branch does not exist", async () => {
       const response = await postAssign(
         randomUUID(),

@@ -200,6 +200,7 @@ describe("POST /api/v1/purchases/:purchaseId/receipts (e2e)", () => {
       });
       await prisma.purchase.deleteMany({ where: { id: { in: purchaseIds } } });
       if (productId) {
+        await prisma.generalStock.deleteMany({ where: { productId } });
         await prisma.product.deleteMany({ where: { id: productId } });
       }
       if (supplierId) {
@@ -236,7 +237,13 @@ describe("POST /api/v1/purchases/:purchaseId/receipts (e2e)", () => {
     const response = await postReceipt(
       pendingPurchaseId,
       {
-        items: [{ purchaseDetailId: pendingDetailId, receivedQuantity: 4 }],
+        items: [
+          {
+            purchaseDetailId: pendingDetailId,
+            receivedQuantity: 4,
+            expirationDate: "2027-06-30",
+          },
+        ],
       },
       tokens.SUPERADMIN,
     ).expect(201);
@@ -277,15 +284,30 @@ describe("POST /api/v1/purchases/:purchaseId/receipts (e2e)", () => {
       userId: actorIds[0],
       movementType: "ENTRY",
       quantity: 4,
+      expirationDate: new Date("2027-06-30T00:00:00.000Z"),
       purchaseId: pendingPurchaseId,
     });
+    expect(
+      await prisma.generalStock.findFirst({
+        where: {
+          productId,
+          expirationDate: new Date("2027-06-30T00:00:00.000Z"),
+        },
+      }),
+    ).toMatchObject({ quantity: 4 });
   });
 
   it("returns 409 when the purchase has already been fully received", async () => {
     const response = await postReceipt(
       receivedPurchaseId,
       {
-        items: [{ purchaseDetailId: receivedDetailId, receivedQuantity: 1 }],
+        items: [
+          {
+            purchaseDetailId: receivedDetailId,
+            receivedQuantity: 1,
+            expirationDate: "2027-06-30",
+          },
+        ],
       },
       tokens.SUPERADMIN,
     ).expect(409);
@@ -302,7 +324,13 @@ describe("POST /api/v1/purchases/:purchaseId/receipts (e2e)", () => {
     const response = await postReceipt(
       randomUUID(),
       {
-        items: [{ purchaseDetailId: randomUUID(), receivedQuantity: 1 }],
+        items: [
+          {
+            purchaseDetailId: randomUUID(),
+            receivedQuantity: 1,
+            expirationDate: "2027-06-30",
+          },
+        ],
       },
       tokens.SUPERADMIN,
     ).expect(404);
@@ -315,7 +343,13 @@ describe("POST /api/v1/purchases/:purchaseId/receipts (e2e)", () => {
       where: { purchaseId: pendingPurchaseId },
     });
     await postReceipt(pendingPurchaseId, {
-      items: [{ purchaseDetailId: pendingDetailId, receivedQuantity: 4 }],
+      items: [
+        {
+          purchaseDetailId: pendingDetailId,
+          receivedQuantity: 4,
+          expirationDate: "2027-06-30",
+        },
+      ],
     }).expect(401);
 
     expect(
@@ -332,7 +366,13 @@ describe("POST /api/v1/purchases/:purchaseId/receipts (e2e)", () => {
     const response = await postReceipt(
       pendingPurchaseId,
       {
-        items: [{ purchaseDetailId: pendingDetailId, receivedQuantity: 4 }],
+        items: [
+          {
+            purchaseDetailId: pendingDetailId,
+            receivedQuantity: 4,
+            expirationDate: "2027-06-30",
+          },
+        ],
       },
       tokens.BRANCH_ASSISTANT,
     ).expect(403);

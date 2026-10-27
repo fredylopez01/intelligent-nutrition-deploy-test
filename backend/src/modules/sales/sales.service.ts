@@ -13,6 +13,8 @@ import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUse
 import { CreateSaleDto } from "./dto/create-sale.dto.js";
 import { ListSalesQueryDto } from "./dto/list-sales-query.dto.js";
 import { ReverseSaleDto } from "./dto/reverse-sale.dto.js";
+import { LowStockService } from "../notifications/low-stock.service.js";
+import { startOfTodayUtc } from "../../common/utils/expiration.util.js";
 
 const saleSelect = {
   id: true,
@@ -130,6 +132,7 @@ export class SalesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly lowStockService: LowStockService,
   ) {}
 
   async create(
@@ -355,8 +358,14 @@ export class SalesService {
 
       const lotsByProduct = new Map<
         string,
-        Array<{ id: string; quantity: number; minimumStock: number }>
+        Array<{
+          id: string;
+          quantity: number;
+          minimumStock: number;
+          expirationDate: Date;
+        }>
       >();
+      const today = startOfTodayUtc(now);
       const insufficientStock: Array<{
         productId: string;
         productName: string;
@@ -373,8 +382,17 @@ export class SalesService {
         `;
 
         const lots = await tx.branchInventory.findMany({
-          where: { branchId, productId: item.productId },
-          select: { id: true, quantity: true, minimumStock: true },
+          where: {
+            branchId,
+            productId: item.productId,
+            expirationDate: { gte: today },
+          },
+          select: {
+            id: true,
+            quantity: true,
+            minimumStock: true,
+            expirationDate: true,
+          },
           orderBy: { expirationDate: "asc" },
         });
 
@@ -399,6 +417,12 @@ export class SalesService {
           details: { items: insufficientStock },
         });
       }
+
+      const stockBefore = await this.lowStockService.levels(
+        tx,
+        branchId,
+        productIds,
+      );
 
       const saleNumber = await this.generateSaleNumber(tx, branchId, now);
 
@@ -445,20 +469,21 @@ export class SalesService {
             data: { quantity: { decrement: taken } },
           });
 
+          await tx.inventoryMovement.create({
+            data: {
+              productId: item.productId,
+              branchId,
+              originBranchId: null,
+              userId: currentUser.id,
+              movementType: "EXIT",
+              quantity: taken,
+              expirationDate: lot.expirationDate,
+              saleId: sale.id,
+            },
+          });
+
           remainingToDiscount -= taken;
         }
-
-        await tx.inventoryMovement.create({
-          data: {
-            productId: item.productId,
-            branchId,
-            originBranchId: null,
-            userId: currentUser.id,
-            movementType: "EXIT",
-            quantity: item.quantity,
-            saleId: sale.id,
-          },
-        });
 
         const lots = lotsByProduct.get(item.productId) ?? [];
         const availableQuantity =
@@ -497,6 +522,8 @@ export class SalesService {
         },
         tx,
       );
+
+      await this.lowStockService.notifyCrossings(tx, branchId, stockBefore);
 
       return formatSaleResponse(sale);
     });
@@ -737,6 +764,21 @@ export class SalesService {
         });
       }
 
+      const saleProductIds = sale.details.map((detail) => detail.productId);
+      const stockBefore = await this.lowStockService.levels(
+        tx,
+        sale.branchId,
+        saleProductIds,
+      );
+      const soldLots = await tx.inventoryMovement.findMany({
+        where: {
+          saleId: sale.id,
+          movementType: "EXIT",
+          expirationDate: { not: null },
+        },
+        select: { productId: true, quantity: true, expirationDate: true },
+      });
+
       for (const detail of sale.details) {
         await tx.$queryRaw`
           SELECT id FROM branch_inventory
@@ -750,7 +792,12 @@ export class SalesService {
             branchId: sale.branchId,
             productId: detail.productId,
           },
-          select: { id: true, quantity: true, expirationDate: true },
+          select: {
+            id: true,
+            quantity: true,
+            minimumStock: true,
+            expirationDate: true,
+          },
           orderBy: { expirationDate: "asc" },
         });
 
@@ -761,25 +808,65 @@ export class SalesService {
           });
         }
 
-        const targetLot = lots[0];
+        const productLots = soldLots.filter(
+          (movement) => movement.productId === detail.productId,
+        );
+        const restorations =
+          productLots.length > 0
+            ? productLots.map((movement) => ({
+                expirationDate: movement.expirationDate as Date,
+                quantity: movement.quantity,
+              }))
+            : [
+                {
+                  expirationDate: lots[0].expirationDate,
+                  quantity: detail.quantity,
+                },
+              ];
+        const minimumStock = lots.reduce(
+          (max, lot) => Math.max(max, lot.minimumStock),
+          0,
+        );
 
-        await tx.branchInventory.update({
-          where: { id: targetLot.id },
-          data: { quantity: { increment: detail.quantity } },
-        });
-        await tx.inventoryMovement.create({
-          data: {
-            productId: detail.productId,
-            branchId: sale.branchId,
-            originBranchId: null,
-            userId: currentUser.id,
-            movementType: "ENTRY",
-            quantity: detail.quantity,
-            observation: `Reversal of sale ${sale.saleNumber}: ${reason}`,
-            saleId: sale.id,
-            purchaseId: null,
-          },
-        });
+        for (const restoration of restorations) {
+          const targetLot = lots.find(
+            (lot) =>
+              lot.expirationDate.getTime() ===
+              restoration.expirationDate.getTime(),
+          );
+
+          if (targetLot) {
+            await tx.branchInventory.update({
+              where: { id: targetLot.id },
+              data: { quantity: { increment: restoration.quantity } },
+            });
+          } else {
+            await tx.branchInventory.create({
+              data: {
+                branchId: sale.branchId,
+                productId: detail.productId,
+                quantity: restoration.quantity,
+                minimumStock,
+                expirationDate: restoration.expirationDate,
+              },
+            });
+          }
+
+          await tx.inventoryMovement.create({
+            data: {
+              productId: detail.productId,
+              branchId: sale.branchId,
+              originBranchId: null,
+              userId: currentUser.id,
+              movementType: "ENTRY",
+              quantity: restoration.quantity,
+              expirationDate: restoration.expirationDate,
+              observation: `Reversal of sale ${sale.saleNumber}: ${reason}`,
+              saleId: sale.id,
+              purchaseId: null,
+            },
+          });
+        }
       }
 
       await tx.sale.update({
@@ -814,6 +901,12 @@ export class SalesService {
         },
         tx,
       );
+      await this.lowStockService.notifyCrossings(
+        tx,
+        sale.branchId,
+        stockBefore,
+      );
+
       const updatedSale = await tx.sale.findUnique({
         where: { id: sale.id },
         select: saleSelect,
