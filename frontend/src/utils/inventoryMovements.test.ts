@@ -138,6 +138,12 @@ describe('api errors', () => {
     ).toEqual({ field: 'quantity', message: 'El stock general solo tiene 2 g de este lote.' })
   })
 
+  it('points a destination without the product to the destination field', () => {
+    expect(
+      movementFieldError(new ApiError('No', 404, {}, 'PRODUCT_NOT_ASSIGNED_IN_DESTINATION'))?.field,
+    ).toBe('branchId')
+  })
+
   it('explains a closed day', () => {
     expect(
       resolveMovementError(new ApiError('Closed', 422, {}, 'INVENTORY_CLOSED'), 'fallback'),

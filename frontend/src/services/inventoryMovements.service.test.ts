@@ -51,4 +51,20 @@ describe('inventoryMovementsService', () => {
 
     expect(http.post).toHaveBeenCalledWith('/inventory-movements', payload, { token: 'token' })
   })
+
+  it('registers a transfer', async () => {
+    vi.mocked(http.post).mockResolvedValue({})
+    const payload = {
+      originBranchId: 'branch-centro',
+      branchId: 'branch-norte',
+      productId: 'product-whey',
+      quantity: 2,
+    }
+
+    await inventoryMovementsService.transfer(payload, 'token')
+
+    expect(http.post).toHaveBeenCalledWith('/inventory-movements/transfers', payload, {
+      token: 'token',
+    })
+  })
 })

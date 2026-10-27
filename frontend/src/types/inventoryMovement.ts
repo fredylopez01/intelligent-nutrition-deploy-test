@@ -51,3 +51,12 @@ export interface CreateMovementPayload {
   expirationDate?: string
   observation?: string
 }
+
+export interface CreateTransferPayload {
+  originBranchId: string
+  branchId: string
+  productId: string
+  quantity: number
+  expirationDate?: string
+  observation?: string
+}
