@@ -49,4 +49,16 @@ describe('salesService', () => {
 
     expect(http.get).toHaveBeenCalledWith('/sales/sale-1', { token: 'token' })
   })
+
+  it('reverses a sale with its reason', async () => {
+    vi.mocked(http.post).mockResolvedValue({})
+
+    await salesService.reverse('sale-1', 'El cliente pidió otro sabor', 'token')
+
+    expect(http.post).toHaveBeenCalledWith(
+      '/sales/sale-1/reverse',
+      { reason: 'El cliente pidió otro sabor' },
+      { token: 'token' },
+    )
+  })
 })

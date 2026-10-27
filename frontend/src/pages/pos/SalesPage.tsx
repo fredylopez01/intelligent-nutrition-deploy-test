@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import { ReverseSaleForm } from '../../components/sales/ReverseSaleForm'
 import { SaleDetail } from '../../components/sales/SaleDetail'
 import { SalesTable } from '../../components/sales/SalesTable'
 import { Alert } from '../../components/ui/Alert'
@@ -18,7 +19,9 @@ import { useSales } from '../../hooks/useSales'
 import { AppLayout } from '../../layouts/AppLayout'
 import { salesService } from '../../services/sales.service'
 import type { Sale, SaleStatus, SaleSummary } from '../../types/sale'
-import { SALE_STATUS_LABELS, resolveSaleError } from '../../utils/sales'
+import { hasRole } from '../../utils/categories'
+import { formatPrice } from '../../utils/products'
+import { SALE_REVERSE_ROLES, SALE_STATUS_LABELS, resolveSaleError } from '../../utils/sales'
 
 import '../inventory/InventoryPage.css'
 import '../inventory/MovementsPage.css'
@@ -31,6 +34,7 @@ const LIMIT_OPTIONS = [20, 50, 100]
 export function SalesPage() {
   const { user } = useAuth()
   const isSuperadmin = user?.role.name === 'SUPERADMIN'
+  const canReverse = hasRole(SALE_REVERSE_ROLES, user?.role.name)
   const branchOptions = useInventoryBranches()
   const [, setSearchParams] = useSearchParams()
   const { search, filters, params, limitOptions, setPage, setLimit, applySearch, setFilter } =
@@ -54,6 +58,7 @@ export function SalesPage() {
   )
 
   const [viewing, setViewing] = useState<SaleSummary | null>(null)
+  const [feedback, setFeedback] = useState<string | null>(null)
 
   const updateFilters = (changes: Record<string, string | null>) =>
     setSearchParams(
@@ -72,6 +77,14 @@ export function SalesPage() {
   const handleSearch = (term: string) => {
     if (term === search) refetch()
     else applySearch(term)
+  }
+
+  const handleReversed = (sale: Sale) => {
+    setViewing(null)
+    setFeedback(
+      `La venta ${sale.saleNumber} quedó reversada y sus unidades volvieron al inventario de ${sale.branch.name}.`,
+    )
+    refetch()
   }
 
   const renderList = () => {
@@ -212,6 +225,12 @@ export function SalesPage() {
         <ReloadButton onReload={refetch} loading={status === 'loading'} />
       </div>
 
+      {feedback && (
+        <div className="inventory-page__feedback">
+          <Alert tone="success">{feedback}</Alert>
+        </div>
+      )}
+
       <div className="inventory-page__card">{renderList()}</div>
 
       <div className="inventory-page__footer">
@@ -235,7 +254,14 @@ export function SalesPage() {
         size="wide"
         onClose={() => setViewing(null)}
       >
-        {viewing && <SaleDialog summary={viewing} onClose={() => setViewing(null)} />}
+        {viewing && (
+          <SaleDialog
+            summary={viewing}
+            canReverse={canReverse}
+            onReversed={handleReversed}
+            onClose={() => setViewing(null)}
+          />
+        )}
       </Modal>
     </AppLayout>
   )
@@ -243,12 +269,15 @@ export function SalesPage() {
 
 interface SaleDialogProps {
   summary: SaleSummary
+  canReverse: boolean
+  onReversed: (sale: Sale) => void
   onClose: () => void
 }
 
-function SaleDialog({ summary, onClose }: SaleDialogProps) {
+function SaleDialog({ summary, canReverse, onReversed, onClose }: SaleDialogProps) {
   const { token } = useAuth()
   const [result, setResult] = useState<{ sale: Sale | null; error: string | null } | null>(null)
+  const [reversing, setReversing] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -279,6 +308,15 @@ function SaleDialog({ summary, onClose }: SaleDialogProps) {
   if (result.error || !result.sale) {
     return <Alert tone="error">{result.error}</Alert>
   }
+  if (reversing) {
+    return (
+      <ReverseSaleForm
+        sale={result.sale}
+        onReversed={onReversed}
+        onCancel={() => setReversing(false)}
+      />
+    )
+  }
   return (
     <div className="sale-detail">
       <SaleDetail sale={result.sale} />
@@ -286,6 +324,11 @@ function SaleDialog({ summary, onClose }: SaleDialogProps) {
         <Button variant="outline" onClick={onClose}>
           Cerrar
         </Button>
+        {canReverse && result.sale.status === 'COMPLETED' && (
+          <Button variant="danger" onClick={() => setReversing(true)}>
+            Reversar por {formatPrice(result.sale.total)}
+          </Button>
+        )}
       </div>
     </div>
   )
