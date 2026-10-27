@@ -22,6 +22,11 @@ export interface InventoryMovement {
   movementAt: string
 }
 
+export interface RegisteredMovement extends InventoryMovement {
+  resultingQuantity: number
+  originResultingQuantity?: number
+}
+
 export interface MovementsListParams {
   page?: number
   limit?: number
@@ -36,4 +41,13 @@ export interface MovementsListParams {
 export interface MovementsListResponse {
   data: InventoryMovement[]
   meta: PaginationMeta
+}
+
+export interface CreateMovementPayload {
+  branchId: string
+  productId: string
+  movementType: 'ENTRY' | 'EXIT'
+  quantity: number
+  expirationDate?: string
+  observation?: string
 }

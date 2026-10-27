@@ -1,7 +1,19 @@
+import { z } from 'zod'
+
 import { ApiError } from '../services/http'
+import type { RoleName } from '../types/auth'
+import type { InventoryLot } from '../types/inventory'
 import type { InventoryMovement, MovementType } from '../types/inventoryMovement'
 
-import { formatQuantity } from './inventory'
+import { expirationState, formatExpirationDate, formatQuantity } from './inventory'
+
+export const MOVEMENT_REGISTER_ROLES: RoleName[] = [
+  'SUPERADMIN',
+  'BRANCH_LEADER',
+  'BRANCH_ASSISTANT',
+]
+
+export const MOVEMENT_TEXT_MAX_LENGTH = 500
 
 export const MOVEMENT_TYPE_OPTIONS: { value: MovementType; label: string }[] = [
   { value: 'ENTRY', label: 'Entradas' },
@@ -101,16 +113,124 @@ export function formatMovementDate(isoDate: string): string {
   return `${part('day')} ${part('month').replace('.', '')} ${part('year')}, ${part('hour')}:${part('minute')} ${period}`
 }
 
+export function lotLabel(lot: { expirationDate: string; quantity: number }, unit: string): string {
+  const { state } = expirationState(lot.expirationDate)
+  const base = `Vence ${formatExpirationDate(lot.expirationDate)} · ${formatQuantity(lot.quantity, unit)}`
+  return state === 'expired' ? `${base} · vencido` : base
+}
+
+export function lotDate(lot: InventoryLot): string {
+  return lot.expirationDate.slice(0, 10)
+}
+
+export function isCurrentLot(lot: { expirationDate: string }): boolean {
+  return expirationState(lot.expirationDate).state !== 'expired'
+}
+
+export function fefoLot<T extends { expirationDate: string; quantity: number }>(
+  lots: T[],
+): T | undefined {
+  return [...lots]
+    .sort((a, b) => a.expirationDate.localeCompare(b.expirationDate))
+    .find((lot) => lot.quantity > 0 && isCurrentLot(lot))
+}
+
+const QUANTITY_PATTERN = /^[1-9]\d{0,8}$/
+
+const quantitySchema = z
+  .string()
+  .trim()
+  .min(1, 'Escribe la cantidad.')
+  .regex(
+    QUANTITY_PATTERN,
+    'La cantidad debe ser un número entero mayor que 0, sin puntos ni comas.',
+  )
+
+const lotSchema = z.string().min(1, 'Elige el lote.')
+
+export const movementSchema = z
+  .object({
+    movementType: z.enum(['ENTRY', 'EXIT']),
+    quantity: quantitySchema,
+    expirationDate: lotSchema,
+    observation: z
+      .string()
+      .trim()
+      .max(MOVEMENT_TEXT_MAX_LENGTH, 'La observación no puede superar 500 caracteres.'),
+  })
+  .superRefine((values, context) => {
+    if (values.movementType === 'EXIT' && values.observation.length < 3) {
+      context.addIssue({
+        code: 'custom',
+        path: ['observation'],
+        message: 'Escribe el motivo de la salida, por ejemplo "Producto dañado".',
+      })
+    }
+  })
+
+export type MovementValues = z.infer<typeof movementSchema>
+
+export type MovementErrorField = 'quantity' | 'expirationDate' | 'branchId'
+
+export function movementFieldError(
+  error: unknown,
+  unit = 'und',
+): { field: MovementErrorField; message: string } | null {
+  if (!(error instanceof ApiError)) return null
+  const details = error.details as { available?: number } | undefined
+  switch (error.code) {
+    case 'INSUFFICIENT_STOCK':
+      return {
+        field: 'quantity',
+        message:
+          details?.available !== undefined
+            ? `El lote solo tiene ${formatQuantity(details.available, unit)} en la sede.`
+            : 'La sede no tiene unidades suficientes de este lote.',
+      }
+    case 'INSUFFICIENT_GENERAL_STOCK':
+      return {
+        field: 'quantity',
+        message:
+          details?.available !== undefined
+            ? `El stock general solo tiene ${formatQuantity(details.available, unit)} de este lote.`
+            : 'El stock general no tiene unidades suficientes de este lote.',
+      }
+    case 'LOT_EXPIRED':
+      return {
+        field: 'expirationDate',
+        message: 'Ese lote está vencido: solo puede salir de la sede como salida o ajuste.',
+      }
+    case 'LOT_NOT_FOUND':
+      return {
+        field: 'expirationDate',
+        message: 'La sede ya no tiene ese lote. Recarga los lotes y elige otro.',
+      }
+  }
+  return null
+}
+
 export function resolveMovementError(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) return fallback
   switch (error.code) {
+    case 'INVENTORY_CLOSED':
+      return 'El inventario de la sede ya se cerró hoy: no se pueden registrar más movimientos hasta mañana. Si hay una diferencia, el superadmin puede registrar un ajuste.'
+    case 'BRANCH_INACTIVE':
+      return 'La sede está inactiva: su inventario no se puede modificar.'
     case 'BRANCH_NOT_FOUND':
       return 'La sede ya no existe. Recarga la página.'
     case 'BRANCH_SCOPE_VIOLATION':
       return 'No tienes acceso a esta sede.'
     case 'BRANCH_REQUIRED':
       return 'Elige una sede para ver sus movimientos.'
+    case 'PRODUCT_NOT_ASSIGNED':
+      return 'El producto ya no está asignado a la sede. Recarga y elige otro producto.'
+    case 'PRODUCT_INACTIVE':
+      return 'El producto está inactivo y no admite movimientos.'
+    case 'PRODUCT_NOT_FOUND':
+      return 'El producto ya no existe. Recarga y elige otro producto.'
   }
+  const fieldError = movementFieldError(error)
+  if (fieldError) return fieldError.message
   if (error.status === 403) return 'No tienes permiso para realizar esta acción.'
   if (error.status === 400) return 'Revisa los datos: hay un valor que el servidor no aceptó.'
   return fallback

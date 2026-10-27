@@ -7,67 +7,115 @@ import {
   jest,
 } from "@jest/globals";
 import { ValidationPipe } from "@nestjs/common";
-import { Test, type TestingModule } from "@nestjs/testing";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CreateTransferDto } from "./dto/create-transfer.dto.js";
+import { InventoryMovementsService } from "./inventory-movements.service.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
-type TransactionCallback = (client: typeof transactionMock) => Promise<unknown>;
 
 const originBranchId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const destBranchId   = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const productId      = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-const userId         = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
-const movementId     = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
-const originLotId    = "ffffffff-ffff-4fff-8fff-ffffffffffff";
-const destLotId      = "11111111-1111-4111-8111-111111111111";
+const destinationBranchId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+const productId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const userId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
-const EXP_DATE = "2027-12-31";
-const expDate  = new Date(EXP_DATE);
+const day = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
-const originBranchRecord = { id: originBranchId, name: "Sede Origen",  active: true };
-const destBranchRecord   = { id: destBranchId,   name: "Sede Destino", active: true };
-const productRecord = {
-  id: productId,
-  name: "Leche Entera",
-  referenceCode: "LECHE-001",
-  active: true,
-  unitOfMeasure: { abreviation: "L" },
-};
-
-const transactionMock = {
-  branch: {
-    findUnique: jest.fn<AsyncMock>(),
-  },
-  product: {
-    findMany: jest.fn<AsyncMock>(),
-  },
+const tx = {
+  branch: { findUnique: jest.fn<AsyncMock>() },
+  product: { findUnique: jest.fn<AsyncMock>() },
+  inventoryClosure: { findUnique: jest.fn<AsyncMock>() },
   branchInventory: {
-    findUnique: jest.fn<AsyncMock>(),
-    update:     jest.fn<AsyncMock>(),
-    create:     jest.fn<AsyncMock>(),
-  },
-  inventoryMovement: {
+    findMany: jest.fn<AsyncMock>(),
+    update: jest.fn<AsyncMock>(),
     create: jest.fn<AsyncMock>(),
+    aggregate: jest.fn<AsyncMock>(),
   },
+  generalStock: { findFirst: jest.fn<AsyncMock>() },
+  inventoryMovement: { create: jest.fn<AsyncMock>() },
   $queryRaw: jest.fn<AsyncMock>(),
 };
-
-const prismaMock = {
-  $transaction: jest.fn<(op: TransactionCallback) => Promise<unknown>>(),
+const prisma = {
+  $transaction:
+    jest.fn<
+      (operation: (client: typeof tx) => Promise<unknown>) => Promise<unknown>
+    >(),
+};
+const audit = { createAuditLog: jest.fn<AsyncMock>() };
+const lowStock = {
+  levels: jest.fn<AsyncMock>(),
+  notifyCrossings: jest.fn<AsyncMock>(),
+};
+const generalStock = {
+  consume: jest.fn<AsyncMock>(),
+  increase: jest.fn<AsyncMock>(),
 };
 
-const auditMock = {
-  createAuditLog: jest.fn<AsyncMock>(),
+const superadmin: AuthenticatedUser = {
+  id: userId,
+  active: true,
+  role: { name: "SUPERADMIN" },
+};
+const leaderAtOrigin: AuthenticatedUser = {
+  id: userId,
+  active: true,
+  role: { name: "BRANCH_LEADER" },
+  branches: [{ id: originBranchId, name: "Centro" }],
+};
+const leaderAtDestination: AuthenticatedUser = {
+  id: userId,
+  active: true,
+  role: { name: "BRANCH_LEADER" },
+  branches: [{ id: destinationBranchId, name: "Norte" }],
 };
 
-jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
-  PrismaService: jest.fn().mockImplementation(() => prismaMock),
-}));
+const originLots = [
+  {
+    id: "origin-expired",
+    quantity: 6,
+    minimumStock: 4,
+    expirationDate: day("2026-10-20"),
+  },
+  {
+    id: "origin-fefo",
+    quantity: 12,
+    minimumStock: 4,
+    expirationDate: day("2027-01-31"),
+  },
+  {
+    id: "origin-late",
+    quantity: 30,
+    minimumStock: 4,
+    expirationDate: day("2027-06-30"),
+  },
+];
+const destinationLots = [
+  {
+    id: "destination-late",
+    quantity: 2,
+    minimumStock: 9,
+    expirationDate: day("2027-06-30"),
+  },
+];
 
-const { PrismaService }             = await import("../../database/prisma/prisma.service.js");
-const { AuditService }              = await import("../audit/audit.service.js");
-const { InventoryMovementsService } = await import("./inventory-movements.service.js");
+function lotsFor(arg: unknown) {
+  const { where } = arg as { where: { branchId: string } };
+  return Promise.resolve(
+    where.branchId === originBranchId ? originLots : destinationLots,
+  );
+}
+
+function transfer(
+  overrides: Partial<CreateTransferDto> = {},
+): CreateTransferDto {
+  return {
+    originBranchId,
+    branchId: destinationBranchId,
+    productId,
+    quantity: 5,
+    observation: "Reposición sede Norte",
+    ...overrides,
+  };
+}
 
 const validationPipe = new ValidationPipe({
   whitelist: true,
@@ -76,28 +124,7 @@ const validationPipe = new ValidationPipe({
   transformOptions: { enableImplicitConversion: false },
 });
 
-const superadminUser: AuthenticatedUser = {
-  id: userId,
-  active: true,
-  role: { name: "SUPERADMIN" },
-};
-
-const leaderUser: AuthenticatedUser = {
-  id: userId,
-  active: true,
-  role: { name: "BRANCH_LEADER" },
-  branches: [{ id: originBranchId, name: "Sede Origen" }],
-};
-
-function validDto(): CreateTransferDto {
-  return {
-    originBranchId,
-    destinationBranchId: destBranchId,
-    items: [{ productId, quantity: 10, expirationDate: EXP_DATE }],
-  } as CreateTransferDto;
-}
-
-async function validateBody(body: Record<string, unknown>) {
+function validateBody(body: Record<string, unknown>) {
   return validationPipe.transform(body, {
     type: "body",
     metatype: CreateTransferDto,
@@ -105,431 +132,321 @@ async function validateBody(body: Record<string, unknown>) {
 }
 
 describe("InventoryMovementsService.createTransfer", () => {
-  let service: InstanceType<typeof InventoryMovementsService>;
-  let testingModule: TestingModule;
+  let service: InventoryMovementsService;
 
-  beforeEach(async () => {
-    jest.clearAllMocks();
-
-    prismaMock.$transaction.mockImplementation((op) => op(transactionMock));
-
-    transactionMock.branch.findUnique.mockImplementation(({ where }: any) => {
-      if (where.id === originBranchId) return Promise.resolve(originBranchRecord);
-      if (where.id === destBranchId)   return Promise.resolve(destBranchRecord);
-      return Promise.resolve(null);
+  beforeEach(() => {
+    jest.useFakeTimers({ now: new Date("2026-10-26T15:00:00.000Z") });
+    jest.resetAllMocks();
+    prisma.$transaction.mockImplementation((operation) => operation(tx));
+    tx.branch.findUnique.mockImplementation((arg) => {
+      const id = (arg as { where: { id: string } }).where.id;
+      return Promise.resolve({
+        id,
+        name: id === originBranchId ? "Centro" : "Norte",
+        active: true,
+      });
     });
-
-    transactionMock.product.findMany.mockResolvedValue([productRecord]);
-    transactionMock.$queryRaw.mockResolvedValue([]);
-
-    transactionMock.branchInventory.findUnique.mockImplementation(({ where }: any) => {
-      const { branchId } = where.branchId_productId_expirationDate;
-      if (branchId === originBranchId) return Promise.resolve({ id: originLotId, quantity: 50 });
-      return Promise.resolve(null);
+    tx.product.findUnique.mockResolvedValue({ id: productId, active: true });
+    tx.inventoryClosure.findUnique.mockResolvedValue(null);
+    tx.branchInventory.findMany.mockImplementation(lotsFor);
+    tx.branchInventory.aggregate.mockImplementation((arg) => {
+      const { where } = arg as { where: { branchId: string } };
+      return Promise.resolve({
+        _sum: { quantity: where.branchId === originBranchId ? 43 : 7 },
+      });
     });
-
-    transactionMock.branchInventory.update.mockResolvedValue({});
-    transactionMock.branchInventory.create.mockResolvedValue({});
-    transactionMock.inventoryMovement.create.mockResolvedValue({ id: movementId });
-    auditMock.createAuditLog.mockResolvedValue({});
-
-    testingModule = await Test.createTestingModule({
-      providers: [
-        InventoryMovementsService,
-        { provide: PrismaService, useValue: prismaMock },
-        { provide: AuditService, useValue: auditMock },
-      ],
-    }).compile();
-    service = testingModule.get(InventoryMovementsService);
+    tx.inventoryMovement.create.mockImplementation((arg) => {
+      const { data } = arg as { data: Record<string, unknown> };
+      return Promise.resolve({
+        id: "movement-id",
+        movementType: data.movementType,
+        quantity: data.quantity,
+        expirationDate: data.expirationDate,
+        movementAt: new Date("2026-10-26T15:00:00.000Z"),
+        observation: data.observation,
+        saleId: null,
+        purchaseId: null,
+        product: {
+          id: productId,
+          name: "Creatina 300 g",
+          referenceCode: "CREA-300",
+          unitOfMeasure: { abreviation: "und" },
+        },
+        branch: { id: destinationBranchId, name: "Norte" },
+        originBranch: { id: originBranchId, name: "Centro" },
+        user: {
+          personId: userId,
+          person: { firstName: "Laura", lastName: "Pérez" },
+        },
+      });
+    });
+    lowStock.levels.mockResolvedValue(new Map());
+    service = new InventoryMovementsService(
+      prisma as never,
+      audit as never,
+      lowStock as never,
+      generalStock as never,
+    );
   });
 
-  afterEach(async () => {
-    await testingModule.close();
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   describe("authorization", () => {
     it("allows SUPERADMIN to transfer between any branches", async () => {
       await expect(
-        service.createTransfer(validDto(), superadminUser),
+        service.createTransfer(transfer(), superadmin),
       ).resolves.toBeDefined();
     });
 
-    it("allows DEV to transfer between any branches", async () => {
-      const dev: AuthenticatedUser = { id: userId, active: true, role: { name: "DEV" } };
-
+    it("allows a BRANCH_LEADER of the origin branch", async () => {
       await expect(
-        service.createTransfer(validDto(), dev),
+        service.createTransfer(transfer(), leaderAtOrigin),
       ).resolves.toBeDefined();
     });
 
-    it("allows BRANCH_LEADER assigned to the origin branch", async () => {
+    it("rejects a BRANCH_LEADER that only belongs to the destination", async () => {
       await expect(
-        service.createTransfer(validDto(), leaderUser),
-      ).resolves.toBeDefined();
-    });
-
-    it("rejects BRANCH_LEADER not assigned to the origin branch", async () => {
-      const leader: AuthenticatedUser = {
-        id: userId,
-        active: true,
-        role: { name: "BRANCH_LEADER" },
-        branches: [{ id: destBranchId, name: "Sede Destino" }],
-      };
-
-      await expect(
-        service.createTransfer(validDto(), leader),
-      ).rejects.toMatchObject({ response: { code: "FORBIDDEN_BRANCH" } });
-
-      expect(prismaMock.$transaction).not.toHaveBeenCalled();
-    });
-
-    it("rejects BRANCH_ASSISTANT without access to the origin branch", async () => {
-      const assistant: AuthenticatedUser = {
-        id: userId,
-        active: true,
-        role: { name: "BRANCH_ASSISTANT" },
-        branches: [],
-      };
-
-      await expect(
-        service.createTransfer(validDto(), assistant),
-      ).rejects.toMatchObject({ response: { code: "FORBIDDEN_BRANCH" } });
-
-      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+        service.createTransfer(transfer(), leaderAtDestination),
+      ).rejects.toMatchObject({ response: { code: "BRANCH_SCOPE_VIOLATION" } });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 
-  describe("pre-transaction validation", () => {
-    it("rejects when origin and destination are the same branch", async () => {
-      const dto: CreateTransferDto = {
-        ...validDto(),
-        destinationBranchId: originBranchId,
-      };
-
+  describe("validation", () => {
+    it("rejects the same branch as origin and destination", async () => {
       await expect(
-        service.createTransfer(dto, superadminUser),
-      ).rejects.toMatchObject({ response: { code: "SAME_BRANCH" } });
-
-      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+        service.createTransfer(
+          transfer({ branchId: originBranchId }),
+          superadmin,
+        ),
+      ).rejects.toMatchObject({ response: { code: "SAME_BRANCH_TRANSFER" } });
     });
 
-    it("rejects when items contain duplicate product and expiration date", async () => {
-      const dto: CreateTransferDto = {
-        ...validDto(),
-        items: [
-          { productId, quantity: 5,  expirationDate: EXP_DATE },
-          { productId, quantity: 10, expirationDate: EXP_DATE },
-        ],
-      };
-
-      await expect(
-        service.createTransfer(dto, superadminUser),
-      ).rejects.toMatchObject({ response: { code: "DUPLICATED_ITEM" } });
-
-      expect(prismaMock.$transaction).not.toHaveBeenCalled();
-    });
-
-    it("allows two items with the same product but different expiration dates", async () => {
-      const dto: CreateTransferDto = {
-        ...validDto(),
-        items: [
-          { productId, quantity: 5, expirationDate: "2027-12-31" },
-          { productId, quantity: 5, expirationDate: "2028-06-30" },
-        ],
-      };
-
-      await expect(
-        service.createTransfer(dto, superadminUser),
-      ).resolves.toBeDefined();
-    });
-  });
-
-  describe("branch validation", () => {
-    it("rejects when the origin branch does not exist", async () => {
-      transactionMock.branch.findUnique.mockImplementation(({ where }: any) => {
-        if (where.id === originBranchId) return Promise.resolve(null);
-        return Promise.resolve(destBranchRecord);
+    it.each([
+      ["origin", originBranchId],
+      ["destination", destinationBranchId],
+    ])("rejects an inactive %s branch", async (_label, inactiveId) => {
+      tx.branch.findUnique.mockImplementation((arg) => {
+        const id = (arg as { where: { id: string } }).where.id;
+        return Promise.resolve({ id, name: "Sede", active: id !== inactiveId });
       });
 
       await expect(
-        service.createTransfer(validDto(), superadminUser),
-      ).rejects.toMatchObject({ response: { code: "ORIGIN_BRANCH_NOT_FOUND" } });
-    });
-
-    it("rejects when the origin branch is inactive", async () => {
-      transactionMock.branch.findUnique.mockImplementation(({ where }: any) => {
-        if (where.id === originBranchId)
-          return Promise.resolve({ ...originBranchRecord, active: false });
-        return Promise.resolve(destBranchRecord);
-      });
-
-      await expect(
-        service.createTransfer(validDto(), superadminUser),
-      ).rejects.toMatchObject({ response: { code: "ORIGIN_BRANCH_INACTIVE" } });
-    });
-
-    it("rejects when the destination branch does not exist", async () => {
-      transactionMock.branch.findUnique.mockImplementation(({ where }: any) => {
-        if (where.id === destBranchId) return Promise.resolve(null);
-        return Promise.resolve(originBranchRecord);
-      });
-
-      await expect(
-        service.createTransfer(validDto(), superadminUser),
-      ).rejects.toMatchObject({ response: { code: "DESTINATION_BRANCH_NOT_FOUND" } });
-    });
-
-    it("rejects when the destination branch is inactive", async () => {
-      transactionMock.branch.findUnique.mockImplementation(({ where }: any) => {
-        if (where.id === destBranchId)
-          return Promise.resolve({ ...destBranchRecord, active: false });
-        return Promise.resolve(originBranchRecord);
-      });
-
-      await expect(
-        service.createTransfer(validDto(), superadminUser),
-      ).rejects.toMatchObject({ response: { code: "DESTINATION_BRANCH_INACTIVE" } });
-    });
-  });
-
-  describe("product validation", () => {
-    it("rejects when a product in the items list does not exist", async () => {
-      transactionMock.product.findMany.mockResolvedValue([]);
-
-      await expect(
-        service.createTransfer(validDto(), superadminUser),
-      ).rejects.toMatchObject({ response: { code: "PRODUCT_NOT_FOUND" } });
-
-      expect(transactionMock.branchInventory.findUnique).not.toHaveBeenCalled();
-    });
-
-    it("rejects when a product in the items list is inactive", async () => {
-      transactionMock.product.findMany.mockResolvedValue([
-        { ...productRecord, active: false },
-      ]);
-
-      await expect(
-        service.createTransfer(validDto(), superadminUser),
-      ).rejects.toMatchObject({ response: { code: "PRODUCT_INACTIVE" } });
-
-      expect(transactionMock.branchInventory.findUnique).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("stock and lot validation", () => {
-    it("rejects when the product lot is not found in the origin branch", async () => {
-      transactionMock.branchInventory.findUnique.mockResolvedValue(null);
-
-      await expect(
-        service.createTransfer(validDto(), superadminUser),
-      ).rejects.toMatchObject({ response: { code: "LOT_NOT_FOUND" } });
-
-      expect(transactionMock.branchInventory.update).not.toHaveBeenCalled();
-    });
-
-    it("rejects when the origin lot has insufficient stock", async () => {
-      transactionMock.branchInventory.findUnique.mockImplementation(({ where }: any) => {
-        const { branchId } = where.branchId_productId_expirationDate;
-        if (branchId === originBranchId)
-          return Promise.resolve({ id: originLotId, quantity: 5 }); // only 5, requesting 10
-        return Promise.resolve(null);
-      });
-
-      await expect(
-        service.createTransfer(validDto(), superadminUser),
-      ).rejects.toMatchObject({ response: { code: "INSUFFICIENT_STOCK" } });
-
-      expect(transactionMock.branchInventory.update).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("happy path", () => {
-    it("decrements the origin lot by the transferred quantity", async () => {
-      await service.createTransfer(validDto(), superadminUser);
-
-      expect(transactionMock.branchInventory.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: originLotId },
-          data:  { quantity: { decrement: 10 } },
-        }),
-      );
-    });
-
-    it("creates a new destination lot when none exists for that product and expiration date", async () => {
-      await service.createTransfer(validDto(), superadminUser);
-
-      expect(transactionMock.branchInventory.create).toHaveBeenCalledWith({
-        data: {
-          branchId:       destBranchId,
-          productId,
-          quantity:       10,
-          minimumStock:   0,
-          expirationDate: expDate,
+        service.createTransfer(transfer(), superadmin),
+      ).rejects.toMatchObject({
+        response: {
+          code: "BRANCH_INACTIVE",
+          details: { branchId: inactiveId },
         },
       });
     });
 
-    it("increments an existing destination lot instead of creating a new one", async () => {
-      transactionMock.branchInventory.findUnique.mockImplementation(({ where }: any) => {
-        const { branchId } = where.branchId_productId_expirationDate;
-        if (branchId === originBranchId) return Promise.resolve({ id: originLotId, quantity: 50 });
-        if (branchId === destBranchId)   return Promise.resolve({ id: destLotId });
-        return Promise.resolve(null);
+    it("rejects a branch that does not exist", async () => {
+      tx.branch.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.createTransfer(transfer(), superadmin),
+      ).rejects.toMatchObject({
+        response: { code: "BRANCH_NOT_FOUND" },
       });
-
-      await service.createTransfer(validDto(), superadminUser);
-
-      expect(transactionMock.branchInventory.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: destLotId },
-          data:  { quantity: { increment: 10 } },
-        }),
-      );
-      expect(transactionMock.branchInventory.create).not.toHaveBeenCalled();
     });
 
-    it("creates a TRANSFER inventory movement record for each item", async () => {
-      await service.createTransfer(validDto(), superadminUser);
+    it.each([
+      ["origin", originBranchId],
+      ["destination", destinationBranchId],
+    ])(
+      "rejects with INVENTORY_CLOSED when the %s branch closed today",
+      async (_label, closedId) => {
+        tx.inventoryClosure.findUnique.mockImplementation((arg) => {
+          const { where } = arg as {
+            where: { branchId_closureDate: { branchId: string } };
+          };
+          return Promise.resolve(
+            where.branchId_closureDate.branchId === closedId
+              ? { status: "CONFIRMED", locked: true }
+              : null,
+          );
+        });
 
-      expect(transactionMock.inventoryMovement.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
+        await expect(
+          service.createTransfer(transfer(), superadmin),
+        ).rejects.toMatchObject({
+          response: {
+            code: "INVENTORY_CLOSED",
+            details: { branchId: closedId },
+          },
+        });
+      },
+    );
+
+    it("rejects with PRODUCT_NOT_ASSIGNED when the origin has no lot", async () => {
+      tx.branchInventory.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.createTransfer(transfer(), superadmin),
+      ).rejects.toMatchObject({
+        response: { code: "PRODUCT_NOT_ASSIGNED" },
+      });
+    });
+
+    it("rejects with PRODUCT_NOT_ASSIGNED_IN_DESTINATION instead of creating the product there", async () => {
+      tx.branchInventory.findMany.mockImplementation((arg) => {
+        const { where } = arg as { where: { branchId: string } };
+        return Promise.resolve(
+          where.branchId === originBranchId ? originLots : [],
+        );
+      });
+
+      await expect(
+        service.createTransfer(transfer(), superadmin),
+      ).rejects.toMatchObject({
+        response: { code: "PRODUCT_NOT_ASSIGNED_IN_DESTINATION" },
+      });
+      expect(tx.branchInventory.create).not.toHaveBeenCalled();
+    });
+
+    it("does not transfer an expired lot", async () => {
+      await expect(
+        service.createTransfer(
+          transfer({ expirationDate: "2026-10-20" }),
+          superadmin,
+        ),
+      ).rejects.toMatchObject({ response: { code: "LOT_EXPIRED" } });
+      expect(tx.branchInventory.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects more units than the origin lot holds", async () => {
+      await expect(
+        service.createTransfer(transfer({ quantity: 13 }), superadmin),
+      ).rejects.toMatchObject({
+        response: {
+          code: "INSUFFICIENT_STOCK",
+          details: {
+            available: 12,
+            requested: 13,
+            expirationDate: "2027-01-31",
+          },
+        },
+      });
+    });
+  });
+
+  describe("happy path", () => {
+    it("moves the earliest current origin lot into a new destination lot that keeps the destination minimum", async () => {
+      await service.createTransfer(transfer(), superadmin);
+
+      expect(tx.branchInventory.update).toHaveBeenCalledWith({
+        where: { id: "origin-fefo" },
+        data: { quantity: { decrement: 5 } },
+      });
+      expect(tx.branchInventory.create).toHaveBeenCalledWith({
+        data: {
+          branchId: destinationBranchId,
           productId,
-          branchId:       destBranchId,
-          originBranchId,
-          userId,
-          movementType:   "TRANSFER",
-          quantity:       10,
-        }),
-        select: { id: true },
+          expirationDate: day("2027-01-31"),
+          quantity: 5,
+          minimumStock: 9,
+        },
       });
     });
 
-    it("records an audit log with action CREATE and entity INVENTORY_TRANSFER", async () => {
-      await service.createTransfer(validDto(), superadminUser, "127.0.0.1");
+    it("adds to the destination lot with the same expiration when it exists", async () => {
+      await service.createTransfer(
+        transfer({ expirationDate: "2027-06-30" }),
+        superadmin,
+      );
 
-      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId,
-          action:    "CREATE",
-          entity:    "INVENTORY_TRANSFER",
-          entityId:  movementId,
-          ipAddress: "127.0.0.1",
-        }),
-        transactionMock,
+      expect(tx.branchInventory.update).toHaveBeenCalledWith({
+        where: { id: "origin-late" },
+        data: { quantity: { decrement: 5 } },
+      });
+      expect(tx.branchInventory.update).toHaveBeenCalledWith({
+        where: { id: "destination-late" },
+        data: { quantity: { increment: 5 } },
+      });
+      expect(tx.branchInventory.create).not.toHaveBeenCalled();
+    });
+
+    it("creates a single TRANSFER movement with the lot", async () => {
+      await service.createTransfer(transfer(), superadmin);
+
+      expect(tx.inventoryMovement.create).toHaveBeenCalledTimes(1);
+      const [args] = tx.inventoryMovement.create.mock.calls[0] as [
+        { data: Record<string, unknown> },
+      ];
+      expect(args.data).toEqual({
+        productId,
+        branchId: destinationBranchId,
+        originBranchId,
+        userId,
+        movementType: "TRANSFER",
+        quantity: 5,
+        expirationDate: day("2027-01-31"),
+        observation: "Reposición sede Norte",
+      });
+    });
+
+    it("evaluates the low stock alert in the origin branch", async () => {
+      const before = new Map([[productId, { total: 48, minimum: 45 }]]);
+      lowStock.levels.mockResolvedValue(before);
+
+      await service.createTransfer(transfer(), superadmin);
+
+      expect(lowStock.levels).toHaveBeenCalledWith(tx, originBranchId, [
+        productId,
+      ]);
+      expect(lowStock.notifyCrossings).toHaveBeenCalledWith(
+        tx,
+        originBranchId,
+        before,
       );
     });
 
-    it("returns origin branch, destination branch and items in the response", async () => {
-      const result = (await service.createTransfer(validDto(), superadminUser)) as any;
+    it("returns the movement with both branches and their resulting quantities", async () => {
+      const result = await service.createTransfer(transfer(), superadmin);
 
       expect(result).toMatchObject({
-        originBranch:      { id: originBranchId, name: "Sede Origen"  },
-        destinationBranch: { id: destBranchId,   name: "Sede Destino" },
-        items: [
-          expect.objectContaining({
-            id:             movementId,
-            productId,
-            productName:    "Leche Entera",
-            referenceCode:  "LECHE-001",
-            unit:           "L",
-            quantity:       10,
-            expirationDate: EXP_DATE,
-            observation:    null,
-          }),
-        ],
+        movementType: "TRANSFER",
+        expirationDate: "2027-01-31",
+        branch: { id: destinationBranchId, name: "Norte" },
+        originBranch: { id: originBranchId, name: "Centro" },
+        resultingQuantity: 7,
+        originResultingQuantity: 43,
       });
     });
 
-    it("stores the item observation when provided", async () => {
-      const dto: CreateTransferDto = {
-        ...validDto(),
-        items: [{ productId, quantity: 10, expirationDate: EXP_DATE, observation: "Handle with care" }],
-      };
+    it("neither touches the general stock nor writes an audit log", async () => {
+      await service.createTransfer(transfer(), superadmin);
 
-      await service.createTransfer(dto, superadminUser);
-
-      expect(transactionMock.inventoryMovement.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ observation: "Handle with care" }),
-        }),
-      );
+      expect(generalStock.consume).not.toHaveBeenCalled();
+      expect(audit.createAuditLog).not.toHaveBeenCalled();
     });
   });
 
   describe("DTO validation", () => {
-    it("rejects when originBranchId is missing", async () => {
-      await expect(
-        validateBody({
-          destinationBranchId: destBranchId,
-          items: [{ productId, quantity: 5, expirationDate: EXP_DATE }],
-        }),
-      ).rejects.toThrow();
+    const valid = {
+      originBranchId,
+      branchId: destinationBranchId,
+      productId,
+      quantity: 5,
+    };
+
+    it("accepts a transfer without observation or lot", async () => {
+      await expect(validateBody(valid)).resolves.toBeDefined();
     });
 
-    it("rejects when destinationBranchId is missing", async () => {
-      await expect(
-        validateBody({
-          originBranchId,
-          items: [{ productId, quantity: 5, expirationDate: EXP_DATE }],
-        }),
-      ).rejects.toThrow();
-    });
-
-    it("rejects a non-UUID originBranchId", async () => {
-      await expect(
-        validateBody({
-          originBranchId:      "not-a-uuid",
-          destinationBranchId: destBranchId,
-          items: [{ productId, quantity: 5, expirationDate: EXP_DATE }],
-        }),
-      ).rejects.toThrow();
-    });
-
-    it("rejects an empty items array", async () => {
-      await expect(
-        validateBody({ originBranchId, destinationBranchId: destBranchId, items: [] }),
-      ).rejects.toThrow();
-    });
-
-    it("rejects when item quantity is zero", async () => {
-      await expect(
-        validateBody({
-          originBranchId,
-          destinationBranchId: destBranchId,
-          items: [{ productId, quantity: 0, expirationDate: EXP_DATE }],
-        }),
-      ).rejects.toThrow();
-    });
-
-    it("rejects when item quantity is negative", async () => {
-      await expect(
-        validateBody({
-          originBranchId,
-          destinationBranchId: destBranchId,
-          items: [{ productId, quantity: -5, expirationDate: EXP_DATE }],
-        }),
-      ).rejects.toThrow();
-    });
-
-    it("rejects an invalid expirationDate format", async () => {
-      await expect(
-        validateBody({
-          originBranchId,
-          destinationBranchId: destBranchId,
-          items: [{ productId, quantity: 5, expirationDate: "not-a-date" }],
-        }),
-      ).rejects.toThrow();
-    });
-
-    it("rejects unknown top-level fields", async () => {
-      await expect(
-        validateBody({
-          originBranchId,
-          destinationBranchId: destBranchId,
-          items: [{ productId, quantity: 5, expirationDate: EXP_DATE }],
-          unexpected: "value",
-        }),
-      ).rejects.toThrow();
+    it.each([
+      ["a missing originBranchId", { originBranchId: undefined }],
+      ["a missing destination branchId", { branchId: undefined }],
+      ["the old destinationBranchId field", { destinationBranchId }],
+      ["a zero quantity", { quantity: 0 }],
+      ["a negative quantity", { quantity: -2 }],
+      ["an invalid expirationDate", { expirationDate: "2027-13-01" }],
+      ["an observation above 500 characters", { observation: "x".repeat(501) }],
+    ])("rejects %s", async (_label, overrides) => {
+      await expect(validateBody({ ...valid, ...overrides })).rejects.toThrow();
     });
   });
 });

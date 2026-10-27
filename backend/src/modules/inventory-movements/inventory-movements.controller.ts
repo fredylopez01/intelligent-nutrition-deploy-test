@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Ip, Param, ParseUUIDPipe, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Ip,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+} from "@nestjs/common";
 import { InventoryMovementsService } from "./inventory-movements.service.js";
 import { Roles } from "../../common/decorators/roles.decorator.js";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
@@ -10,40 +19,44 @@ import { CreateMovementDto } from "./dto/create-movement.dto.js";
 
 @Controller("inventory-movements")
 export class InventoryMovementsController {
-  constructor(private readonly inventoryMovementsService: InventoryMovementsService) {}
+  constructor(
+    private readonly inventoryMovementsService: InventoryMovementsService,
+  ) {}
 
   @Post()
-  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   createMovement(
     @Body() dto: CreateMovementDto,
     @CurrentUser() currentUser: AuthenticatedUser,
-    @Ip() ipAddress: string,
   ) {
-    return this.inventoryMovementsService.createMovement(dto, currentUser, ipAddress);
+    return this.inventoryMovementsService.createMovement(dto, currentUser);
   }
 
   @Post("transfers")
-  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
   createTransfer(
     @Body() dto: CreateTransferDto,
     @CurrentUser() currentUser: AuthenticatedUser,
-    @Ip() ipAddress: string,
   ) {
-    return this.inventoryMovementsService.createTransfer(dto, currentUser, ipAddress);
+    return this.inventoryMovementsService.createTransfer(dto, currentUser);
   }
 
   @Post("adjustments")
-  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER")
+  @Roles("SUPERADMIN")
   createAdjustment(
     @Body() dto: CreateAdjustmentDto,
     @CurrentUser() currentUser: AuthenticatedUser,
     @Ip() ipAddress: string,
   ) {
-    return this.inventoryMovementsService.createAdjustment(dto, currentUser, ipAddress);
+    return this.inventoryMovementsService.createAdjustment(
+      dto,
+      currentUser,
+      ipAddress,
+    );
   }
 
   @Get()
-  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   findAll(
     @Query() query: ListInventoryMovementsQueryDto,
     @CurrentUser() currentUser: AuthenticatedUser,
@@ -52,7 +65,7 @@ export class InventoryMovementsController {
   }
 
   @Get(":movementId")
-  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   findOne(
     @Param("movementId", new ParseUUIDPipe()) movementId: string,
     @CurrentUser() currentUser: AuthenticatedUser,

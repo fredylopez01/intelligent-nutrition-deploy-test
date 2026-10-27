@@ -1,12 +1,16 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 
+import { ApiError } from '../services/http'
 import { buildMovement } from '../test-utils/inventoryMovements'
 
 import {
+  fefoLot,
   formatMovementDate,
   movementDirection,
+  movementFieldError,
   movementKind,
   movementPlace,
+  movementSchema,
   resolveMovementError,
   signedQuantity,
 } from './inventoryMovements'
@@ -85,7 +89,61 @@ describe('formatMovementDate', () => {
   })
 })
 
+describe('fefoLot', () => {
+  it('proposes the earliest current lot with units', () => {
+    expect(
+      fefoLot([
+        { expirationDate: '2027-06-30', quantity: 5 },
+        { expirationDate: '2026-10-01', quantity: 9 },
+        { expirationDate: '2026-12-31', quantity: 0 },
+        { expirationDate: '2027-01-31', quantity: 2 },
+      ]),
+    ).toEqual({ expirationDate: '2027-01-31', quantity: 2 })
+  })
+
+  it('keeps a lot that expires today', () => {
+    expect(fefoLot([{ expirationDate: '2026-10-26', quantity: 1 }])).toBeDefined()
+  })
+})
+
+describe('schemas', () => {
+  const exit = { movementType: 'EXIT' as const, quantity: '3', expirationDate: '2027-01-31' }
+
+  it('asks for the reason of an exit but not of an entry', () => {
+    expect(movementSchema.safeParse({ ...exit, observation: '' }).success).toBe(false)
+    expect(
+      movementSchema.safeParse({ ...exit, movementType: 'ENTRY', observation: '' }).success,
+    ).toBe(true)
+  })
+
+  it.each(['0', '-1', '1.5', '1,5', 'abc'])('rejects the quantity %s', (quantity) => {
+    expect(
+      movementSchema.safeParse({ ...exit, quantity, observation: 'Empaque roto' }).success,
+    ).toBe(false)
+  })
+})
+
 describe('api errors', () => {
+  it('points the stock errors to the quantity with the available units', () => {
+    expect(
+      movementFieldError(
+        new ApiError('Short', 422, { available: 4, requested: 9 }, 'INSUFFICIENT_STOCK'),
+      ),
+    ).toEqual({ field: 'quantity', message: 'El lote solo tiene 4 und en la sede.' })
+    expect(
+      movementFieldError(
+        new ApiError('Short', 422, { available: 2 }, 'INSUFFICIENT_GENERAL_STOCK'),
+        'g',
+      ),
+    ).toEqual({ field: 'quantity', message: 'El stock general solo tiene 2 g de este lote.' })
+  })
+
+  it('explains a closed day', () => {
+    expect(
+      resolveMovementError(new ApiError('Closed', 422, {}, 'INVENTORY_CLOSED'), 'fallback'),
+    ).toContain('ya se cerró hoy')
+  })
+
   it('uses the fallback for unknown errors', () => {
     expect(resolveMovementError(new Error('boom'), 'fallback')).toBe('fallback')
   })

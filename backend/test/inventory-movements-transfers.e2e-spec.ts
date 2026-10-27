@@ -15,25 +15,26 @@ import type { App } from "supertest/types.js";
 import { AppModule } from "../src/app.module.js";
 import { configureApp } from "../src/app.setup.js";
 import { PrismaService } from "../src/database/prisma/prisma.service.js";
+import { businessDate } from "../src/common/utils/business-day.util.js";
 
 type RoleName = "SUPERADMIN" | "BRANCH_LEADER" | "BRANCH_ASSISTANT" | "DEV";
 
-interface TransferResponseItem {
-  id: string;
-  productId: string;
-  productName: string;
-  referenceCode: string;
-  unit: string;
-  quantity: number;
-  expirationDate: string;
-  observation: string | null;
-}
-
-interface TransferResponse {
+interface MovementResponse {
   data: {
-    originBranch: { id: string; name: string };
-    destinationBranch: { id: string; name: string };
-    items: TransferResponseItem[];
+    id: string;
+    movementType: string;
+    quantity: number;
+    expirationDate: string | null;
+    product: { id: string; name: string; referenceCode: string; unit: string };
+    branch: { id: string; name: string } | null;
+    originBranch: { id: string; name: string } | null;
+    user: { id: string; fullName: string };
+    observation: string | null;
+    saleId: string | null;
+    purchaseId: string | null;
+    movementAt: string;
+    resultingQuantity: number;
+    originResultingQuantity: number;
   };
 }
 
@@ -44,6 +45,8 @@ interface ApiErrorBody {
 const runId = Date.now().toString(36);
 const DOCUMENT_CODE = `CC-TR-${runId}`;
 const EXP_DATE = "2027-12-31";
+const LATER_EXP_DATE = "2028-06-30";
+const EXPIRED_DATE = "2026-01-31";
 const STOCK_INITIAL = 50;
 
 const roleNames: RoleName[] = [
@@ -53,7 +56,7 @@ const roleNames: RoleName[] = [
   "DEV",
 ];
 
-const transferOf = (body: unknown) => (body as TransferResponse).data;
+const transferOf = (body: unknown) => (body as MovementResponse).data;
 const errorOf = (body: unknown) => (body as ApiErrorBody).error;
 
 describe("POST /api/v1/inventory-movements/transfers (e2e)", () => {
@@ -85,28 +88,24 @@ describe("POST /api/v1/inventory-movements/transfers (e2e)", () => {
 
   const validPayload = (overrides: Record<string, unknown> = {}) => ({
     originBranchId,
-    destinationBranchId,
-    items: [
-      {
-        productId,
-        quantity: 3,
-        expirationDate: EXP_DATE,
-      },
-    ],
+    branchId: destinationBranchId,
+    productId,
+    quantity: 3,
+    expirationDate: EXP_DATE,
     ...overrides,
   });
 
-  const originStock = () =>
-    prisma!.branchInventory.findFirst({
-      where: { branchId: originBranchId, productId },
-      select: { quantity: true },
-    });
-
-  const destinationStock = () =>
-    prisma!.branchInventory.findFirst({
-      where: { branchId: destinationBranchId, productId },
-      select: { quantity: true },
-    });
+  const lotQuantity = async (branchId: string, expirationDate: string) =>
+    (
+      await prisma!.branchInventory.findFirst({
+        where: {
+          branchId,
+          productId,
+          expirationDate: new Date(`${expirationDate}T00:00:00.000Z`),
+        },
+        select: { quantity: true },
+      })
+    )?.quantity ?? null;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -142,7 +141,11 @@ describe("POST /api/v1/inventory-movements/transfers (e2e)", () => {
           phone: "3009998877",
           address: "Carrera 9 # 8-7",
           userAccount: {
-            create: { roleId: role.id, active: true, mustChangePassword: false },
+            create: {
+              roleId: role.id,
+              active: true,
+              mustChangePassword: false,
+            },
           },
         },
       });
@@ -283,15 +286,36 @@ describe("POST /api/v1/inventory-movements/transfers (e2e)", () => {
       },
     });
 
-    // Seed origin stock for each test
-    await prisma.branchInventory.create({
-      data: {
-        branchId: originBranchId,
-        productId,
-        quantity: STOCK_INITIAL,
-        minimumStock: 5,
-        expirationDate: new Date(`${EXP_DATE}T00:00:00.000Z`),
-      },
+    await prisma.inventoryClosure.deleteMany({
+      where: { branchId: { in: [originBranchId, destinationBranchId] } },
+    });
+
+    // Origin: an expired lot and a current lot. Destination: the product is
+    // assigned with a later lot, so a transfer of EXP_DATE creates a new lot.
+    await prisma.branchInventory.createMany({
+      data: [
+        {
+          branchId: originBranchId,
+          productId,
+          quantity: 4,
+          minimumStock: 5,
+          expirationDate: new Date(`${EXPIRED_DATE}T00:00:00.000Z`),
+        },
+        {
+          branchId: originBranchId,
+          productId,
+          quantity: STOCK_INITIAL,
+          minimumStock: 5,
+          expirationDate: new Date(`${EXP_DATE}T00:00:00.000Z`),
+        },
+        {
+          branchId: destinationBranchId,
+          productId,
+          quantity: 1,
+          minimumStock: 7,
+          expirationDate: new Date(`${LATER_EXP_DATE}T00:00:00.000Z`),
+        },
+      ],
     });
   });
 
@@ -310,12 +334,18 @@ describe("POST /api/v1/inventory-movements/transfers (e2e)", () => {
         where: { productId: { in: productIds } },
       });
       await prisma.auditLog.deleteMany({
+        where: { userId: { in: personIds } },
+      });
+      await prisma.notification.deleteMany({
         where: {
           OR: [
+            { productId: { in: productIds } },
             { userId: { in: personIds } },
-            { entity: "INVENTORY_TRANSFER" },
           ],
         },
+      });
+      await prisma.inventoryClosure.deleteMany({
+        where: { branchId: { in: branchIds } },
       });
       await prisma.branchInventory.deleteMany({
         where: { productId: { in: productIds } },
@@ -338,273 +368,203 @@ describe("POST /api/v1/inventory-movements/transfers (e2e)", () => {
   }, 30000);
 
   describe("successful transfer", () => {
-    it("transfers items, returns originBranch/destinationBranch/items shape", async () => {
+    it("returns the movement with both branches and the resulting quantities → 201", async () => {
       const response = await postTransfer(
-        validPayload(),
+        validPayload({ observation: "Reposición sede destino" }),
         tokens.SUPERADMIN,
       ).expect(201);
 
       const transfer = transferOf(response.body);
-      expect(transfer.originBranch.id).toBe(originBranchId);
-      expect(transfer.destinationBranch.id).toBe(destinationBranchId);
-      expect(transfer.items).toHaveLength(1);
-      expect(transfer.items[0]).toMatchObject({
+      expect(transfer).toMatchObject({
         id: expect.any(String),
-        productId,
-        productName: expect.any(String),
-        referenceCode: `TR-${runId}`,
-        unit: expect.any(String),
+        movementType: "TRANSFER",
         quantity: 3,
         expirationDate: EXP_DATE,
+        product: { id: productId, referenceCode: `TR-${runId}` },
+        branch: { id: destinationBranchId },
+        originBranch: { id: originBranchId },
+        user: { id: actorIds.SUPERADMIN, fullName: "SUPERADMIN E2E-TR" },
+        observation: "Reposición sede destino",
+        saleId: null,
+        purchaseId: null,
+        resultingQuantity: 1 + 3,
+        originResultingQuantity: 4 + STOCK_INITIAL - 3,
       });
     });
 
-    it("decrements origin stock and increments destination stock", async () => {
+    it("moves the units from the origin lot into a new destination lot with the destination minimum", async () => {
       await postTransfer(validPayload(), tokens.SUPERADMIN).expect(201);
 
-      const origin = await originStock();
-      const destination = await destinationStock();
-      expect(origin!.quantity).toBe(STOCK_INITIAL - 3);
-      expect(destination!.quantity).toBe(3);
-    });
-
-    it("creates a destination lot when the product was not there yet", async () => {
-      const before = await destinationStock();
-      expect(before).toBeNull();
-
-      await postTransfer(validPayload(), tokens.SUPERADMIN).expect(201);
-
-      const after = await destinationStock();
-      expect(after).not.toBeNull();
-      expect(after!.quantity).toBe(3);
-    });
-
-    it("increments an existing destination lot", async () => {
-      await prisma!.branchInventory.create({
-        data: {
+      expect(await lotQuantity(originBranchId, EXP_DATE)).toBe(
+        STOCK_INITIAL - 3,
+      );
+      const destination = await prisma!.branchInventory.findFirst({
+        where: {
           branchId: destinationBranchId,
           productId,
-          quantity: 10,
-          minimumStock: 0,
           expirationDate: new Date(`${EXP_DATE}T00:00:00.000Z`),
         },
       });
-
-      await postTransfer(validPayload(), tokens.SUPERADMIN).expect(201);
-
-      const destination = await destinationStock();
-      expect(destination!.quantity).toBe(10 + 3);
+      expect(destination).toMatchObject({ quantity: 3, minimumStock: 7 });
     });
 
-    it("creates one InventoryMovement per transferred item with type TRANSFER", async () => {
-      await postTransfer(validPayload(), tokens.SUPERADMIN).expect(201);
-
-      const movement = await prisma!.inventoryMovement.findFirst({
-        where: { branchId: destinationBranchId, productId },
+    it("adds to the destination lot with the same expiration", async () => {
+      await prisma!.branchInventory.create({
+        data: {
+          branchId: originBranchId,
+          productId,
+          quantity: 10,
+          minimumStock: 5,
+          expirationDate: new Date(`${LATER_EXP_DATE}T00:00:00.000Z`),
+        },
       });
-      expect(movement).not.toBeNull();
-      expect(movement!.movementType).toBe("TRANSFER");
-      expect(movement!.quantity).toBe(3);
-      expect(movement!.originBranchId).toBe(originBranchId);
-    });
 
-    it("records an audit log with entity INVENTORY_TRANSFER", async () => {
       await postTransfer(
-        validPayload({
-          items: [{ productId, quantity: 5, expirationDate: EXP_DATE }],
-        }),
+        validPayload({ expirationDate: LATER_EXP_DATE }),
         tokens.SUPERADMIN,
       ).expect(201);
 
-      const log = await prisma!.auditLog.findFirst({
-        where: { entity: "INVENTORY_TRANSFER", userId: actorIds.SUPERADMIN },
-      });
-      expect(log).not.toBeNull();
-      expect(log!.action).toBe("CREATE");
+      expect(await lotQuantity(destinationBranchId, LATER_EXP_DATE)).toBe(4);
+      expect(await lotQuantity(originBranchId, LATER_EXP_DATE)).toBe(7);
     });
 
-    it("accepts an optional observation per item", async () => {
+    it("takes the earliest current origin lot when no lot is sent, skipping the expired one", async () => {
       const response = await postTransfer(
-        validPayload({
-          items: [
-            {
-              productId,
-              quantity: 2,
-              expirationDate: EXP_DATE,
-              observation: "Test observation",
-            },
-          ],
-        }),
+        validPayload({ expirationDate: undefined }),
         tokens.SUPERADMIN,
       ).expect(201);
 
-      expect(transferOf(response.body).items[0].observation).toBe(
-        "Test observation",
-      );
+      expect(transferOf(response.body).expirationDate).toBe(EXP_DATE);
+      expect(await lotQuantity(originBranchId, EXPIRED_DATE)).toBe(4);
+    });
+
+    it("creates a single TRANSFER movement that keeps the lot", async () => {
+      await postTransfer(validPayload(), tokens.SUPERADMIN).expect(201);
+
+      const movements = await prisma!.inventoryMovement.findMany({
+        where: { productId },
+      });
+      expect(movements).toHaveLength(1);
+      expect(movements[0]).toMatchObject({
+        movementType: "TRANSFER",
+        quantity: 3,
+        branchId: destinationBranchId,
+        originBranchId,
+        userId: actorIds.SUPERADMIN,
+        expirationDate: new Date(`${EXP_DATE}T00:00:00.000Z`),
+      });
+    });
+
+    it("does not write an audit log, since the movement already traces it", async () => {
+      await postTransfer(validPayload(), tokens.SUPERADMIN).expect(201);
+
+      const logs = await prisma!.auditLog.count({
+        where: { userId: actorIds.SUPERADMIN },
+      });
+      expect(logs).toBe(0);
     });
   });
 
   describe("DTO validation", () => {
-    it("rejects a missing originBranchId → 400", async () => {
-      const { originBranchId: _ob, ...body } = validPayload();
-      const response = await postTransfer(body, tokens.SUPERADMIN).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects a missing destinationBranchId → 400", async () => {
-      const { destinationBranchId: _db, ...body } = validPayload();
-      const response = await postTransfer(body, tokens.SUPERADMIN).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects a non-UUID originBranchId → 400", async () => {
-      const response = await postTransfer(
-        validPayload({ originBranchId: "not-a-uuid" }),
-        tokens.SUPERADMIN,
-      ).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects items array with zero elements → 400", async () => {
-      const response = await postTransfer(
-        validPayload({ items: [] }),
-        tokens.SUPERADMIN,
-      ).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects quantity < 1 → 400", async () => {
-      const response = await postTransfer(
-        validPayload({
-          items: [{ productId, quantity: 0, expirationDate: EXP_DATE }],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-      expect(errorOf(response.body).details).toEqual(
-        expect.arrayContaining([expect.stringContaining("quantity")]),
+    it.each([
+      ["a missing originBranchId", { originBranchId: undefined }],
+      ["a missing destination branchId", { branchId: undefined }],
+      ["a non-UUID originBranchId", { originBranchId: "not-a-uuid" }],
+      ["the old items array", { items: [] }],
+      ["quantity < 1", { quantity: 0 }],
+      ["an invalid expirationDate format", { expirationDate: "31/12/2027" }],
+    ])("rejects %s → 400", async (_label, overrides) => {
+      await postTransfer(validPayload(overrides), tokens.SUPERADMIN).expect(
+        400,
       );
-    });
-
-    it("rejects an invalid expirationDate format → 400", async () => {
-      const response = await postTransfer(
-        validPayload({
-          items: [{ productId, quantity: 1, expirationDate: "31/12/2027" }],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
     });
   });
 
   describe("business rules", () => {
-    it("returns 422 SAME_BRANCH when origin and destination are the same", async () => {
+    const expectError = async (
+      body: Record<string, unknown>,
+      status: number,
+      code: string,
+    ) => {
       const response = await postTransfer(
-        validPayload({ destinationBranchId: originBranchId }),
+        validPayload(body),
         tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("SAME_BRANCH");
+      ).expect(status);
+      expect(errorOf(response.body).code).toBe(code);
+    };
+
+    it("returns 422 SAME_BRANCH_TRANSFER when origin and destination are the same", async () => {
+      await expectError(
+        { branchId: originBranchId },
+        422,
+        "SAME_BRANCH_TRANSFER",
+      );
     });
 
-    it("returns 422 DUPLICATED_ITEM when items share productId + expirationDate", async () => {
-      const response = await postTransfer(
-        validPayload({
-          items: [
-            { productId, quantity: 1, expirationDate: EXP_DATE },
-            { productId, quantity: 2, expirationDate: EXP_DATE },
-          ],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("DUPLICATED_ITEM");
+    it("returns 404 BRANCH_NOT_FOUND when a branch does not exist", async () => {
+      await expectError({ branchId: randomUUID() }, 404, "BRANCH_NOT_FOUND");
     });
 
-    it("returns 404 ORIGIN_BRANCH_NOT_FOUND when origin does not exist", async () => {
-      const response = await postTransfer(
-        validPayload({ originBranchId: randomUUID() }),
-        tokens.SUPERADMIN,
-      ).expect(404);
-      expect(errorOf(response.body).code).toBe("ORIGIN_BRANCH_NOT_FOUND");
-    });
-
-    it("returns 422 ORIGIN_BRANCH_INACTIVE when origin branch is inactive", async () => {
-      const response = await postTransfer(
-        validPayload({ originBranchId: inactiveBranchId }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("ORIGIN_BRANCH_INACTIVE");
-    });
-
-    it("returns 404 DESTINATION_BRANCH_NOT_FOUND when destination does not exist", async () => {
-      const response = await postTransfer(
-        validPayload({ destinationBranchId: randomUUID() }),
-        tokens.SUPERADMIN,
-      ).expect(404);
-      expect(errorOf(response.body).code).toBe("DESTINATION_BRANCH_NOT_FOUND");
-    });
-
-    it("returns 422 DESTINATION_BRANCH_INACTIVE when destination branch is inactive", async () => {
-      const response = await postTransfer(
-        validPayload({ destinationBranchId: inactiveBranchId }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("DESTINATION_BRANCH_INACTIVE");
+    it("returns 422 BRANCH_INACTIVE when the destination branch is inactive", async () => {
+      await expectError({ branchId: inactiveBranchId }, 422, "BRANCH_INACTIVE");
     });
 
     it("returns 404 PRODUCT_NOT_FOUND when the product does not exist", async () => {
-      const response = await postTransfer(
-        validPayload({
-          items: [{ productId: randomUUID(), quantity: 1, expirationDate: EXP_DATE }],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(404);
-      expect(errorOf(response.body).code).toBe("PRODUCT_NOT_FOUND");
+      await expectError({ productId: randomUUID() }, 404, "PRODUCT_NOT_FOUND");
     });
 
     it("returns 422 PRODUCT_INACTIVE when the product is inactive", async () => {
-      const response = await postTransfer(
-        validPayload({
-          items: [{ productId: inactiveProductId, quantity: 1, expirationDate: EXP_DATE }],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("PRODUCT_INACTIVE");
+      await expectError(
+        { productId: inactiveProductId },
+        422,
+        "PRODUCT_INACTIVE",
+      );
     });
 
-    it("returns 422 LOT_NOT_FOUND when the product has no lot with that expirationDate in origin", async () => {
-      const response = await postTransfer(
-        validPayload({
-          items: [{ productId, quantity: 1, expirationDate: "2099-01-01" }],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("LOT_NOT_FOUND");
+    it("returns 404 PRODUCT_NOT_ASSIGNED_IN_DESTINATION and does not create the product there", async () => {
+      await prisma!.branchInventory.deleteMany({
+        where: { branchId: destinationBranchId, productId },
+      });
+
+      await expectError({}, 404, "PRODUCT_NOT_ASSIGNED_IN_DESTINATION");
+      expect(await lotQuantity(destinationBranchId, EXP_DATE)).toBeNull();
+      expect(await lotQuantity(originBranchId, EXP_DATE)).toBe(STOCK_INITIAL);
     });
 
-    it("returns 422 INSUFFICIENT_STOCK when requested quantity exceeds available stock", async () => {
-      const response = await postTransfer(
-        validPayload({
-          items: [{ productId, quantity: STOCK_INITIAL + 1, expirationDate: EXP_DATE }],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("INSUFFICIENT_STOCK");
+    it("returns 404 LOT_NOT_FOUND when the origin has no lot with that expirationDate", async () => {
+      await expectError({ expirationDate: "2029-01-01" }, 404, "LOT_NOT_FOUND");
     });
 
-    it("does not modify stock when any item fails validation", async () => {
-      const before = await originStock();
+    it("returns 422 LOT_EXPIRED for an expired lot", async () => {
+      await expectError({ expirationDate: EXPIRED_DATE }, 422, "LOT_EXPIRED");
+    });
 
-      await postTransfer(
-        validPayload({
-          items: [
-            { productId, quantity: STOCK_INITIAL + 1, expirationDate: EXP_DATE },
-          ],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(422);
+    it("returns 422 INSUFFICIENT_STOCK and keeps both branches untouched", async () => {
+      await expectError(
+        { quantity: STOCK_INITIAL + 1 },
+        422,
+        "INSUFFICIENT_STOCK",
+      );
 
-      const after = await originStock();
-      expect(after!.quantity).toBe(before!.quantity);
+      expect(await lotQuantity(originBranchId, EXP_DATE)).toBe(STOCK_INITIAL);
+      expect(await lotQuantity(destinationBranchId, EXP_DATE)).toBeNull();
+      expect(
+        await prisma!.inventoryMovement.count({ where: { productId } }),
+      ).toBe(0);
+    });
+
+    it("returns 422 INVENTORY_CLOSED when the destination already closed the day", async () => {
+      await prisma!.inventoryClosure.create({
+        data: {
+          branchId: destinationBranchId,
+          closureDate: businessDate(),
+          status: "CONFIRMED",
+          confirmed: true,
+          locked: true,
+        },
+      });
+
+      await expectError({}, 422, "INVENTORY_CLOSED");
     });
   });
 
@@ -617,27 +577,24 @@ describe("POST /api/v1/inventory-movements/transfers (e2e)", () => {
       await postTransfer(validPayload(), tokens.BRANCH_LEADER).expect(201);
     });
 
-    it("returns 403 FORBIDDEN_BRANCH when BRANCH_LEADER is not assigned to the origin branch", async () => {
+    it("returns 403 BRANCH_SCOPE_VIOLATION when BRANCH_LEADER is not assigned to the origin branch", async () => {
       const response = await postTransfer(
         validPayload(),
         tokenBranchLeaderOther,
       ).expect(403);
-      expect(errorOf(response.body).code).toBe("FORBIDDEN_BRANCH");
+      expect(errorOf(response.body).code).toBe("BRANCH_SCOPE_VIOLATION");
     });
 
-    it("returns 403 INSUFFICIENT_PERMISSIONS when BRANCH_ASSISTANT attempts a transfer", async () => {
-      const response = await postTransfer(
-        validPayload(),
-        tokens.BRANCH_ASSISTANT,
-      ).expect(403);
-      expect(errorOf(response.body).code).toMatch(
-        /FORBIDDEN|INSUFFICIENT_PERMISSIONS/,
-      );
-    });
-
-    it("allows DEV to transfer between any branches → 201", async () => {
-      await postTransfer(validPayload(), tokens.DEV).expect(201);
-    });
+    it.each<RoleName>(["BRANCH_ASSISTANT", "DEV"])(
+      "returns 403 INSUFFICIENT_PERMISSIONS for %s",
+      async (roleName) => {
+        const response = await postTransfer(
+          validPayload(),
+          tokens[roleName],
+        ).expect(403);
+        expect(errorOf(response.body).code).toBe("INSUFFICIENT_PERMISSIONS");
+      },
+    );
 
     it("returns 401 when no token is provided", async () => {
       await postTransfer(validPayload()).expect(401);

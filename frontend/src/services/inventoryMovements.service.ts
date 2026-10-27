@@ -1,4 +1,9 @@
-import type { MovementsListParams, MovementsListResponse } from '../types/inventoryMovement'
+import type {
+  CreateMovementPayload,
+  MovementsListParams,
+  MovementsListResponse,
+  RegisteredMovement,
+} from '../types/inventoryMovement'
 
 import { http } from './http'
 
@@ -16,4 +21,7 @@ function buildMovementsQuery(params: MovementsListParams): string {
 export const inventoryMovementsService = {
   list: (params: MovementsListParams, token: string | null) =>
     http.get<MovementsListResponse>(`${MOVEMENTS_PATH}${buildMovementsQuery(params)}`, { token }),
+
+  create: (payload: CreateMovementPayload, token: string | null) =>
+    http.post<RegisteredMovement>(MOVEMENTS_PATH, payload, { token }),
 }

@@ -15,26 +15,23 @@ import type { App } from "supertest/types.js";
 import { AppModule } from "../src/app.module.js";
 import { configureApp } from "../src/app.setup.js";
 import { PrismaService } from "../src/database/prisma/prisma.service.js";
+import { businessDate } from "../src/common/utils/business-day.util.js";
 
 type RoleName = "SUPERADMIN" | "BRANCH_LEADER" | "BRANCH_ASSISTANT" | "DEV";
 
-interface AdjustmentResponseItem {
-  id: string;
-  productId: string;
-  productName: string;
-  referenceCode: string;
-  unit: string;
-  quantity: number;
-  expirationDate: string;
-  observation: string | null;
-}
-
 interface AdjustmentResponse {
   data: {
+    id: string;
+    movementType: "ADJUSTMENT_ENTRY" | "ADJUSTMENT_EXIT";
+    quantity: number;
+    expirationDate: string | null;
+    product: { id: string; name: string; referenceCode: string; unit: string };
     branch: { id: string; name: string };
-    adjustmentType: "ENTRY" | "EXIT";
-    reason: string;
-    items: AdjustmentResponseItem[];
+    originBranch: null;
+    user: { id: string; fullName: string };
+    observation: string;
+    movementAt: string;
+    resultingQuantity: number;
   };
 }
 
@@ -46,7 +43,8 @@ const runId = Date.now().toString(36);
 const DOCUMENT_CODE = `CC-ADJ-${runId}`;
 const EXP_DATE = "2027-12-31";
 const STOCK_INITIAL = 50;
-const DEFAULT_REASON = "Stock adjustment for testing purposes";
+const NEW_LOT_DATE = "2028-03-31";
+const DEFAULT_REASON = "Diferencia detectada en el conteo físico";
 
 const roleNames: RoleName[] = [
   "SUPERADMIN",
@@ -75,7 +73,6 @@ describe("POST /api/v1/inventory-movements/adjustments (e2e)", () => {
   const personIds: string[] = [];
   const tokens = {} as Record<RoleName, string>;
   const actorIds = {} as Record<RoleName, string>;
-  let tokenBranchLeaderOther = "";
 
   const postAdjustment = (body: object, token?: string) => {
     const pending = request(app!.getHttpServer())
@@ -87,25 +84,28 @@ describe("POST /api/v1/inventory-movements/adjustments (e2e)", () => {
 
   const validEntryPayload = (overrides: Record<string, unknown> = {}) => ({
     branchId,
-    adjustmentType: "ENTRY",
+    productId,
+    movementType: "ADJUSTMENT_ENTRY",
+    quantity: 5,
+    expirationDate: EXP_DATE,
     reason: DEFAULT_REASON,
-    items: [{ productId, quantity: 5, expirationDate: EXP_DATE }],
     ...overrides,
   });
 
-  const validExitPayload = (overrides: Record<string, unknown> = {}) => ({
-    branchId,
-    adjustmentType: "EXIT",
-    reason: DEFAULT_REASON,
-    items: [{ productId, quantity: 5, expirationDate: EXP_DATE }],
-    ...overrides,
-  });
+  const validExitPayload = (overrides: Record<string, unknown> = {}) =>
+    validEntryPayload({ movementType: "ADJUSTMENT_EXIT", ...overrides });
 
-  const branchStock = () =>
-    prisma!.branchInventory.findFirst({
-      where: { branchId, productId },
-      select: { quantity: true },
-    });
+  const lotQuantity = async (expirationDate: string) =>
+    (
+      await prisma!.branchInventory.findFirst({
+        where: {
+          branchId,
+          productId,
+          expirationDate: new Date(`${expirationDate}T00:00:00.000Z`),
+        },
+        select: { quantity: true },
+      })
+    )?.quantity ?? null;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -141,7 +141,11 @@ describe("POST /api/v1/inventory-movements/adjustments (e2e)", () => {
           phone: "3009998877",
           address: "Carrera 9 # 8-7",
           userAccount: {
-            create: { roleId: role.id, active: true, mustChangePassword: false },
+            create: {
+              roleId: role.id,
+              active: true,
+              mustChangePassword: false,
+            },
           },
         },
       });
@@ -173,9 +177,6 @@ describe("POST /api/v1/inventory-movements/adjustments (e2e)", () => {
     });
     personIds.push(branchLeaderOtherPerson.id);
     branchLeaderOtherId = branchLeaderOtherPerson.id;
-    tokenBranchLeaderOther = await jwtService.signAsync({
-      sub: branchLeaderOtherPerson.id,
-    });
 
     const branch = await prisma.branch.create({
       data: {
@@ -282,7 +283,8 @@ describe("POST /api/v1/inventory-movements/adjustments (e2e)", () => {
       },
     });
 
-    // Seed stock for EXIT tests; ENTRY tests that need a fresh start delete this lot first
+    await prisma.inventoryClosure.deleteMany({ where: { branchId } });
+
     await prisma.branchInventory.create({
       data: {
         branchId,
@@ -299,18 +301,26 @@ describe("POST /api/v1/inventory-movements/adjustments (e2e)", () => {
       if (!prisma) return;
 
       const productIds = [productId, inactiveProductId].filter(Boolean);
-      const branchIds = [branchId, inactiveBranchId, otherBranchId].filter(Boolean);
+      const branchIds = [branchId, inactiveBranchId, otherBranchId].filter(
+        Boolean,
+      );
 
       await prisma.inventoryMovement.deleteMany({
         where: { productId: { in: productIds } },
       });
       await prisma.auditLog.deleteMany({
+        where: { userId: { in: personIds } },
+      });
+      await prisma.notification.deleteMany({
         where: {
           OR: [
+            { productId: { in: productIds } },
             { userId: { in: personIds } },
-            { entity: "INVENTORY_ADJUSTMENT" },
           ],
         },
+      });
+      await prisma.inventoryClosure.deleteMany({
+        where: { branchId: { in: branchIds } },
       });
       await prisma.branchInventory.deleteMany({
         where: { productId: { in: productIds } },
@@ -332,361 +342,236 @@ describe("POST /api/v1/inventory-movements/adjustments (e2e)", () => {
     }
   }, 30000);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // ENTRY adjustment
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe("successful ENTRY adjustment", () => {
-    it("returns branch/adjustmentType/reason/items shape → 201", async () => {
+  describe("successful ADJUSTMENT_ENTRY", () => {
+    it("returns the movement in the contract shape with the resulting quantity → 201", async () => {
       const response = await postAdjustment(
         validEntryPayload(),
         tokens.SUPERADMIN,
       ).expect(201);
 
-      const body = adjustmentOf(response.body);
-      expect(body.branch.id).toBe(branchId);
-      expect(body.adjustmentType).toBe("ENTRY");
-      expect(body.reason).toBe(DEFAULT_REASON);
-      expect(body.items).toHaveLength(1);
-      expect(body.items[0]).toMatchObject({
+      expect(adjustmentOf(response.body)).toMatchObject({
         id: expect.any(String),
-        productId,
-        productName: expect.any(String),
-        referenceCode: `ADJ-${runId}`,
-        unit: expect.any(String),
+        movementType: "ADJUSTMENT_ENTRY",
         quantity: 5,
         expirationDate: EXP_DATE,
+        product: { id: productId },
+        branch: { id: branchId },
+        originBranch: null,
+        user: { id: actorIds.SUPERADMIN },
+        observation: DEFAULT_REASON,
+        resultingQuantity: STOCK_INITIAL + 5,
       });
     });
 
-    it("creates a new lot when the product has no existing inventory in the branch", async () => {
-      await prisma!.branchInventory.deleteMany({ where: { branchId, productId } });
-      const before = await branchStock();
-      expect(before).toBeNull();
-
+    it("increments the lot with the same expiration", async () => {
       await postAdjustment(validEntryPayload(), tokens.SUPERADMIN).expect(201);
 
-      const after = await branchStock();
-      expect(after).not.toBeNull();
-      expect(after!.quantity).toBe(5);
+      expect(await lotQuantity(EXP_DATE)).toBe(STOCK_INITIAL + 5);
     });
 
-    it("increments an existing lot when the product already has inventory", async () => {
-      await postAdjustment(validEntryPayload(), tokens.SUPERADMIN).expect(201);
+    it("creates the lot with the branch minimum when it is new", async () => {
+      await postAdjustment(
+        validEntryPayload({ expirationDate: NEW_LOT_DATE }),
+        tokens.SUPERADMIN,
+      ).expect(201);
 
-      const after = await branchStock();
-      expect(after!.quantity).toBe(STOCK_INITIAL + 5);
+      const lot = await prisma!.branchInventory.findFirst({
+        where: {
+          branchId,
+          productId,
+          expirationDate: new Date(`${NEW_LOT_DATE}T00:00:00.000Z`),
+        },
+      });
+      expect(lot).toMatchObject({ quantity: 5, minimumStock: 5 });
     });
 
-    it("creates one InventoryMovement per item with type ADJUSTMENT_ENTRY", async () => {
+    it("records the movement with the lot and the reason as observation", async () => {
       await postAdjustment(validEntryPayload(), tokens.SUPERADMIN).expect(201);
 
       const movement = await prisma!.inventoryMovement.findFirst({
         where: { branchId, productId },
       });
-      expect(movement).not.toBeNull();
-      expect(movement!.movementType).toBe("ADJUSTMENT_ENTRY");
-      expect(movement!.quantity).toBe(5);
-      expect(movement!.originBranchId).toBeNull();
-    });
-
-    it("records an audit log with entity INVENTORY_ADJUSTMENT and action CREATE", async () => {
-      await postAdjustment(validEntryPayload(), tokens.SUPERADMIN).expect(201);
-
-      const log = await prisma!.auditLog.findFirst({
-        where: { entity: "INVENTORY_ADJUSTMENT", userId: actorIds.SUPERADMIN },
+      expect(movement).toMatchObject({
+        movementType: "ADJUSTMENT_ENTRY",
+        quantity: 5,
+        observation: DEFAULT_REASON,
+        expirationDate: new Date(`${EXP_DATE}T00:00:00.000Z`),
       });
-      expect(log).not.toBeNull();
-      expect(log!.action).toBe("CREATE");
     });
 
-    it("accepts an optional observation per item", async () => {
+    it("records an INVENTORY_ADJUSTMENT audit log with the reason", async () => {
       const response = await postAdjustment(
-        validEntryPayload({
-          items: [
-            {
-              productId,
-              quantity: 2,
-              expirationDate: EXP_DATE,
-              observation: "Found extra units",
-            },
-          ],
-        }),
+        validEntryPayload(),
         tokens.SUPERADMIN,
       ).expect(201);
 
-      expect(adjustmentOf(response.body).items[0].observation).toBe(
-        "Found extra units",
-      );
+      const log = await prisma!.auditLog.findFirst({
+        where: { entityId: adjustmentOf(response.body).id },
+      });
+      expect(log).toMatchObject({
+        action: "INVENTORY_ADJUSTMENT",
+        entity: "INVENTORY_MOVEMENT",
+        reason: DEFAULT_REASON,
+        userId: actorIds.SUPERADMIN,
+      });
     });
   });
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // EXIT adjustment
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe("successful EXIT adjustment", () => {
-    it("returns branch/adjustmentType/reason/items shape → 201", async () => {
+  describe("successful ADJUSTMENT_EXIT", () => {
+    it("decrements the lot and returns the resulting quantity", async () => {
       const response = await postAdjustment(
         validExitPayload(),
         tokens.SUPERADMIN,
       ).expect(201);
 
-      const body = adjustmentOf(response.body);
-      expect(body.branch.id).toBe(branchId);
-      expect(body.adjustmentType).toBe("EXIT");
-      expect(body.reason).toBe(DEFAULT_REASON);
-      expect(body.items).toHaveLength(1);
-      expect(body.items[0].quantity).toBe(5);
-    });
-
-    it("decrements the existing lot by the requested quantity", async () => {
-      await postAdjustment(validExitPayload(), tokens.SUPERADMIN).expect(201);
-
-      const after = await branchStock();
-      expect(after!.quantity).toBe(STOCK_INITIAL - 5);
-    });
-
-    it("creates one InventoryMovement per item with type ADJUSTMENT_EXIT", async () => {
-      await postAdjustment(validExitPayload(), tokens.SUPERADMIN).expect(201);
-
-      const movement = await prisma!.inventoryMovement.findFirst({
-        where: { branchId, productId },
+      expect(adjustmentOf(response.body)).toMatchObject({
+        movementType: "ADJUSTMENT_EXIT",
+        resultingQuantity: STOCK_INITIAL - 5,
       });
-      expect(movement).not.toBeNull();
-      expect(movement!.movementType).toBe("ADJUSTMENT_EXIT");
-      expect(movement!.quantity).toBe(5);
+      expect(await lotQuantity(EXP_DATE)).toBe(STOCK_INITIAL - 5);
+    });
+
+    it("uses the earliest current lot when no lot is sent", async () => {
+      const response = await postAdjustment(
+        validExitPayload({ expirationDate: undefined }),
+        tokens.SUPERADMIN,
+      ).expect(201);
+
+      expect(adjustmentOf(response.body).expirationDate).toBe(EXP_DATE);
+    });
+
+    it("is allowed after the day was closed and is audited as POST_CLOSURE_ADJUSTMENT", async () => {
+      await prisma!.inventoryClosure.create({
+        data: {
+          branchId,
+          closureDate: businessDate(),
+          status: "CONFIRMED",
+          confirmed: true,
+          locked: true,
+        },
+      });
+
+      const response = await postAdjustment(
+        validExitPayload(),
+        tokens.SUPERADMIN,
+      ).expect(201);
+
+      const log = await prisma!.auditLog.findFirst({
+        where: { entityId: adjustmentOf(response.body).id },
+      });
+      expect(log?.action).toBe("POST_CLOSURE_ADJUSTMENT");
     });
   });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // DTO validation
-  // ─────────────────────────────────────────────────────────────────────────────
 
   describe("DTO validation", () => {
-    it("rejects a missing branchId → 400", async () => {
-      const { branchId: _b, ...body } = validEntryPayload();
-      const response = await postAdjustment(body, tokens.SUPERADMIN).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects a non-UUID branchId → 400", async () => {
-      const response = await postAdjustment(
-        validEntryPayload({ branchId: "not-a-uuid" }),
+    it.each([
+      ["a missing branchId", { branchId: undefined }],
+      ["a non-UUID branchId", { branchId: "not-a-uuid" }],
+      ["a missing movementType", { movementType: undefined }],
+      ["a manual EXIT movementType", { movementType: "EXIT" }],
+      ["a missing reason", { reason: undefined }],
+      ["a reason shorter than 10 characters", { reason: "Conteo" }],
+      ["the old items array", { items: [] }],
+      ["quantity < 1", { quantity: 0 }],
+      ["an invalid expirationDate format", { expirationDate: "2027/12/31" }],
+      ["a non-UUID productId", { productId: "whey" }],
+    ])("rejects %s → 400", async (_label, overrides) => {
+      await postAdjustment(
+        validEntryPayload(overrides),
         tokens.SUPERADMIN,
       ).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects a missing adjustmentType → 400", async () => {
-      const { adjustmentType: _at, ...body } = validEntryPayload();
-      const response = await postAdjustment(body, tokens.SUPERADMIN).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects an invalid adjustmentType → 400", async () => {
-      const response = await postAdjustment(
-        validEntryPayload({ adjustmentType: "TRANSFER" }),
-        tokens.SUPERADMIN,
-      ).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects a missing reason → 400", async () => {
-      const { reason: _r, ...body } = validEntryPayload();
-      const response = await postAdjustment(body, tokens.SUPERADMIN).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects a reason shorter than 3 characters → 400", async () => {
-      const response = await postAdjustment(
-        validEntryPayload({ reason: "AB" }),
-        tokens.SUPERADMIN,
-      ).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects an empty items array → 400", async () => {
-      const response = await postAdjustment(
-        validEntryPayload({ items: [] }),
-        tokens.SUPERADMIN,
-      ).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects quantity < 1 → 400", async () => {
-      const response = await postAdjustment(
-        validEntryPayload({
-          items: [{ productId, quantity: 0, expirationDate: EXP_DATE }],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-      expect(errorOf(response.body).details).toEqual(
-        expect.arrayContaining([expect.stringContaining("quantity")]),
-      );
-    });
-
-    it("rejects an invalid expirationDate format → 400", async () => {
-      const response = await postAdjustment(
-        validEntryPayload({
-          items: [{ productId, quantity: 5, expirationDate: "31/12/2027" }],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
-    });
-
-    it("rejects a non-UUID productId in items → 400", async () => {
-      const response = await postAdjustment(
-        validEntryPayload({
-          items: [
-            { productId: "not-a-uuid", quantity: 5, expirationDate: EXP_DATE },
-          ],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(400);
-      expect(errorOf(response.body).code).toBe("BAD_REQUEST");
     });
   });
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Business rules
-  // ─────────────────────────────────────────────────────────────────────────────
-
   describe("business rules", () => {
-    it("returns 422 DUPLICATED_ITEM when items share productId + expirationDate", async () => {
-      const response = await postAdjustment(
-        validEntryPayload({
-          items: [
-            { productId, quantity: 2, expirationDate: EXP_DATE },
-            { productId, quantity: 3, expirationDate: EXP_DATE },
-          ],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("DUPLICATED_ITEM");
-    });
+    const expectError = async (
+      body: Record<string, unknown>,
+      status: number,
+      code: string,
+    ) => {
+      const response = await postAdjustment(body, tokens.SUPERADMIN).expect(
+        status,
+      );
+      expect(errorOf(response.body).code).toBe(code);
+    };
 
     it("returns 404 BRANCH_NOT_FOUND when the branch does not exist", async () => {
-      const response = await postAdjustment(
+      await expectError(
         validEntryPayload({ branchId: randomUUID() }),
-        tokens.SUPERADMIN,
-      ).expect(404);
-      expect(errorOf(response.body).code).toBe("BRANCH_NOT_FOUND");
+        404,
+        "BRANCH_NOT_FOUND",
+      );
     });
 
     it("returns 422 BRANCH_INACTIVE when the branch is inactive", async () => {
-      const response = await postAdjustment(
+      await expectError(
         validEntryPayload({ branchId: inactiveBranchId }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("BRANCH_INACTIVE");
-    });
-
-    it("returns 404 PRODUCT_NOT_FOUND when the product does not exist", async () => {
-      const response = await postAdjustment(
-        validEntryPayload({
-          items: [
-            { productId: randomUUID(), quantity: 5, expirationDate: EXP_DATE },
-          ],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(404);
-      expect(errorOf(response.body).code).toBe("PRODUCT_NOT_FOUND");
-    });
-
-    it("returns 422 PRODUCT_INACTIVE when the product is inactive", async () => {
-      const response = await postAdjustment(
-        validEntryPayload({
-          items: [
-            {
-              productId: inactiveProductId,
-              quantity: 5,
-              expirationDate: EXP_DATE,
-            },
-          ],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("PRODUCT_INACTIVE");
-    });
-
-    it("returns 422 LOT_NOT_FOUND on EXIT when there is no lot with that expirationDate", async () => {
-      const response = await postAdjustment(
-        validExitPayload({
-          items: [{ productId, quantity: 5, expirationDate: "2099-01-01" }],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("LOT_NOT_FOUND");
-    });
-
-    it("returns 422 INSUFFICIENT_STOCK on EXIT when requested quantity exceeds available stock", async () => {
-      const response = await postAdjustment(
-        validExitPayload({
-          items: [{ productId, quantity: STOCK_INITIAL + 1, expirationDate: EXP_DATE }],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-      expect(errorOf(response.body).code).toBe("INSUFFICIENT_STOCK");
-    });
-
-    it("does not modify stock when EXIT fails validation (atomicity)", async () => {
-      const before = await branchStock();
-
-      await postAdjustment(
-        validExitPayload({
-          items: [{ productId, quantity: STOCK_INITIAL + 1, expirationDate: EXP_DATE }],
-        }),
-        tokens.SUPERADMIN,
-      ).expect(422);
-
-      const after = await branchStock();
-      expect(after!.quantity).toBe(before!.quantity);
-    });
-
-    it("ENTRY does not require an existing lot — succeeds with no prior inventory", async () => {
-      await prisma!.branchInventory.deleteMany({ where: { branchId, productId } });
-
-      await postAdjustment(validEntryPayload(), tokens.SUPERADMIN).expect(201);
-    });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Role access and scope
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  describe("role access and scope", () => {
-    it("allows SUPERADMIN to adjust any branch → 201", async () => {
-      await postAdjustment(validEntryPayload(), tokens.SUPERADMIN).expect(201);
-    });
-
-    it("allows BRANCH_LEADER to adjust their assigned branch → 201", async () => {
-      await postAdjustment(validEntryPayload(), tokens.BRANCH_LEADER).expect(201);
-    });
-
-    it("returns 403 FORBIDDEN_BRANCH when BRANCH_LEADER is not assigned to the branch", async () => {
-      const response = await postAdjustment(
-        validEntryPayload(),
-        tokenBranchLeaderOther,
-      ).expect(403);
-      expect(errorOf(response.body).code).toBe("FORBIDDEN_BRANCH");
-    });
-
-    it("returns 403 when BRANCH_ASSISTANT attempts an adjustment", async () => {
-      const response = await postAdjustment(
-        validEntryPayload(),
-        tokens.BRANCH_ASSISTANT,
-      ).expect(403);
-      expect(errorOf(response.body).code).toMatch(
-        /FORBIDDEN|INSUFFICIENT_PERMISSIONS/,
+        422,
+        "BRANCH_INACTIVE",
       );
     });
 
-    it("allows DEV to adjust any branch → 201", async () => {
-      await postAdjustment(validEntryPayload(), tokens.DEV).expect(201);
+    it("returns 404 PRODUCT_NOT_FOUND when the product does not exist", async () => {
+      await expectError(
+        validEntryPayload({ productId: randomUUID() }),
+        404,
+        "PRODUCT_NOT_FOUND",
+      );
     });
+
+    it("returns 422 PRODUCT_INACTIVE when the product is inactive", async () => {
+      await expectError(
+        validEntryPayload({ productId: inactiveProductId }),
+        422,
+        "PRODUCT_INACTIVE",
+      );
+    });
+
+    it("returns 404 PRODUCT_NOT_ASSIGNED when the branch never had the product", async () => {
+      await expectError(
+        validEntryPayload({ branchId: otherBranchId }),
+        404,
+        "PRODUCT_NOT_ASSIGNED",
+      );
+    });
+
+    it("returns 404 LOT_NOT_FOUND on ADJUSTMENT_EXIT for a lot the branch does not have", async () => {
+      await expectError(
+        validExitPayload({ expirationDate: NEW_LOT_DATE }),
+        404,
+        "LOT_NOT_FOUND",
+      );
+    });
+
+    it("returns 422 INSUFFICIENT_STOCK and keeps the stock untouched", async () => {
+      await expectError(
+        validExitPayload({ quantity: STOCK_INITIAL + 1 }),
+        422,
+        "INSUFFICIENT_STOCK",
+      );
+
+      expect(await lotQuantity(EXP_DATE)).toBe(STOCK_INITIAL);
+      expect(
+        await prisma!.inventoryMovement.count({ where: { productId } }),
+      ).toBe(0);
+    });
+  });
+
+  describe("role access", () => {
+    it("allows SUPERADMIN → 201", async () => {
+      await postAdjustment(validEntryPayload(), tokens.SUPERADMIN).expect(201);
+    });
+
+    it.each<RoleName>(["BRANCH_LEADER", "BRANCH_ASSISTANT", "DEV"])(
+      "returns 403 INSUFFICIENT_PERMISSIONS for %s, since only SUPERADMIN adjusts",
+      async (roleName) => {
+        const response = await postAdjustment(
+          validEntryPayload(),
+          tokens[roleName],
+        ).expect(403);
+        expect(errorOf(response.body).code).toBe("INSUFFICIENT_PERMISSIONS");
+      },
+    );
 
     it("returns 401 when no token is provided", async () => {
       await postAdjustment(validEntryPayload()).expect(401);

@@ -35,4 +35,20 @@ describe('inventoryMovementsService', () => {
       { token: 'token' },
     )
   })
+
+  it('registers an entry or exit', async () => {
+    vi.mocked(http.post).mockResolvedValue({})
+    const payload = {
+      branchId: 'branch-centro',
+      productId: 'product-whey',
+      movementType: 'EXIT' as const,
+      quantity: 3,
+      expirationDate: '2027-01-31',
+      observation: 'Empaque roto',
+    }
+
+    await inventoryMovementsService.create(payload, 'token')
+
+    expect(http.post).toHaveBeenCalledWith('/inventory-movements', payload, { token: 'token' })
+  })
 })

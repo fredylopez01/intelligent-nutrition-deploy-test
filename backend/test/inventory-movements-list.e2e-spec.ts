@@ -463,6 +463,34 @@ describe("GET /api/v1/inventory-movements (e2e)", () => {
       expect(ids).not.toContain(movEntryBId);   // branchId = branchB, no origin
     });
 
+    it("filters by the user who registered the movement", async () => {
+      const mine = listOf(
+        (
+          await getList(tokens.SUPERADMIN, {
+            branchId: branchAId,
+            userId: actorIds.SUPERADMIN,
+          }).expect(200)
+        ).body,
+      );
+      expect(mine.data.map((m) => m.id).sort()).toEqual(
+        [...branchAIds()].sort(),
+      );
+
+      const others = listOf(
+        (
+          await getList(tokens.SUPERADMIN, {
+            branchId: branchAId,
+            userId: actorIds.DEV,
+          }).expect(200)
+        ).body,
+      );
+      expect(others.meta.total).toBe(0);
+    });
+
+    it("rejects a non-UUID userId → 400", async () => {
+      await getList(tokens.SUPERADMIN, { userId: "laura" }).expect(400);
+    });
+
     it("filters by productId", async () => {
       const body = listOf(
         (await getList(tokens.SUPERADMIN, { productId: product2Id }).expect(200)).body,
@@ -496,7 +524,7 @@ describe("GET /api/v1/inventory-movements (e2e)", () => {
       expect(body.data[0].id).toBe(movAdjExitAId);
     });
 
-    it("filters by from date (inclusive at 00:00:00Z)", async () => {
+    it("filters by from date (inclusive from the start of the Bogota day)", async () => {
       const body = listOf(
         (await getList(tokens.SUPERADMIN, { from: "2026-10-20" }).expect(200)).body,
       );
@@ -508,7 +536,7 @@ describe("GET /api/v1/inventory-movements (e2e)", () => {
       expect(ids).not.toContain(movExitAId);
     });
 
-    it("filters by to date (inclusive at 23:59:59.999Z)", async () => {
+    it("filters by to date (inclusive until the end of the Bogota day)", async () => {
       const body = listOf(
         (await getList(tokens.SUPERADMIN, { to: "2026-10-10" }).expect(200)).body,
       );
@@ -645,13 +673,16 @@ describe("GET /api/v1/inventory-movements (e2e)", () => {
         expect(body.meta.total).toBeGreaterThanOrEqual(6);
       });
 
-      it("DEV sees all movements → 200", async () => {
-        const body = listOf((await getList(tokens.DEV).expect(200)).body);
-        expect(body.meta.total).toBeGreaterThanOrEqual(6);
+      it("denies DEV, which is not part of the movements roles → 403", async () => {
+        const response = await getList(tokens.DEV).expect(403);
+        expect(errorOf(response.body).code).toBe("INSUFFICIENT_PERMISSIONS");
       });
 
       it("BRANCH_LEADER sees only movements related to their branch (branchId OR originBranchId)", async () => {
-        const body = listOf((await getList(tokens.BRANCH_LEADER).expect(200)).body);
+        const body = listOf(
+          (await getList(tokens.BRANCH_LEADER, { branchId: branchAId }).expect(200))
+            .body,
+        );
 
         const ids = body.data.map((m) => m.id);
         // Should see branchA movements and the TRANSFER that originates from branchA
@@ -663,7 +694,13 @@ describe("GET /api/v1/inventory-movements (e2e)", () => {
       });
 
       it("BRANCH_ASSISTANT sees only movements related to their branch", async () => {
-        const body = listOf((await getList(tokens.BRANCH_ASSISTANT).expect(200)).body);
+        const body = listOf(
+          (
+            await getList(tokens.BRANCH_ASSISTANT, { branchId: branchAId }).expect(
+              200,
+            )
+          ).body,
+        );
 
         const ids = body.data.map((m) => m.id);
         for (const id of branchAIds()) {
@@ -672,11 +709,19 @@ describe("GET /api/v1/inventory-movements (e2e)", () => {
         expect(ids).not.toContain(movEntryBId);
       });
 
-      it("BRANCH_LEADER filtering by a branch outside their scope → 403 FORBIDDEN_BRANCH", async () => {
+      it.each(["BRANCH_LEADER", "BRANCH_ASSISTANT"] as const)(
+        "%s must send the branchId → 400 BRANCH_REQUIRED",
+        async (roleName) => {
+          const response = await getList(tokens[roleName]).expect(400);
+          expect(errorOf(response.body).code).toBe("BRANCH_REQUIRED");
+        },
+      );
+
+      it("BRANCH_LEADER filtering by a branch outside their scope → 403 BRANCH_SCOPE_VIOLATION", async () => {
         const response = await getList(tokens.BRANCH_LEADER, {
           branchId: branchBId,
         }).expect(403);
-        expect(errorOf(response.body).code).toBe("FORBIDDEN_BRANCH");
+        expect(errorOf(response.body).code).toBe("BRANCH_SCOPE_VIOLATION");
       });
 
       it("returns 401 when no token is provided", async () => {
@@ -693,9 +738,9 @@ describe("GET /api/v1/inventory-movements (e2e)", () => {
         await getOne(movTransferAtoBId, tokens.BRANCH_LEADER).expect(200);
       });
 
-      it("BRANCH_LEADER cannot read a movement from a branch outside their scope → 403 FORBIDDEN_BRANCH", async () => {
+      it("BRANCH_LEADER cannot read a movement from a branch outside their scope → 403 BRANCH_SCOPE_VIOLATION", async () => {
         const response = await getOne(movEntryBId, tokens.BRANCH_LEADER).expect(403);
-        expect(errorOf(response.body).code).toBe("FORBIDDEN_BRANCH");
+        expect(errorOf(response.body).code).toBe("BRANCH_SCOPE_VIOLATION");
       });
 
       it("BRANCH_ASSISTANT can read a movement from their branch → 200", async () => {

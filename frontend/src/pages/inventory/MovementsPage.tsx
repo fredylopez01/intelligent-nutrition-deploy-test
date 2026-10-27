@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { MovementDetail } from '../../components/inventory-movements/MovementDetail'
+import { MovementForm } from '../../components/inventory-movements/MovementForm'
 import { MovementsTable } from '../../components/inventory-movements/MovementsTable'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
@@ -16,8 +17,18 @@ import { useInventoryMovements } from '../../hooks/useInventoryMovements'
 import { useMovementProductOptions } from '../../hooks/useMovementProductOptions'
 import { usePagination } from '../../hooks/usePagination'
 import { AppLayout } from '../../layouts/AppLayout'
-import type { InventoryMovement, MovementType } from '../../types/inventoryMovement'
-import { MOVEMENT_TYPE_OPTIONS } from '../../utils/inventoryMovements'
+import type {
+  InventoryMovement,
+  MovementType,
+  RegisteredMovement,
+} from '../../types/inventoryMovement'
+import { hasRole } from '../../utils/categories'
+import { formatQuantity } from '../../utils/inventory'
+import {
+  MOVEMENT_REGISTER_ROLES,
+  MOVEMENT_TYPE_OPTIONS,
+  signedQuantity,
+} from '../../utils/inventoryMovements'
 
 import './InventoryPage.css'
 import './MovementsPage.css'
@@ -27,12 +38,21 @@ const ALL_BRANCHES = 'todas'
 const FILTER_DEFAULTS = { sede: '', tipo: 'todos', producto: 'todos', desde: '', hasta: '' }
 const LIMIT_OPTIONS = [20, 50, 100]
 
-type Dialog = { kind: 'detail'; movement: InventoryMovement }
+const REGISTERED_LABELS: Record<MovementType, string> = {
+  ENTRY: 'Entrada registrada',
+  EXIT: 'Salida registrada',
+  TRANSFER: 'Traslado registrado',
+  ADJUSTMENT_ENTRY: 'Ajuste de entrada registrado',
+  ADJUSTMENT_EXIT: 'Ajuste de salida registrado',
+}
+
+type Dialog = { kind: 'register' } | { kind: 'detail'; movement: InventoryMovement }
 
 export function MovementsPage() {
   const { user } = useAuth()
   const roleName = user?.role.name
   const isSuperadmin = roleName === 'SUPERADMIN'
+  const canRegister = hasRole(MOVEMENT_REGISTER_ROLES, roleName)
   const branchOptions = useInventoryBranches()
 
   const [, setSearchParams] = useSearchParams()
@@ -64,6 +84,7 @@ export function MovementsPage() {
   const clearListFilters = () =>
     updateFilters({ tipo: null, producto: null, desde: null, hasta: null })
 
+  const activeBranches = branchOptions.branches.filter((option) => option.active)
   const requested = branchOptions.branches.find((option) => option.id === filters.sede)
   const branch = requested ?? (isSuperadmin ? null : (branchOptions.branches[0] ?? null))
   const branchId = branch?.id
@@ -85,7 +106,25 @@ export function MovementsPage() {
   )
 
   const [dialog, setDialog] = useState<Dialog | null>(null)
+  const [feedback, setFeedback] = useState<string | null>(null)
   const closeDialog = () => setDialog(null)
+  const openDialog = (next: Dialog) => {
+    setFeedback(null)
+    setDialog(next)
+  }
+
+  const handleRegistered = (movement: RegisteredMovement) => {
+    closeDialog()
+    const quantity = signedQuantity(movement, movement.branch?.id)
+    setFeedback(
+      `${REGISTERED_LABELS[movement.movementType]}: ${quantity} de ${movement.product.name} en ${movement.branch?.name ?? 'la sede'}. Ahora hay ${formatQuantity(movement.resultingQuantity, movement.product.unit)}.`,
+    )
+    if (params.page === 1) refetch()
+    else setPage(1)
+  }
+
+  const formBranches = isSuperadmin ? activeBranches : branchOptions.branches
+  const defaultFormBranchId = branch?.active ? branch.id : formBranches[0]?.id
 
   const renderList = () => {
     if (branchOptions.status === 'error') {
@@ -145,7 +184,7 @@ export function MovementsPage() {
       <MovementsTable
         movements={movements}
         viewedBranchId={branchId}
-        onViewDetail={(movement) => setDialog({ kind: 'detail', movement })}
+        onViewDetail={(movement) => openDialog({ kind: 'detail', movement })}
       />
     )
   }
@@ -190,6 +229,16 @@ export function MovementsPage() {
               </option>
             ))}
           </select>
+        </div>
+        <div className="movements-page__actions">
+          {canRegister && (
+            <Button
+              onClick={() => openDialog({ kind: 'register' })}
+              disabled={formBranches.length === 0}
+            >
+              Registrar entrada o salida
+            </Button>
+          )}
         </div>
       </div>
 
@@ -251,6 +300,12 @@ export function MovementsPage() {
         <ReloadButton onReload={refetch} loading={status === 'loading'} />
       </div>
 
+      {feedback && (
+        <div className="inventory-page__feedback">
+          <Alert tone="success">{feedback}</Alert>
+        </div>
+      )}
+
       <div className="inventory-page__card">{renderList()}</div>
 
       <div className="inventory-page__footer">
@@ -271,6 +326,22 @@ export function MovementsPage() {
           corrección se registra como un ajuste. Un traslado aparece en las dos sedes.
         </p>
       </div>
+
+      <Modal
+        open={dialog?.kind === 'register'}
+        title="Registrar entrada o salida"
+        description="La entrada trae unidades del stock general; la salida retira unidades de un lote de la sede."
+        onClose={closeDialog}
+      >
+        {dialog?.kind === 'register' && (
+          <MovementForm
+            branches={formBranches}
+            defaultBranchId={defaultFormBranchId}
+            onRegistered={handleRegistered}
+            onCancel={closeDialog}
+          />
+        )}
+      </Modal>
 
       <Modal open={dialog?.kind === 'detail'} title="Detalle del movimiento" onClose={closeDialog}>
         {dialog?.kind === 'detail' && (
