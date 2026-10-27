@@ -20,3 +20,8 @@ export interface PaymentMethodsListResponse {
   data: PaymentMethod[]
   meta: PaginationMeta
 }
+
+export interface CreatePaymentMethodPayload {
+  code: string
+  name: string
+}

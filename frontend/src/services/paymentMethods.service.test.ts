@@ -34,4 +34,16 @@ describe('paymentMethodsService', () => {
 
     expect(http.get).toHaveBeenCalledWith('/payment-methods', { token: 'token' })
   })
+
+  it('creates a payment method with its code and name', async () => {
+    vi.mocked(http.post).mockResolvedValue({ id: 'pm-1' })
+
+    await paymentMethodsService.create({ code: 'DAVIPLATA', name: 'Daviplata' }, 'token')
+
+    expect(http.post).toHaveBeenCalledWith(
+      '/payment-methods',
+      { code: 'DAVIPLATA', name: 'Daviplata' },
+      { token: 'token' },
+    )
+  })
 })

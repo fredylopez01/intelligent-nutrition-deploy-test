@@ -1,4 +1,9 @@
-import type { PaymentMethodsListParams, PaymentMethodsListResponse } from '../types/paymentMethod'
+import type {
+  CreatePaymentMethodPayload,
+  PaymentMethod,
+  PaymentMethodsListParams,
+  PaymentMethodsListResponse,
+} from '../types/paymentMethod'
 
 import { http } from './http'
 
@@ -25,4 +30,7 @@ export const paymentMethodsService = {
       `${PAYMENT_METHODS_PATH}${buildPaymentMethodsQuery(params)}`,
       { token },
     ),
+
+  create: (payload: CreatePaymentMethodPayload, token: string | null) =>
+    http.post<PaymentMethod>(PAYMENT_METHODS_PATH, payload, { token }),
 }
