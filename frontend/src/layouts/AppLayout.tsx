@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
+import { NotificationsPanel } from '../components/notifications/NotificationsPanel'
 import { Sidebar } from '../components/Sidebar'
 import { useAuth } from '../hooks/useAuth'
 
@@ -62,6 +63,7 @@ export function AppLayout({
           </div>
           <div className="app-layout__header-actions">
             {actions}
+            <NotificationsPanel />
             <button type="button" className="app-layout__logout" onClick={handleLogout}>
               Cerrar sesión
             </button>
