@@ -376,6 +376,52 @@ describe("Inventory availability and consolidated (e2e)", () => {
       },
     );
 
+    it("leaves out the branch sent in excludeBranchId", async () => {
+      const response = await getAvailability(tokens.BRANCH_LEADER, {
+        productId: products.alpha,
+        excludeBranchId: branchA,
+      }).expect(200);
+      const branches = onlyOwn(availabilityOf(response.body).branches);
+
+      expect(branches.map((item) => [item.branchId, item.quantity])).toEqual([
+        [branchB, 20],
+        [emptyBranch, 0],
+      ]);
+    });
+
+    it("rejects a malformed excludeBranchId", async () => {
+      await getAvailability(tokens.SUPERADMIN, {
+        productId: products.alpha,
+        excludeBranchId: "not-a-uuid",
+      }).expect(400);
+    });
+
+    it("does not count expired lots, since they cannot be sold or transferred", async () => {
+      const expired = await createLot(
+        branchA,
+        products.bravo,
+        9,
+        1,
+        "2020-01-01T00:00:00.000Z",
+      );
+      try {
+        const response = await getAvailability(tokens.BRANCH_ASSISTANT, {
+          productId: products.bravo,
+        }).expect(200);
+        const branches = onlyOwn(availabilityOf(response.body).branches);
+
+        expect(branches.map((item) => [item.branchId, item.quantity])).toEqual(
+          [
+            [branchA, 0],
+            [branchB, 8],
+            [emptyBranch, 0],
+          ],
+        );
+      } finally {
+        await prisma!.branchInventory.delete({ where: { id: expired.id } });
+      }
+    });
+
     it.each([
       ["missing productId", {}],
       ["empty productId", { productId: "" }],

@@ -21,6 +21,7 @@ import { GeneralStockService } from "../general-stock/general-stock.service.js";
 import { LowStockService } from "../notifications/low-stock.service.js";
 import {
   isExpired,
+  startOfTodayUtc,
   toExpirationDate,
 } from "../../common/utils/expiration.util.js";
 
@@ -596,7 +597,7 @@ export class InventoryService {
     };
   }
 
-  async getAvailability(productId: string) {
+  async getAvailability(productId: string, excludeBranchId?: string) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
       select: { id: true, name: true, referenceCode: true },
@@ -609,12 +610,15 @@ export class InventoryService {
     }
 
     const branches = await this.prisma.branch.findMany({
-      where: { active: true },
+      where: {
+        active: true,
+        ...(excludeBranchId ? { id: { not: excludeBranchId } } : {}),
+      },
       select: {
         id: true,
         name: true,
         branchInventories: {
-          where: { productId },
+          where: { productId, expirationDate: { gte: startOfTodayUtc() } },
           select: { quantity: true },
         },
       },
