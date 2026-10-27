@@ -16,16 +16,24 @@ interface AuditLogsResult {
   error: string | null
 }
 
-export function useAuditLogs({ page, limit, userId, action, fromDate, toDate }: AuditLogsListParams) {
+export function useAuditLogs({
+  page,
+  limit,
+  userId,
+  action,
+  entity,
+  from,
+  to,
+}: AuditLogsListParams) {
   const { token } = useAuth()
   const [result, setResult] = useState<AuditLogsResult | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
-  const requestKey = `${page ?? 1}|${limit ?? 10}|${userId ?? ''}|${action ?? ''}|${fromDate ?? ''}|${toDate ?? ''}|${token ?? ''}|${reloadToken}`
+  const requestKey = `${page ?? 1}|${limit ?? 10}|${userId ?? ''}|${action ?? ''}|${entity ?? ''}|${from ?? ''}|${to ?? ''}|${token ?? ''}|${reloadToken}`
 
   useEffect(() => {
     let cancelled = false
     auditLogsService
-      .list({ page, limit, userId, action, fromDate, toDate }, token)
+      .list({ page, limit, userId, action, entity, from, to }, token)
       .then((response) => {
         if (cancelled) return
         setResult({
@@ -54,7 +62,7 @@ export function useAuditLogs({ page, limit, userId, action, fromDate, toDate }: 
     return () => {
       cancelled = true
     }
-  }, [requestKey, page, limit, userId, action, fromDate, toDate, token])
+  }, [requestKey, page, limit, userId, action, entity, from, to, token])
 
   const refetch = useCallback(() => {
     setReloadToken((value) => value + 1)
