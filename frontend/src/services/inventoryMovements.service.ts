@@ -1,4 +1,5 @@
 import type {
+  CreateAdjustmentPayload,
   CreateMovementPayload,
   CreateTransferPayload,
   MovementsListParams,
@@ -28,4 +29,7 @@ export const inventoryMovementsService = {
 
   transfer: (payload: CreateTransferPayload, token: string | null) =>
     http.post<RegisteredMovement>(`${MOVEMENTS_PATH}/transfers`, payload, { token }),
+
+  adjust: (payload: CreateAdjustmentPayload, token: string | null) =>
+    http.post<RegisteredMovement>(`${MOVEMENTS_PATH}/adjustments`, payload, { token }),
 }

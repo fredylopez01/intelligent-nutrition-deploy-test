@@ -60,3 +60,12 @@ export interface CreateTransferPayload {
   expirationDate?: string
   observation?: string
 }
+
+export interface CreateAdjustmentPayload {
+  branchId: string
+  productId: string
+  movementType: 'ADJUSTMENT_ENTRY' | 'ADJUSTMENT_EXIT'
+  quantity: number
+  expirationDate?: string
+  reason: string
+}
