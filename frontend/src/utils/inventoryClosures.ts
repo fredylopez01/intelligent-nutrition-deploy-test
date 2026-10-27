@@ -1,7 +1,9 @@
 import { ApiError } from '../services/http'
 import type { RoleName } from '../types/auth'
+import type { ClosureItem } from '../types/inventoryClosure'
 
 export const CLOSURE_COUNT_ROLES: RoleName[] = ['BRANCH_LEADER', 'BRANCH_ASSISTANT']
+export const CLOSURE_OBSERVATION_MAX_LENGTH = 500
 
 const BUSINESS_TIME_ZONE = 'America/Bogota'
 
@@ -29,11 +31,28 @@ export function formatClosureDay(isoDate: string): string {
   return longDateFormatter.format(date)
 }
 
+export function lotKey(item: Pick<ClosureItem, 'productId' | 'expirationDate'>): string {
+  return `${item.productId}|${item.expirationDate ?? ''}`
+}
+
+export const COUNT_PATTERN = /^\d{1,9}$/
+
+export function countError(value: string): string | null {
+  if (value.trim() === '') return null
+  return COUNT_PATTERN.test(value.trim())
+    ? null
+    : 'Escribe un número entero de 0 en adelante, sin puntos ni comas.'
+}
+
 export function resolveClosureError(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) return fallback
   switch (error.code) {
     case 'CLOSURE_ALREADY_EXISTS':
       return 'La sede ya tiene un cierre para hoy. Recarga para continuar con ese conteo.'
+    case 'CLOSURE_LOCKED':
+      return 'El cierre ya se confirmó o se bloqueó: los conteos no se pueden cambiar. Si hay una diferencia, el superadmin puede registrar un ajuste.'
+    case 'PRODUCT_NOT_IN_CLOSURE':
+      return 'Uno de los lotes ya no pertenece al cierre. Recarga la página.'
     case 'BRANCH_INACTIVE':
       return 'La sede está inactiva: no se puede iniciar el cierre.'
     case 'BRANCH_SCOPE_VIOLATION':

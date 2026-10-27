@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '../services/http'
 
-import { businessToday, formatClosureDay, resolveClosureError } from './inventoryClosures'
+import {
+  businessToday,
+  countError,
+  formatClosureDay,
+  resolveClosureError,
+} from './inventoryClosures'
 
 describe('inventory closure helpers', () => {
   it('uses the Bogota calendar day', () => {
@@ -14,9 +19,20 @@ describe('inventory closure helpers', () => {
     expect(formatClosureDay('2026-10-26')).toBe('lunes, 26 de octubre')
   })
 
-  it('explains that the branch already started the closure of today', () => {
+  it.each([
+    ['', null],
+    ['0', null],
+    ['12', null],
+    ['-1', 'Escribe un número entero de 0 en adelante, sin puntos ni comas.'],
+    ['1.5', 'Escribe un número entero de 0 en adelante, sin puntos ni comas.'],
+    ['diez', 'Escribe un número entero de 0 en adelante, sin puntos ni comas.'],
+  ])('validates the count %s', (value, error) => {
+    expect(countError(value)).toBe(error)
+  })
+
+  it('explains a locked closure', () => {
     expect(
-      resolveClosureError(new ApiError('Exists', 409, {}, 'CLOSURE_ALREADY_EXISTS'), 'fallback'),
-    ).toContain('ya tiene un cierre para hoy')
+      resolveClosureError(new ApiError('Locked', 422, {}, 'CLOSURE_LOCKED'), 'fallback'),
+    ).toContain('ya se confirmó o se bloqueó')
   })
 })

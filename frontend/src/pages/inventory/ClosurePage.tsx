@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router-dom'
 
+import { ClosureCountForm } from '../../components/inventory-closures/ClosureCountForm'
 import { ClosureStart } from '../../components/inventory-closures/ClosureStart'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
@@ -84,12 +85,21 @@ export function ClosurePage() {
     }
     if (today.closure.status === 'PENDING') {
       return (
-        <div className="closure-page__today">
-          <Alert tone="info">
-            El cierre del {formatClosureDay(today.closure.closureDate)} está abierto con{' '}
-            {today.closure.totalItems} lotes para contar.
-          </Alert>
-        </div>
+        <section className="closure-page__today" aria-labelledby="closure-count-title">
+          <div className="closure-page__section-head">
+            <div>
+              <p className="closure-card__eyebrow">{formatClosureDay(today.closure.closureDate)}</p>
+              <h2 id="closure-count-title" className="closure-card__title">
+                Conteo ciego de {branch.name}
+              </h2>
+            </div>
+          </div>
+          <ClosureCountForm
+            key={today.closure.id}
+            closure={today.closure}
+            onSaved={handleClosureChange}
+          />
+        </section>
       )
     }
     return (

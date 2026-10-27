@@ -1,4 +1,5 @@
 import type {
+  ClosureCount,
   ClosuresListParams,
   ClosuresListResponse,
   InventoryClosure,
@@ -26,4 +27,7 @@ export const inventoryClosuresService = {
 
   list: (params: ClosuresListParams, token: string | null) =>
     http.get<ClosuresListResponse>(`${CLOSURES_PATH}${buildClosuresQuery(params)}`, { token }),
+
+  saveCounts: (closureId: string, items: ClosureCount[], token: string | null) =>
+    http.put<InventoryClosure>(`${CLOSURES_PATH}/${closureId}/counts`, { items }, { token }),
 }

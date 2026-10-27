@@ -47,3 +47,10 @@ export interface ClosuresListResponse {
   data: ClosureSummary[]
   meta: PaginationMeta
 }
+
+export interface ClosureCount {
+  productId: string
+  expirationDate: string
+  physicalQuantity: number
+  observation?: string
+}

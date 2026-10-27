@@ -80,6 +80,8 @@ export const http = {
     request<T>(path, { ...options, method: 'POST', body: JSON.stringify(data) }),
   patch: <T>(path: string, data: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'PATCH', body: JSON.stringify(data) }),
+  put: <T>(path: string, data: unknown, options?: RequestOptions) =>
+    request<T>(path, { ...options, method: 'PUT', body: JSON.stringify(data) }),
   delete: <T>(path: string, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'DELETE' }),
 }
