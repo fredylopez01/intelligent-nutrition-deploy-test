@@ -11,11 +11,6 @@ export const PENDING_MODULES: PendingModule[] = [
     description: 'Ventas del día, stock por sede y alertas de inventario en una sola vista.',
   },
   {
-    path: '/pos/ventas',
-    title: 'Ventas',
-    description: 'Historial de ventas por sede y reversión de tiquetes con motivo.',
-  },
-  {
     path: '/proveedores/compras',
     title: 'Compras y recepción',
     description: 'Registro de compras, recepción parcial y asignación del stock general.',

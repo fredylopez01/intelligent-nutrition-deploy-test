@@ -27,4 +27,26 @@ describe('salesService', () => {
       { token: 'token' },
     )
   })
+
+  it('lists the sales with the contract filters', async () => {
+    vi.mocked(http.get).mockResolvedValue({ data: [], meta: {} })
+
+    await salesService.list(
+      { page: 1, limit: 20, branchId: 'branch-centro', status: 'REVERSED', search: 'V-2026' },
+      'token',
+    )
+
+    expect(http.get).toHaveBeenCalledWith(
+      '/sales?page=1&limit=20&branchId=branch-centro&status=REVERSED&search=V-2026',
+      { token: 'token' },
+    )
+  })
+
+  it('reads one sale', async () => {
+    vi.mocked(http.get).mockResolvedValue({})
+
+    await salesService.get('sale-1', 'token')
+
+    expect(http.get).toHaveBeenCalledWith('/sales/sale-1', { token: 'token' })
+  })
 })

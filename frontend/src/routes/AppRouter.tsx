@@ -25,6 +25,7 @@ import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
 import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
 import { PaymentMethodsPage } from '../pages/pos/PaymentMethodsPage'
 import { PosPage } from '../pages/pos/PosPage'
+import { SalesPage } from '../pages/pos/SalesPage'
 import { SettingsPage } from '../pages/settings/SettingsPage'
 import { SupplierDetailPage } from '../pages/suppliers/SupplierDetailPage'
 import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
@@ -143,6 +144,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={ROUTE_ROLES['/pos']}>
             <PosPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pos/ventas"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/pos/ventas']}>
+            <SalesPage />
           </ProtectedRoute>
         }
       />
