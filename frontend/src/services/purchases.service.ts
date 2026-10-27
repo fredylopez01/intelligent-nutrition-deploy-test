@@ -1,4 +1,9 @@
-import type { Purchase, PurchasesListParams, PurchasesListResponse } from '../types/purchase'
+import type {
+  CreatePurchasePayload,
+  Purchase,
+  PurchasesListParams,
+  PurchasesListResponse,
+} from '../types/purchase'
 
 import { http } from './http'
 
@@ -19,4 +24,7 @@ export const purchasesService = {
 
   get: (purchaseId: string, token: string | null) =>
     http.get<Purchase>(`${PURCHASES_PATH}/${purchaseId}`, { token }),
+
+  create: (payload: CreatePurchasePayload, token: string | null) =>
+    http.post<Purchase>(PURCHASES_PATH, payload, { token }),
 }

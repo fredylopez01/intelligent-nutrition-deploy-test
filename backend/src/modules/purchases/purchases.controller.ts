@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Ip,
   Param,
   ParseUUIDPipe,
@@ -21,7 +22,7 @@ export class PurchasesController {
   constructor(private readonly purchasesService: PurchasesService) {}
 
   @Post()
-  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
   create(
     @Body() createPurchaseDto: CreatePurchaseDto,
     @CurrentUser() currentUser: AuthenticatedUser,
@@ -35,19 +36,20 @@ export class PurchasesController {
   }
 
   @Get()
-  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
   findAll(@Query() query: ListPurchasesQueryDto) {
     return this.purchasesService.findAll(query);
   }
 
   @Get(":purchaseId")
-  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER")
+  @Roles("SUPERADMIN", "BRANCH_LEADER")
   findOne(@Param("purchaseId", new ParseUUIDPipe()) purchaseId: string) {
     return this.purchasesService.findOne(purchaseId);
   }
 
   @Post(":purchaseId/receipts")
-  @Roles("SUPERADMIN", "BRANCH_LEADER")
+  @HttpCode(200)
+  @Roles("SUPERADMIN")
   receive(
     @Param("purchaseId", new ParseUUIDPipe()) purchaseId: string,
     @Body() receivePurchaseDto: ReceivePurchaseDto,

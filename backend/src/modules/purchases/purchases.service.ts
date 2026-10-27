@@ -13,6 +13,10 @@ import { ListPurchasesQueryDto } from "./dto/list-purchases-query.dto.js";
 import { ReceivePurchaseDto } from "./dto/receive-purchase.dto.js";
 import { GeneralStockService } from "../general-stock/general-stock.service.js";
 import {
+  businessDate,
+  businessDayBounds,
+} from "../../common/utils/business-day.util.js";
+import {
   formatExpirationDate,
   isExpired,
   toExpirationDate,
@@ -253,8 +257,8 @@ export class PurchasesService {
     }
     if (from || to) {
       where.purchaseAt = {};
-      if (from) where.purchaseAt.gte = new Date(`${from}T00:00:00Z`);
-      if (to) where.purchaseAt.lte = new Date(`${to}T23:59:59.999Z`);
+      if (from) where.purchaseAt.gte = businessDayBounds(from).start;
+      if (to) where.purchaseAt.lte = businessDayBounds(to).end;
     }
     if (productId) {
       where.details = { some: { productId } };
@@ -579,7 +583,10 @@ export class PurchasesService {
     tx: Parameters<Parameters<PrismaService["$transaction"]>[0]>[0],
   ): Promise<string> {
     const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+    const dateStr = businessDate(now)
+      .toISOString()
+      .slice(0, 10)
+      .replace(/-/g, "");
     const prefix = `C-${dateStr}-`;
 
     const lastPurchase: any = await (tx as any).purchase.findFirst({

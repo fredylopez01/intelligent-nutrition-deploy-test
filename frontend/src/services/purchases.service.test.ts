@@ -34,4 +34,16 @@ describe('purchasesService', () => {
 
     expect(http.get).toHaveBeenCalledWith('/purchases/purchase-1', { token: 'token' })
   })
+
+  it('creates a purchase order', async () => {
+    vi.mocked(http.post).mockResolvedValue({})
+    const payload = {
+      supplierId: 'supplier-1',
+      items: [{ productId: 'product-whey', requestedQuantity: 20, unitPrice: '98000.00' }],
+    }
+
+    await purchasesService.create(payload, 'token')
+
+    expect(http.post).toHaveBeenCalledWith('/purchases', payload, { token: 'token' })
+  })
 })

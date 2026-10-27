@@ -246,7 +246,7 @@ describe("POST /api/v1/purchases/:purchaseId/receipts (e2e)", () => {
         ],
       },
       tokens.SUPERADMIN,
-    ).expect(201);
+    ).expect(200);
     const purchase = (response.body as ReceiptResponse).data;
 
     expect(purchase).toMatchObject({
