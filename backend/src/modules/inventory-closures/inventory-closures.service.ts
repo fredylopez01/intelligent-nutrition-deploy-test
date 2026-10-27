@@ -1,15 +1,136 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
+import type { Prisma } from "../../../generated/prisma/client.js";
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { UpdateCountsDto } from "./dto/update-counts.dto.js";
 import { ListClosuresQueryDto } from "./dto/list-closures-query.dto.js";
+import { businessDate } from "../../common/utils/business-day.util.js";
+import {
+  formatExpirationDate,
+  toExpirationDate,
+} from "../../common/utils/expiration.util.js";
+
+const CLOSURE_SELECT = {
+  id: true,
+  branchId: true,
+  closureDate: true,
+  status: true,
+  confirmed: true,
+  locked: true,
+  closedAt: true,
+  branch: { select: { name: true } },
+  user: {
+    select: { person: { select: { firstName: true, lastName: true } } },
+  },
+  details: {
+    select: {
+      id: true,
+      productId: true,
+      expirationDate: true,
+      systemQuantity: true,
+      physicalQuantity: true,
+      difference: true,
+      observation: true,
+      product: {
+        select: {
+          name: true,
+          referenceCode: true,
+          unitOfMeasure: { select: { abreviation: true } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.InventoryClosureSelect;
+
+type ClosureRow = Prisma.InventoryClosureGetPayload<{
+  select: typeof CLOSURE_SELECT;
+}>;
+
+type UserName = {
+  person: { firstName: string | null; lastName: string | null };
+} | null;
+
+function fullName(user: UserName): string | null {
+  if (!user) return null;
+  return (
+    [user.person.firstName, user.person.lastName].filter(Boolean).join(" ") ||
+    null
+  );
+}
+
+function lotKey(productId: string, expirationDate: Date | null): string {
+  return `${productId}|${expirationDate ? formatExpirationDate(expirationDate) : ""}`;
+}
+
+function canSeeDifferences(currentUser: AuthenticatedUser): boolean {
+  const roleName = currentUser.role?.name;
+  return roleName === "SUPERADMIN" || roleName === "BRANCH_LEADER";
+}
+
+function isScopedRole(currentUser: AuthenticatedUser): boolean {
+  const roleName = currentUser.role?.name;
+  return roleName === "BRANCH_LEADER" || roleName === "BRANCH_ASSISTANT";
+}
+
+function toClosureResponse(
+  closure: ClosureRow,
+  currentUser: AuthenticatedUser,
+) {
+  const reveal = closure.status !== "PENDING" && canSeeDifferences(currentUser);
+  const items = [...closure.details]
+    .sort(
+      (a, b) =>
+        a.product.name.localeCompare(b.product.name, "es") ||
+        (a.expirationDate?.getTime() ?? 0) - (b.expirationDate?.getTime() ?? 0),
+    )
+    .map((detail) => ({
+      productId: detail.productId,
+      productName: detail.product.name,
+      referenceCode: detail.product.referenceCode,
+      unit: detail.product.unitOfMeasure.abreviation,
+      expirationDate: detail.expirationDate
+        ? formatExpirationDate(detail.expirationDate)
+        : null,
+      physicalQuantity: detail.physicalQuantity,
+      observation: detail.observation,
+      ...(reveal
+        ? {
+            systemQuantity: detail.systemQuantity,
+            difference: detail.difference,
+          }
+        : {}),
+    }));
+
+  return {
+    id: closure.id,
+    branchId: closure.branchId,
+    branchName: closure.branch.name,
+    closureDate: formatExpirationDate(closure.closureDate),
+    status: closure.status,
+    confirmed: closure.confirmed,
+    locked: closure.locked,
+    closedAt: closure.closedAt,
+    userName: fullName(closure.user),
+    countedItems: items.filter((item) => item.physicalQuantity !== null).length,
+    totalItems: items.length,
+    ...(reveal
+      ? {
+          totalDifferences: closure.details.filter(
+            (detail) => detail.difference !== null && detail.difference !== 0,
+          ).length,
+        }
+      : {}),
+    items,
+  };
+}
 
 @Injectable()
 export class InventoryClosuresService {
@@ -18,13 +139,13 @@ export class InventoryClosuresService {
     private readonly auditService: AuditService,
   ) {}
 
-  async create(branchId: string, currentUser: AuthenticatedUser, ipAddress?: string) {
+  async create(branchId: string, currentUser: AuthenticatedUser) {
     this.assertBranchScope(branchId, currentUser);
 
     return this.prisma.$transaction(async (tx) => {
       const branch = await tx.branch.findUnique({
         where: { id: branchId },
-        select: { id: true, name: true, active: true },
+        select: { id: true, active: true },
       });
       if (!branch) {
         throw new NotFoundException({
@@ -39,11 +160,9 @@ export class InventoryClosuresService {
         });
       }
 
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-
+      const closureDate = businessDate();
       const existing = await tx.inventoryClosure.findUnique({
-        where: { branchId_closureDate: { branchId, closureDate: today } },
+        where: { branchId_closureDate: { branchId, closureDate } },
         select: { id: true },
       });
       if (existing) {
@@ -54,260 +173,104 @@ export class InventoryClosuresService {
         });
       }
 
-      const inventoryRows = await tx.branchInventory.findMany({
-        where: {
-          branchId,
-          product: { active: true },
-        },
-        select: {
-          productId: true,
-          quantity: true,
-          product: {
-            select: {
-              name: true,
-              referenceCode: true,
-              unitOfMeasure: { select: { abreviation: true } },
-            },
-          },
-        },
+      const lots = await tx.branchInventory.findMany({
+        where: { branchId, quantity: { gt: 0 }, product: { active: true } },
+        select: { productId: true, expirationDate: true, quantity: true },
       });
-
-      const productMap = new Map<
-        string,
-        { name: string; referenceCode: string; unit: string; totalQty: number }
-      >();
-      for (const row of inventoryRows) {
-        const existing = productMap.get(row.productId);
-        if (existing) {
-          existing.totalQty += row.quantity;
-        } else {
-          productMap.set(row.productId, {
-            name: row.product.name,
-            referenceCode: row.product.referenceCode,
-            unit: row.product.unitOfMeasure.abreviation,
-            totalQty: row.quantity,
-          });
-        }
-      }
 
       const closure = await tx.inventoryClosure.create({
         data: {
           branchId,
           userId: currentUser.id,
-          closureDate: today,
+          closureDate,
           status: "PENDING",
           confirmed: false,
           locked: false,
           details: {
-            create: Array.from(productMap.entries()).map(([productId, info]) => ({
-              productId,
-              systemQuantity: info.totalQty,
+            create: lots.map((lot) => ({
+              productId: lot.productId,
+              expirationDate: lot.expirationDate,
+              systemQuantity: lot.quantity,
             })),
           },
         },
-        select: {
-          id: true,
-          branchId: true,
-          closureDate: true,
-          status: true,
-          confirmed: true,
-          locked: true,
-          closedAt: true,
-          details: {
-            select: {
-              productId: true,
-              physicalQuantity: true,
-              observation: true,
-              product: {
-                select: {
-                  name: true,
-                  referenceCode: true,
-                  unitOfMeasure: { select: { abreviation: true } },
-                },
-              },
-            },
-          },
-        },
+        select: CLOSURE_SELECT,
       });
 
-      await this.auditService.createAuditLog(
-        {
-          userId: currentUser.id,
-          action: "CREATE",
-          entity: "INVENTORY_CLOSURE",
-          entityId: closure.id,
-          newData: {
-            branchId,
-            closureDate: today.toISOString().slice(0, 10),
-            itemsCount: productMap.size,
-          },
-          reason: `Inventory closure created for branch ${branchId}`,
-          ipAddress,
-        },
-        tx,
-      );
-
-      return {
-        id: closure.id,
-        branchId: closure.branchId,
-        closureDate: closure.closureDate,
-        status: closure.status,
-        confirmed: closure.confirmed,
-        locked: closure.locked,
-        closedAt: closure.closedAt,
-        items: closure.details.map((d) => ({
-          productId: d.productId,
-          productName: d.product.name,
-          referenceCode: d.product.referenceCode,
-          unit: d.product.unitOfMeasure.abreviation,
-          physicalQuantity: d.physicalQuantity,
-          observation: d.observation,
-        })),
-      };
+      return toClosureResponse(closure, currentUser);
     });
+  }
+
+  async findOne(closureId: string, currentUser: AuthenticatedUser) {
+    const closure = await this.prisma.inventoryClosure.findUnique({
+      where: { id: closureId },
+      select: CLOSURE_SELECT,
+    });
+    if (!closure) throw this.notFound();
+    this.assertBranchScope(closure.branchId, currentUser);
+    return toClosureResponse(closure, currentUser);
   }
 
   async updateCounts(
     closureId: string,
     dto: UpdateCountsDto,
     currentUser: AuthenticatedUser,
-    ipAddress?: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
       const closure = await tx.inventoryClosure.findUnique({
         where: { id: closureId },
-        select: {
-          id: true,
-          branchId: true,
-          status: true,
-          locked: true,
-          details: {
-            select: {
-              id: true,
-              productId: true,
-              systemQuantity: true,
-            },
-          },
-        },
+        select: CLOSURE_SELECT,
       });
-
-      if (!closure) {
-        throw new NotFoundException({
-          code: "CLOSURE_NOT_FOUND",
-          message: "Inventory closure not found.",
-        });
-      }
-
+      if (!closure) throw this.notFound();
       this.assertBranchScope(closure.branchId, currentUser);
+      this.assertPending(closure);
 
-      if (closure.status !== "PENDING") {
-        throw new UnprocessableEntityException({
-          code: "CLOSURE_NOT_PENDING",
-          message: "Inventory closure is not in PENDING status.",
-        });
-      }
-
-      if (closure.locked) {
-        throw new UnprocessableEntityException({
-          code: "CLOSURE_LOCKED",
-          message: "Inventory closure is locked.",
-        });
-      }
-
-      const productIds = dto.counts.map((c) => c.productId);
-      const uniqueIds = new Set(productIds);
-      if (uniqueIds.size !== productIds.length) {
-        throw new UnprocessableEntityException({
-          code: "DUPLICATED_PRODUCT",
-          message: "Counts contain duplicated products.",
-        });
-      }
-
-      const detailMap = new Map(
-        closure.details.map((d) => [d.productId, d]),
+      const keys = dto.items.map((item) =>
+        lotKey(item.productId, toExpirationDate(item.expirationDate)),
       );
+      if (new Set(keys).size !== keys.length) {
+        throw new UnprocessableEntityException({
+          code: "DUPLICATED_ITEM",
+          message: "The counts repeat the same product and lot.",
+        });
+      }
 
-      for (const count of dto.counts) {
-        if (!detailMap.has(count.productId)) {
+      const details = new Map(
+        closure.details.map((detail) => [
+          lotKey(detail.productId, detail.expirationDate),
+          detail,
+        ]),
+      );
+      for (const [index, item] of dto.items.entries()) {
+        if (!details.has(keys[index])) {
           throw new UnprocessableEntityException({
             code: "PRODUCT_NOT_IN_CLOSURE",
-            message: `Product ${count.productId} is not part of this closure.`,
+            message: "The product lot is not part of this closure.",
+            details: {
+              productId: item.productId,
+              expirationDate: item.expirationDate,
+            },
           });
         }
       }
 
-      for (const count of dto.counts) {
-        const detail = detailMap.get(count.productId)!;
-        const difference = count.physicalQuantity - detail.systemQuantity;
+      for (const [index, item] of dto.items.entries()) {
+        const detail = details.get(keys[index])!;
         await tx.inventoryClosureDetail.update({
           where: { id: detail.id },
           data: {
-            physicalQuantity: count.physicalQuantity,
-            difference,
-            observation: count.observation ?? null,
+            physicalQuantity: item.physicalQuantity,
+            difference: item.physicalQuantity - detail.systemQuantity,
+            observation: item.observation || null,
           },
         });
       }
 
-      const updated = await tx.inventoryClosure.findUnique({
+      const updated = await tx.inventoryClosure.findUniqueOrThrow({
         where: { id: closureId },
-        select: {
-          id: true,
-          branchId: true,
-          closureDate: true,
-          status: true,
-          confirmed: true,
-          locked: true,
-          closedAt: true,
-          details: {
-            select: {
-              productId: true,
-              physicalQuantity: true,
-              observation: true,
-              product: {
-                select: {
-                  name: true,
-                  referenceCode: true,
-                  unitOfMeasure: { select: { abreviation: true } },
-                },
-              },
-            },
-          },
-        },
+        select: CLOSURE_SELECT,
       });
-
-      await this.auditService.createAuditLog(
-        {
-          userId: currentUser.id,
-          action: "UPDATE",
-          entity: "INVENTORY_CLOSURE",
-          entityId: closureId,
-          newData: {
-            countsUpdated: dto.counts.length,
-          },
-          reason: `Physical counts updated for closure ${closureId}`,
-          ipAddress,
-        },
-        tx,
-      );
-
-      return {
-        id: updated!.id,
-        branchId: updated!.branchId,
-        closureDate: updated!.closureDate,
-        status: updated!.status,
-        confirmed: updated!.confirmed,
-        locked: updated!.locked,
-        closedAt: updated!.closedAt,
-        items: updated!.details.map((d) => ({
-          productId: d.productId,
-          productName: d.product.name,
-          referenceCode: d.product.referenceCode,
-          unit: d.product.unitOfMeasure.abreviation,
-          physicalQuantity: d.physicalQuantity,
-          observation: d.observation,
-        })),
-      };
+      return toClosureResponse(updated, currentUser);
     });
   }
 
@@ -319,60 +282,42 @@ export class InventoryClosuresService {
     return this.prisma.$transaction(async (tx) => {
       const closure = await tx.inventoryClosure.findUnique({
         where: { id: closureId },
-        select: {
-          id: true,
-          branchId: true,
-          status: true,
-          locked: true,
-          details: {
-            select: {
-              id: true,
-              productId: true,
-              systemQuantity: true,
-              physicalQuantity: true,
-              difference: true,
-              observation: true,
-              product: {
-                select: {
-                  name: true,
-                  referenceCode: true,
-                  unitOfMeasure: { select: { abreviation: true } },
-                },
-              },
-            },
-          },
-        },
+        select: CLOSURE_SELECT,
       });
-
-      if (!closure) {
-        throw new NotFoundException({
-          code: "CLOSURE_NOT_FOUND",
-          message: "Inventory closure not found.",
-        });
-      }
-
+      if (!closure) throw this.notFound();
       this.assertBranchScope(closure.branchId, currentUser);
+      this.assertPending(closure);
 
-      if (closure.status !== "PENDING") {
+      const pending = closure.details.filter(
+        (detail) => detail.physicalQuantity === null,
+      );
+      if (pending.length > 0) {
         throw new UnprocessableEntityException({
-          code: "CLOSURE_NOT_PENDING",
-          message: "Inventory closure is not in PENDING status.",
+          code: "INCOMPLETE_COUNT",
+          message:
+            "Every lot of the closure must be counted before confirming.",
+          details: {
+            pending: pending.map((detail) => ({
+              productId: detail.productId,
+              productName: detail.product.name,
+              expirationDate: detail.expirationDate
+                ? formatExpirationDate(detail.expirationDate)
+                : null,
+            })),
+          },
         });
       }
 
-      const missing = closure.details.filter((d) => d.physicalQuantity === null);
-      if (missing.length > 0) {
-        throw new UnprocessableEntityException({
-          code: "COUNTS_INCOMPLETE",
-          message: "All items must have a physical count before confirming.",
-          details: {
-            missingProducts: missing.map((d) => d.productId),
+      for (const detail of closure.details) {
+        await tx.inventoryClosureDetail.update({
+          where: { id: detail.id },
+          data: {
+            difference: (detail.physicalQuantity ?? 0) - detail.systemQuantity,
           },
         });
       }
 
       const now = new Date();
-
       const updated = await tx.inventoryClosure.update({
         where: { id: closureId },
         data: {
@@ -381,92 +326,69 @@ export class InventoryClosuresService {
           locked: true,
           closedAt: now,
         },
-        select: {
-          id: true,
-          branchId: true,
-          closureDate: true,
-          status: true,
-          confirmed: true,
-          locked: true,
-          closedAt: true,
-          details: {
-            select: {
-              productId: true,
-              systemQuantity: true,
-              physicalQuantity: true,
-              difference: true,
-              observation: true,
-              product: {
-                select: {
-                  name: true,
-                  referenceCode: true,
-                  unitOfMeasure: { select: { abreviation: true } },
-                },
-              },
-            },
-          },
-        },
+        select: CLOSURE_SELECT,
       });
 
+      const differences = updated.details.filter(
+        (detail) => detail.difference !== 0,
+      ).length;
       await this.auditService.createAuditLog(
         {
           userId: currentUser.id,
-          action: "UPDATE",
+          action: "CONFIRM",
           entity: "INVENTORY_CLOSURE",
           entityId: closureId,
+          oldData: { status: "PENDING" },
           newData: {
             status: "CONFIRMED",
-            confirmedAt: now.toISOString(),
+            closureDate: formatExpirationDate(updated.closureDate),
+            countedLots: updated.details.length,
+            lotsWithDifference: differences,
           },
-          reason: `Inventory closure ${closureId} confirmed`,
+          reason: `Inventory closure of ${updated.branch.name} confirmed`,
           ipAddress,
         },
         tx,
       );
 
-      return {
-        id: updated.id,
-        branchId: updated.branchId,
-        closureDate: updated.closureDate,
-        status: updated.status,
-        confirmed: updated.confirmed,
-        locked: updated.locked,
-        closedAt: updated.closedAt,
-        items: updated.details.map((d) => ({
-          productId: d.productId,
-          productName: d.product.name,
-          referenceCode: d.product.referenceCode,
-          unit: d.product.unitOfMeasure.abreviation,
-          systemQuantity: d.systemQuantity,
-          physicalQuantity: d.physicalQuantity,
-          difference: d.difference,
-          observation: d.observation,
-        })),
-      };
+      return toClosureResponse(updated, currentUser);
     });
   }
 
-  async findAll(query: ListClosuresQueryDto) {
+  async findAll(query: ListClosuresQueryDto, currentUser: AuthenticatedUser) {
     const { page, limit, branchId, status, from, to } = query;
 
-    const where: any = {};
-    if (branchId) where.branchId = branchId;
-    if (status) where.status = status;
-    if (from || to) {
-      where.closureDate = {};
-      if (from) where.closureDate.gte = new Date(`${from}T00:00:00Z`);
-      if (to) where.closureDate.lte = new Date(`${to}T23:59:59.999Z`);
+    if (isScopedRole(currentUser)) {
+      if (!branchId) {
+        throw new BadRequestException({
+          code: "BRANCH_REQUIRED",
+          message: "branchId is required for branch roles.",
+        });
+      }
+      this.assertBranchScope(branchId, currentUser);
     }
 
-    const skip = (page - 1) * limit;
+    const where: Prisma.InventoryClosureWhereInput = {
+      ...(branchId ? { branchId } : {}),
+      ...(status ? { status: status as ClosureRow["status"] } : {}),
+      ...(from || to
+        ? {
+            closureDate: {
+              ...(from ? { gte: toExpirationDate(from) } : {}),
+              ...(to ? { lte: toExpirationDate(to) } : {}),
+            },
+          }
+        : {}),
+    };
 
+    const skip = (page - 1) * limit;
     const [total, closures] = await this.prisma.$transaction([
       this.prisma.inventoryClosure.count({ where }),
       this.prisma.inventoryClosure.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { closureDate: "desc" },
+        orderBy: [{ closureDate: "desc" }, { createdAt: "desc" }],
         select: {
           id: true,
           branchId: true,
@@ -476,22 +398,41 @@ export class InventoryClosuresService {
           locked: true,
           closedAt: true,
           branch: { select: { name: true } },
-          _count: { select: { details: true } },
+          user: {
+            select: { person: { select: { firstName: true, lastName: true } } },
+          },
+          details: { select: { physicalQuantity: true, difference: true } },
         },
       }),
     ]);
 
+    const showDifferences = canSeeDifferences(currentUser);
     return {
-      data: closures.map((c) => ({
-        id: c.id,
-        branchId: c.branchId,
-        branchName: c.branch.name,
-        closureDate: c.closureDate,
-        status: c.status,
-        confirmed: c.confirmed,
-        locked: c.locked,
-        closedAt: c.closedAt,
-        itemsCount: c._count.details,
+      data: closures.map((closure) => ({
+        id: closure.id,
+        branchId: closure.branchId,
+        branchName: closure.branch.name,
+        closureDate: formatExpirationDate(closure.closureDate),
+        status: closure.status,
+        confirmed: closure.confirmed,
+        locked: closure.locked,
+        closedAt: closure.closedAt,
+        userName: fullName(closure.user),
+        countedItems: closure.details.filter(
+          (detail) => detail.physicalQuantity !== null,
+        ).length,
+        totalItems: closure.details.length,
+        ...(showDifferences
+          ? {
+              totalDifferences:
+                closure.status === "PENDING"
+                  ? null
+                  : closure.details.filter(
+                      (detail) =>
+                        detail.difference !== null && detail.difference !== 0,
+                    ).length,
+            }
+          : {}),
       })),
       meta: {
         page,
@@ -502,19 +443,30 @@ export class InventoryClosuresService {
     };
   }
 
-  private assertBranchScope(branchId: string, currentUser: AuthenticatedUser) {
-    const roleName = currentUser.role?.name;
-    if (roleName === "SUPERADMIN" || roleName === "DEV") return;
+  private assertPending(closure: { status: string; locked: boolean }) {
+    if (closure.status !== "PENDING" || closure.locked) {
+      throw new UnprocessableEntityException({
+        code: "CLOSURE_LOCKED",
+        message: "The inventory closure is already confirmed or locked.",
+      });
+    }
+  }
 
-    if (roleName === "BRANCH_LEADER" || roleName === "BRANCH_ASSISTANT") {
-      const branches = currentUser.branches ?? [];
-      const hasAccess = branches.some((b) => b.id === branchId);
-      if (!hasAccess) {
-        throw new ForbiddenException({
-          code: "FORBIDDEN_BRANCH",
-          message: "You do not have access to this branch.",
-        });
-      }
+  private notFound(): NotFoundException {
+    return new NotFoundException({
+      code: "CLOSURE_NOT_FOUND",
+      message: "Inventory closure not found.",
+    });
+  }
+
+  private assertBranchScope(branchId: string, currentUser: AuthenticatedUser) {
+    if (!isScopedRole(currentUser)) return;
+    const branches = currentUser.branches ?? [];
+    if (!branches.some((branch) => branch.id === branchId)) {
+      throw new ForbiddenException({
+        code: "BRANCH_SCOPE_VIOLATION",
+        message: "You do not have access to this branch.",
+      });
     }
   }
 }

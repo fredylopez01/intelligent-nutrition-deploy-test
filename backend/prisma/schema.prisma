@@ -415,11 +415,12 @@ model InventoryClosureDetail {
   physicalQuantity Int?     @map("physical_quantity")
   difference       Int?
   observation      String?  @db.Text
+  expirationDate   DateTime? @map("expiration_date") @db.Timestamp(6)
 
   closure InventoryClosure @relation(fields: [closureId], references: [id])
   product Product          @relation(fields: [productId], references: [id])
 
-  @@unique([closureId, productId])
+  @@unique([closureId, productId, expirationDate])
   @@index([closureId])
   @@index([productId])
   @@map("inventory_closure_detail")
