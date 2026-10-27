@@ -66,4 +66,14 @@ describe('inventoryClosuresService', () => {
       },
     )
   })
+
+  it('confirms the closure', async () => {
+    vi.mocked(http.post).mockResolvedValue({})
+
+    await inventoryClosuresService.confirm('closure-1', 'token')
+
+    expect(http.post).toHaveBeenCalledWith('/inventory-closures/closure-1/confirm', undefined, {
+      token: 'token',
+    })
+  })
 })

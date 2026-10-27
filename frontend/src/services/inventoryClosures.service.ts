@@ -30,4 +30,7 @@ export const inventoryClosuresService = {
 
   saveCounts: (closureId: string, items: ClosureCount[], token: string | null) =>
     http.put<InventoryClosure>(`${CLOSURES_PATH}/${closureId}/counts`, { items }, { token }),
+
+  confirm: (closureId: string, token: string | null) =>
+    http.post<InventoryClosure>(`${CLOSURES_PATH}/${closureId}/confirm`, undefined, { token }),
 }

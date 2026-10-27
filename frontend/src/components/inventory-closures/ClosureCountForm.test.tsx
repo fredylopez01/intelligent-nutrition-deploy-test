@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ApiError } from '../../services/http'
 import { inventoryClosuresService } from '../../services/inventoryClosures.service'
 import { buildClosure, buildItem } from '../../test-utils/inventoryClosures'
 import type { InventoryClosure } from '../../types/inventoryClosure'
@@ -9,7 +10,7 @@ import type { InventoryClosure } from '../../types/inventoryClosure'
 import { ClosureCountForm } from './ClosureCountForm'
 
 vi.mock('../../services/inventoryClosures.service', () => ({
-  inventoryClosuresService: { saveCounts: vi.fn() },
+  inventoryClosuresService: { saveCounts: vi.fn(), confirm: vi.fn() },
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
@@ -17,12 +18,20 @@ vi.mock('../../hooks/useAuth', () => ({
 }))
 
 const saveCounts = vi.mocked(inventoryClosuresService.saveCounts)
+const confirm = vi.mocked(inventoryClosuresService.confirm)
 
-function renderForm(closure: InventoryClosure = buildClosure()) {
+function renderForm(closure: InventoryClosure = buildClosure(), withConfirm = true) {
   const onSaved = vi.fn()
+  const onConfirmed = vi.fn()
   const user = userEvent.setup()
-  render(<ClosureCountForm closure={closure} onSaved={onSaved} />)
-  return { user, onSaved }
+  render(
+    <ClosureCountForm
+      closure={closure}
+      onSaved={onSaved}
+      onConfirmed={withConfirm ? onConfirmed : undefined}
+    />,
+  )
+  return { user, onSaved, onConfirmed }
 }
 
 const quantity = (lot: string) =>
@@ -33,6 +42,7 @@ beforeEach(() => {
   saveCounts.mockImplementation((_id, items) =>
     Promise.resolve(buildClosure({ countedItems: items.length })),
   )
+  confirm.mockResolvedValue(buildClosure({ status: 'CONFIRMED', confirmed: true, locked: true }))
 })
 
 describe('ClosureCountForm', () => {
@@ -111,5 +121,75 @@ describe('ClosureCountForm', () => {
     )
     await user.type(quantity('30 jun 2027'), '8')
     expect(screen.getByText(/cambios sin guardar/)).toBeInTheDocument()
+  })
+
+  it('marks the lots still missing when trying to confirm', async () => {
+    const { user } = renderForm()
+
+    await user.type(quantity('30 jun 2027'), '8')
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }))
+
+    expect(await screen.findByText('Falta contar este lote.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Faltan 1 lote por contar. Escribe 0 si no encontraste unidades.'),
+    ).toBeInTheDocument()
+    expect(confirm).not.toHaveBeenCalled()
+  })
+
+  it('saves the pending counts and confirms after the warning', async () => {
+    const { user, onConfirmed } = renderForm()
+
+    await user.type(quantity('30 sept 2026'), '1')
+    await user.type(quantity('30 jun 2027'), '8')
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }))
+    const dialog = within(screen.getByRole('dialog', { name: '¿Confirmar el cierre del día?' }))
+    expect(dialog.getByText(/no se pueden cambiar las cantidades/)).toBeInTheDocument()
+    await user.click(dialog.getByRole('button', { name: 'Sí, confirmar cierre' }))
+
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalled())
+    expect(saveCounts).toHaveBeenCalledWith(
+      'closure-1',
+      [
+        { productId: 'product-whey', expirationDate: '2026-09-30', physicalQuantity: 1 },
+        { productId: 'product-whey', expirationDate: '2027-06-30', physicalQuantity: 8 },
+      ],
+      'test-token',
+    )
+    expect(confirm).toHaveBeenCalledWith('closure-1', 'test-token')
+  })
+
+  it('lists the lots the api reports as missing', async () => {
+    confirm.mockRejectedValue(
+      new ApiError(
+        'Incomplete',
+        422,
+        { pending: [{ productName: 'Creatina 300 g' }] },
+        'INCOMPLETE_COUNT',
+      ),
+    )
+    const { user } = renderForm()
+
+    await user.type(quantity('30 sept 2026'), '1')
+    await user.type(quantity('30 jun 2027'), '8')
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, confirmar cierre' }))
+
+    expect(await screen.findByText('Faltan por contar: Creatina 300 g.')).toBeInTheDocument()
+  })
+
+  it('hides the confirmation when the page does not allow it', () => {
+    renderForm(buildClosure(), false)
+
+    expect(screen.queryByRole('button', { name: 'Confirmar cierre' })).not.toBeInTheDocument()
+  })
+
+  it('lets a branch without stock confirm an empty closure', async () => {
+    const { user, onConfirmed } = renderForm(buildClosure({ items: [] }))
+
+    expect(screen.getByText(/no hay nada que contar/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, confirmar cierre' }))
+
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalled())
   })
 })

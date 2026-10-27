@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { useAuth } from '../../hooks/useAuth'
+import { ApiError } from '../../services/http'
 import { inventoryClosuresService } from '../../services/inventoryClosures.service'
 import type { ClosureCount, InventoryClosure } from '../../types/inventoryClosure'
 import { expirationState, formatExpirationDate } from '../../utils/inventory'
@@ -12,12 +13,14 @@ import {
 } from '../../utils/inventoryClosures'
 import { Alert } from '../ui/Alert'
 import { Button } from '../ui/Button'
+import { Modal } from '../ui/Modal'
 
 import './InventoryClosures.css'
 
 interface ClosureCountFormProps {
   closure: InventoryClosure
   onSaved: (closure: InventoryClosure) => void
+  onConfirmed?: (closure: InventoryClosure) => void
 }
 
 interface RowValue {
@@ -37,21 +40,24 @@ function initialValues(closure: InventoryClosure): Record<string, RowValue> {
   )
 }
 
-export function ClosureCountForm({ closure, onSaved }: ClosureCountFormProps) {
+export function ClosureCountForm({ closure, onSaved, onConfirmed }: ClosureCountFormProps) {
   const { token } = useAuth()
   const [values, setValues] = useState(() => initialValues(closure))
   const [baseline, setBaseline] = useState(() => initialValues(closure))
   const [showErrors, setShowErrors] = useState(false)
-  const [busy, setBusy] = useState<'save' | null>(null)
+  const [markMissing, setMarkMissing] = useState(false)
+  const [busy, setBusy] = useState<'save' | 'confirm' | null>(null)
   const [message, setMessage] = useState<{
     tone: 'success' | 'error' | 'info'
     text: string
   } | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const keys = closure.items.map(lotKey)
   const rowError = (key: string) => countError(values[key]?.quantity ?? '')
   const invalidKeys = keys.filter((key) => rowError(key) !== null)
   const filledKeys = keys.filter((key) => (values[key]?.quantity ?? '').trim() !== '')
+  const missing = keys.length - filledKeys.length
   const dirtyKeys = keys.filter(
     (key) =>
       values[key]?.quantity.trim() !== baseline[key]?.quantity.trim() ||
@@ -118,12 +124,67 @@ export function ClosureCountForm({ closure, onSaved }: ClosureCountFormProps) {
     }
   }
 
+  const requestConfirm = () => {
+    setShowErrors(true)
+    setMarkMissing(true)
+    if (invalidKeys.length > 0 || missing > 0) {
+      setMessage({
+        tone: 'error',
+        text:
+          missing > 0
+            ? `Faltan ${missing === 1 ? '1 lote' : `${missing} lotes`} por contar. Escribe 0 si no encontraste unidades.`
+            : 'Hay cantidades que no son válidas. Revisa las marcadas.',
+      })
+      return
+    }
+    setConfirmOpen(true)
+  }
+
+  const confirm = async () => {
+    if (!onConfirmed) return
+    setBusy('confirm')
+    try {
+      await persist()
+      const confirmed = await inventoryClosuresService.confirm(closure.id, token)
+      setConfirmOpen(false)
+      onConfirmed(confirmed)
+    } catch (error) {
+      setConfirmOpen(false)
+      const pending =
+        error instanceof ApiError && error.code === 'INCOMPLETE_COUNT'
+          ? ((error.details as { pending?: { productName: string }[] } | undefined)?.pending ?? [])
+          : []
+      setMessage({
+        tone: 'error',
+        text:
+          pending.length > 0
+            ? `Faltan por contar: ${pending.map((item) => item.productName).join(', ')}.`
+            : resolveClosureError(error, 'No fue posible confirmar el cierre. Intenta de nuevo.'),
+      })
+    } finally {
+      setBusy(null)
+    }
+  }
+
   if (closure.items.length === 0) {
     return (
       <div className="closure-count">
         <Alert tone="info">
           La sede no tenía unidades en ningún lote al iniciar el cierre: no hay nada que contar.
         </Alert>
+        {onConfirmed && (
+          <div className="closure-card__actions">
+            <Button onClick={() => setConfirmOpen(true)} disabled={busy !== null}>
+              Confirmar cierre
+            </Button>
+          </div>
+        )}
+        <ConfirmDialog
+          open={confirmOpen}
+          busy={busy === 'confirm'}
+          onCancel={() => setConfirmOpen(false)}
+          onConfirm={() => void confirm()}
+        />
       </div>
     )
   }
@@ -160,7 +221,10 @@ export function ClosureCountForm({ closure, onSaved }: ClosureCountFormProps) {
         </div>
         {closure.items.map((item) => {
           const key = lotKey(item)
-          const error = showErrors ? rowError(key) : null
+          const empty = (values[key]?.quantity ?? '').trim() === ''
+          const error = showErrors
+            ? (rowError(key) ?? (markMissing && empty ? 'Falta contar este lote.' : null))
+            : null
           const expired = item.expirationDate
             ? expirationState(item.expirationDate).state === 'expired'
             : false
@@ -232,8 +296,47 @@ export function ClosureCountForm({ closure, onSaved }: ClosureCountFormProps) {
           <Button variant="outline" onClick={() => void save()} disabled={busy !== null}>
             {busy === 'save' ? 'Guardando...' : 'Guardar conteo'}
           </Button>
+          {onConfirmed && (
+            <Button onClick={requestConfirm} disabled={busy !== null}>
+              Confirmar cierre
+            </Button>
+          )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        busy={busy === 'confirm'}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => void confirm()}
+      />
     </div>
+  )
+}
+
+interface ConfirmDialogProps {
+  open: boolean
+  busy: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}
+
+function ConfirmDialog({ open, busy, onCancel, onConfirm }: ConfirmDialogProps) {
+  return (
+    <Modal
+      open={open}
+      title="¿Confirmar el cierre del día?"
+      description="Se guardan los conteos pendientes y el cierre queda bloqueado. Después de confirmar no se pueden cambiar las cantidades, y no se pueden registrar más movimientos en la sede hoy."
+      onClose={busy ? () => undefined : onCancel}
+    >
+      <div className="closure-card__actions">
+        <Button variant="outline" onClick={onCancel} disabled={busy}>
+          Seguir contando
+        </Button>
+        <Button onClick={onConfirm} disabled={busy}>
+          {busy ? 'Confirmando...' : 'Sí, confirmar cierre'}
+        </Button>
+      </div>
+    </Modal>
   )
 }
