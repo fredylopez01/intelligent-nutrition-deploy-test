@@ -14,6 +14,7 @@ export const ROUTE_ROLES: Record<string, RoleName[]> = {
   '/pos/metodos-pago': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
   '/clientes': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
   '/proveedores': ['SUPERADMIN', 'BRANCH_LEADER'],
+  '/proveedores/compras': ['SUPERADMIN', 'BRANCH_LEADER'],
   '/usuarios': ['SUPERADMIN', 'DEV'],
   '/auditoria': ['SUPERADMIN', 'DEV'],
 }

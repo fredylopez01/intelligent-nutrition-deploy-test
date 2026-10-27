@@ -27,6 +27,7 @@ import { PaymentMethodsPage } from '../pages/pos/PaymentMethodsPage'
 import { PosPage } from '../pages/pos/PosPage'
 import { SalesPage } from '../pages/pos/SalesPage'
 import { SettingsPage } from '../pages/settings/SettingsPage'
+import { PurchasesPage } from '../pages/suppliers/PurchasesPage'
 import { SupplierDetailPage } from '../pages/suppliers/SupplierDetailPage'
 import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
 import { UserDetailPage } from '../pages/users/UserDetailPage'
@@ -169,6 +170,14 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={ROUTE_ROLES['/proveedores']}>
             <SuppliersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/proveedores/compras"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/proveedores/compras']}>
+            <PurchasesPage />
           </ProtectedRoute>
         }
       />
