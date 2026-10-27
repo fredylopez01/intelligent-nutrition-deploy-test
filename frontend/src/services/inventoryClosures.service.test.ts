@@ -7,7 +7,7 @@ vi.mock('./http', async (importOriginal) => {
   const original = await importOriginal<typeof import('./http')>()
   return {
     ...original,
-    http: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+    http: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), delete: vi.fn() },
   }
 })
 
@@ -49,6 +49,21 @@ describe('inventoryClosuresService', () => {
     expect(http.get).toHaveBeenCalledWith(
       '/inventory-closures?page=1&limit=10&branchId=branch-centro&status=CONFIRMED&from=2026-10-01',
       { token: 'token' },
+    )
+  })
+
+  it('saves the counts of each lot', async () => {
+    vi.mocked(http.put).mockResolvedValue({})
+    const items = [{ productId: 'product-whey', expirationDate: '2027-06-30', physicalQuantity: 7 }]
+
+    await inventoryClosuresService.saveCounts('closure-1', items, 'token')
+
+    expect(http.put).toHaveBeenCalledWith(
+      '/inventory-closures/closure-1/counts',
+      { items },
+      {
+        token: 'token',
+      },
     )
   })
 })

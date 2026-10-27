@@ -22,6 +22,7 @@ vi.mock('../../services/inventoryClosures.service', () => ({
     start: vi.fn(),
     get: vi.fn(),
     list: vi.fn(),
+    saveCounts: vi.fn(),
   },
 }))
 
@@ -99,21 +100,22 @@ describe('ClosurePage today', () => {
     )
   })
 
-  it('shows the open closure after starting it', async () => {
+  it('moves to the blind count after starting', async () => {
     vi.mocked(inventoryClosuresService.start).mockResolvedValue(buildClosure())
     const { user } = renderPage()
 
     await user.click(await screen.findByRole('button', { name: 'Iniciar cierre del día' }))
 
-    expect(await screen.findByText(/está abierto con 2 lotes para contar/)).toBeInTheDocument()
+    expect(await screen.findByText('Conteo ciego de Centro')).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'Lotes a contar' })).toBeInTheDocument()
   })
 
-  it('finds the closure that was already started today', async () => {
+  it('continues the pending count of today', async () => {
     mockClosures(buildSummary({ id: 'closure-1', closureDate: '2026-10-26', status: 'PENDING' }))
     get.mockResolvedValue(buildClosure())
     renderPage()
 
-    expect(await screen.findByText(/está abierto con 2 lotes para contar/)).toBeInTheDocument()
+    expect(await screen.findByText('Conteo ciego de Centro')).toBeInTheDocument()
     expect(get).toHaveBeenCalledWith('closure-1', 'test-token')
   })
 
