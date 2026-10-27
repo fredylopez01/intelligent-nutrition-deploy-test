@@ -13,7 +13,7 @@ Verificación rápida de que el stack está operativo después de cada despliegu
 Verifica el stack completo tras un deploy:
 
 - `GET /api/v1/health` → responde 200 sin token y valida conexión a PostgreSQL
-- Body del health → `{ "status": "ok" }`
+- Body del health → `{ "data": { "status": "ok" } }` (el interceptor global envuelve la respuesta en `data`)
 - Frontend → responde 200
 
 No usa Jest ni Node.js — solo `bash` + `curl`.
@@ -22,20 +22,35 @@ No usa Jest ni Node.js — solo `bash` + `curl`.
 
 ```bash
 cd backend
-node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.ts --verbose app.module.spec
+npm test -- app.module.spec
 ```
 
 Verifica que `AppModule` compila sin errores de inyección de dependencias, incluido `HealthModule`. No necesita Docker ni BD. Corre como gate de merge en cada PR.
 
+> La configuración de Jest vive en el bloque `jest` de `backend/package.json`; no existe un `jest.config.ts`.
+
 ### 3. Docker Compose profiles (CI/CD)
 
-```bash
-# Smoke test en Docker
-docker compose -f docker-compose.yml -f docker-compose.test.yml --profile smoke up --build
+Desde la raíz del repositorio:
 
-# Bootstrap test en Docker
-docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test up --build
+```bash
+npm run smoke:docker   # smoke test del stack completo
+npm run test:docker    # tests unitarios + e2e del backend
 ```
+
+Ambos scripts están en el `package.json` de la raíz. Por debajo ejecutan, siempre con **ambos** archivos `-f` (porque `postgres`, `backend` y `frontend` están definidos en `docker-compose.yml`):
+
+```bash
+# Equivalente a npm run smoke:docker
+docker compose -f docker-compose.yml -f docker-compose.test.yml --profile smoke up --build --abort-on-container-exit --exit-code-from smoke-test smoke-test
+
+# Equivalente a npm run test:docker
+docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test up --build --abort-on-container-exit --exit-code-from test-runner test-runner
+```
+
+`--abort-on-container-exit --exit-code-from <servicio>` es obligatorio para que el comando termine y devuelva el veredicto; sin ellos el stack queda corriendo y `up` no reporta el resultado.
+
+Si el backend no arranca (por ejemplo, por variables de entorno faltantes), el smoke test **no llega a ejecutarse** y Docker Compose aborta con `dependency failed to start`.
 
 ## Health endpoint
 
@@ -43,10 +58,22 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test u
 
 - Decorado con `@Public()` — bypass del guard global JWT, responde 200 sin token
 - Ejecuta `SELECT 1` contra PostgreSQL vía `PrismaService`
-- Retorna `{ "status": "ok" }`
+- Retorna `{ "status": "ok" }` (el interceptor global lo envuelve como `{ "data": { "status": "ok" } }`)
 - Si la BD no está accesible → Nest retorna 500 automáticamente
 
 ## Variables de entorno
+
+El stack (`docker-compose.yml`) necesita el `.env` de la raíz completo. Si falta alguna de estas, el backend **no arranca** y el smoke test falla con `dependency failed to start`:
+
+- `POSTGRES_*`, `DATABASE_URL_DOCKER`
+- `JWT_SECRET`, `JWT_EXPIRES_IN`
+- `RESEND_*` (`EmailService` valida al instanciarse)
+- `STORAGE_*` (`StorageService` valida al instanciarse)
+- `SEED_ADMIN_PASSWORD` (requerida por `backend-init`)
+
+Todas están listadas en `.env.example`.
+
+Variables propias del script:
 
 | Variable         | Default                 | Descripción               |
 | ---------------- | ----------------------- | ------------------------- |
@@ -65,7 +92,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test u
 El proyecto usa ESM (`"type": "module"`). Jest debe correr en modo ESM nativo:
 
 ```bash
-node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.ts
+npm test
 ```
 
 Requiere `npx prisma generate` antes de correr los tests (el cliente generado no se commitea).
