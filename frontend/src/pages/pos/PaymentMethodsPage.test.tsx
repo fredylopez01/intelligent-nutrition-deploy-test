@@ -11,12 +11,19 @@ import type { PaymentMethodsListParams } from '../../types/paymentMethod'
 
 import { PaymentMethodsPage } from './PaymentMethodsPage'
 
+const auth = vi.hoisted(() => ({ role: 'SUPERADMIN' }))
+
 vi.mock('../../services/paymentMethods.service', () => ({
-  paymentMethodsService: { list: vi.fn() },
+  paymentMethodsService: {
+    list: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    updateStatus: vi.fn(),
+  },
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({ token: 'test-token', user: { id: 'me', role: { name: 'SUPERADMIN' } } }),
+  useAuth: () => ({ token: 'test-token', user: { id: 'me', role: { name: auth.role } } }),
 }))
 
 vi.mock('../../layouts/AppLayout', () => ({
@@ -48,6 +55,7 @@ function renderPage(path = '/pos/metodos-pago') {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  auth.role = 'SUPERADMIN'
   listMethods.mockResolvedValue(paymentMethodsPage([CASH, NEQUI, OTHER]))
 })
 
@@ -124,4 +132,16 @@ describe('PaymentMethodsPage', () => {
 
     await waitFor(() => expect(lastListParams()).toMatchObject({ page: 2 }))
   })
+
+  it.each(['BRANCH_LEADER', 'BRANCH_ASSISTANT'])(
+    'lets the %s consult the list without management actions',
+    async (role) => {
+      auth.role = role
+      renderPage()
+      await screen.findByText('Efectivo')
+
+      expect(screen.queryByRole('button', { name: 'Registrar método' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Acciones para/ })).not.toBeInTheDocument()
+    },
+  )
 })

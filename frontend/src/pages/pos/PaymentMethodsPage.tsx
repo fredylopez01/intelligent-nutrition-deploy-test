@@ -1,14 +1,22 @@
+import { useState } from 'react'
+
+import { CreatePaymentMethodForm } from '../../components/payment-methods/CreatePaymentMethodForm'
 import { PaymentMethodsTable } from '../../components/payment-methods/PaymentMethodsTable'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { Modal } from '../../components/ui/Modal'
 import { Pagination } from '../../components/ui/Pagination'
 import { ReloadButton } from '../../components/ui/ReloadButton'
 import { SearchBar } from '../../components/ui/SearchBar'
 import { TableSkeleton } from '../../components/ui/TableSkeleton'
+import { useAuth } from '../../hooks/useAuth'
 import { usePagination } from '../../hooks/usePagination'
 import { usePaymentMethods } from '../../hooks/usePaymentMethods'
 import { AppLayout } from '../../layouts/AppLayout'
+import type { PaymentMethod } from '../../types/paymentMethod'
+import { hasRole } from '../../utils/categories'
+import { PAYMENT_METHOD_MANAGE_ROLES } from '../../utils/paymentMethods'
 
 import '../catalog/CatalogPage.css'
 
@@ -22,7 +30,11 @@ const ACTIVE_FILTER_VALUES: Record<string, boolean | undefined> = {
 const FILTER_DEFAULTS = { estado: 'todos' }
 
 export function PaymentMethodsPage() {
+  const { user } = useAuth()
+  const canManage = hasRole(PAYMENT_METHOD_MANAGE_ROLES, user?.role.name)
+
   const {
+    page,
     search,
     filters,
     hasFilters,
@@ -34,6 +46,8 @@ export function PaymentMethodsPage() {
     setFilter,
     clearFilters,
   } = usePagination({ filters: FILTER_DEFAULTS })
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
 
   const { status, paymentMethods, meta, error, refetch } = usePaymentMethods({
     ...params,
@@ -43,6 +57,20 @@ export function PaymentMethodsPage() {
   const handleSearch = (term: string) => {
     if (term === search) refetch()
     else applySearch(term)
+  }
+
+  const handleOpenCreate = () => {
+    setFeedbackMessage(null)
+    setIsCreateOpen(true)
+  }
+
+  const handleCreated = (paymentMethod: PaymentMethod) => {
+    setIsCreateOpen(false)
+    setFeedbackMessage(
+      `El método ${paymentMethod.name} (${paymentMethod.code}) quedó registrado y ya se puede usar en el punto de venta.`,
+    )
+    if (page === 1) refetch()
+    else setPage(1)
   }
 
   const renderList = () => {
@@ -74,7 +102,9 @@ export function PaymentMethodsPage() {
           variant="sin-registros"
           title="Todavía no hay métodos de pago"
           description="Sin métodos de pago activos el punto de venta no puede registrar ventas."
-        />
+        >
+          {canManage && <Button onClick={handleOpenCreate}>Registrar método</Button>}
+        </EmptyState>
       )
     }
 
@@ -105,7 +135,18 @@ export function PaymentMethodsPage() {
           <option value="inactivos">Inactivos</option>
         </select>
         <ReloadButton onReload={refetch} loading={status === 'loading'} />
+        {canManage && (
+          <Button className="catalog-page__primary" onClick={handleOpenCreate}>
+            Registrar método
+          </Button>
+        )}
       </div>
+
+      {feedbackMessage && (
+        <div className="catalog-page__feedback">
+          <Alert tone="success">{feedbackMessage}</Alert>
+        </div>
+      )}
 
       <div className="catalog-page__card">{renderList()}</div>
 
@@ -123,6 +164,18 @@ export function PaymentMethodsPage() {
           />
         )}
       </div>
+
+      <Modal
+        open={isCreateOpen}
+        title="Registrar método de pago"
+        description="El código y el nombre no pueden repetirse con otro método."
+        onClose={() => setIsCreateOpen(false)}
+      >
+        <CreatePaymentMethodForm
+          onCreated={handleCreated}
+          onCancel={() => setIsCreateOpen(false)}
+        />
+      </Modal>
     </AppLayout>
   )
 }
