@@ -11,6 +11,7 @@ import { AuditService } from "../audit/audit.service.js";
 import { CreateBranchDto } from "./dto/create-branch.dto.js";
 import { ListBranchesQueryDto } from "./dto/list-branches-query.dto.js";
 import { ListSellableProductsQueryDto } from "./dto/list-sellable-products-query.dto.js";
+import { startOfTodayUtc } from "../../common/utils/expiration.util.js";
 import { UpdateBranchDto } from "./dto/update-branch.dto.js";
 
 @Injectable()
@@ -315,7 +316,7 @@ export class BranchesService {
 
     const grouped = await this.prisma.branchInventory.groupBy({
       by: ["productId"],
-      where: { branchId },
+      where: { branchId, expirationDate: { gte: startOfTodayUtc() } },
       _sum: { quantity: true },
     });
 

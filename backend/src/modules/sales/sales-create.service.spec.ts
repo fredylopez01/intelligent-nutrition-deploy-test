@@ -12,6 +12,11 @@ import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUse
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
 
+const lowStockMock = {
+  levels: async () => new Map(),
+  notifyCrossings: async () => 0,
+};
+
 const branchId = "11111111-1111-4111-8111-111111111111";
 const otherBranchId = "22222222-2222-4222-8222-222222222222";
 const userId = "33333333-3333-4333-8333-333333333333";
@@ -97,6 +102,8 @@ const { Test } = await import("@nestjs/testing");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
 const { AuditService } = await import("../audit/audit.service.js");
+const { LowStockService } =
+  await import("../notifications/low-stock.service.js");
 const { SalesService } = await import("./sales.service.js");
 
 type SaleCreateData = {
@@ -259,6 +266,7 @@ describe("SalesService.create", () => {
         SalesService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
+        { provide: LowStockService, useValue: lowStockMock },
       ],
     }).compile();
     service = testingModule.get(SalesService);
@@ -836,7 +844,7 @@ describe("SalesService.create", () => {
   });
 
   describe("stock effects", () => {
-    it("takes the stock from the lot that expires first", async () => {
+    it("takes the stock from the non-expired lot that expires first", async () => {
       transactionMock.branchInventory.findMany.mockResolvedValue([
         { id: firstLotId, quantity: 1, minimumStock: 0 },
         { id: secondLotId, quantity: 5, minimumStock: 0 },
@@ -851,8 +859,17 @@ describe("SalesService.create", () => {
       await service.create(dto, superadmin, ipAddress);
 
       expect(transactionMock.branchInventory.findMany).toHaveBeenCalledWith({
-        where: { branchId, productId: productAId },
-        select: { id: true, quantity: true, minimumStock: true },
+        where: {
+          branchId,
+          productId: productAId,
+          expirationDate: { gte: expect.any(Date) },
+        },
+        select: {
+          id: true,
+          quantity: true,
+          minimumStock: true,
+          expirationDate: true,
+        },
         orderBy: { expirationDate: "asc" },
       });
       expect(transactionMock.branchInventory.update).toHaveBeenCalledTimes(2);

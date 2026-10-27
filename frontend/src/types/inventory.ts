@@ -107,3 +107,22 @@ export interface ConsolidatedResponse {
   data: ConsolidatedItem[]
   meta: PaginationMeta
 }
+
+export interface GeneralStockLot {
+  id: string
+  expirationDate: string
+  quantity: number
+  expired: boolean
+}
+
+export interface GeneralStockDetail {
+  product: {
+    id: string
+    name: string
+    referenceCode: string
+    active: boolean
+    unitOfMeasure: { abbreviation: string }
+  }
+  totalQuantity: number
+  lots: GeneralStockLot[]
+}

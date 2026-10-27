@@ -4,9 +4,11 @@ import { InventoryController } from "./inventory.controller.js";
 import { PrismaModule } from "../../database/prisma/prisma.module.js";
 import { AuditModule } from "../audit/audit.module.js";
 import { InventoryGlobalController } from "./inventory-global.controller.js";
+import { GeneralStockModule } from "../general-stock/general-stock.module.js";
+import { NotificationsModule } from "../notifications/notifications.module.js";
 
 @Module({
-  imports: [PrismaModule, AuditModule],
+  imports: [PrismaModule, AuditModule, GeneralStockModule, NotificationsModule],
   controllers: [InventoryController, InventoryGlobalController],
   providers: [InventoryService],
 })

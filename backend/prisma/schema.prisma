@@ -83,6 +83,7 @@ model UserAccount {
   purchases          Purchase[]
   inventoryClosures  InventoryClosure[]
   sales              Sale[]
+  notifications      Notification[]
 
   @@map("user_account")
 }
@@ -129,6 +130,7 @@ model Branch {
   originMovements    InventoryMovement[] @relation("InventoryMovementOriginBranch")
   inventoryClosures  InventoryClosure[]
   sales              Sale[]
+  notifications      Notification[]
 
   @@map("branch")
 }
@@ -227,6 +229,8 @@ model Product {
   purchaseDetails PurchaseDetail[]
   closureDetails  InventoryClosureDetail[]
   saleDetails     SaleDetail[]
+  generalStock    GeneralStock[]
+  notifications   Notification[]
 
   @@index([categoryId])
   @@index([unitOfMeasureId])
@@ -290,6 +294,7 @@ model InventoryMovement {
   quantity       Int
   observation    String?               @db.Text
   movementAt     DateTime              @default(now()) @map("movement_at") @db.Timestamp(6)
+  expirationDate DateTime?             @map("expiration_date") @db.Timestamp(6)
   saleId         String?               @map("sale_id") @db.Uuid
   purchaseId     String?               @map("purchase_id") @db.Uuid
 
@@ -308,6 +313,21 @@ model InventoryMovement {
   @@index([movementType])
   @@index([saleId])
   @@map("inventory_movement")
+}
+
+model GeneralStock {
+  id             String   @id @default(uuid()) @db.Uuid
+  productId      String   @map("product_id") @db.Uuid
+  quantity       Int      @default(0)
+  expirationDate DateTime @map("expiration_date") @db.Timestamp(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([productId, expirationDate])
+  @@index([productId])
+  @@map("general_stock")
 }
 
 enum PurchaseStatus {
@@ -476,4 +496,29 @@ model SalePayment {
   @@index([saleId])
   @@index([paymentMethodId])
   @@map("sale_payment")
+}
+
+enum NotificationType {
+  LOW_STOCK
+  CLOSURE_NOT_CONFIRMED
+  PURCHASE_PENDING_RECEIPT
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  branchId  String?          @map("branch_id") @db.Uuid
+  productId String?          @map("product_id") @db.Uuid
+  type      NotificationType
+  title     String           @db.VarChar(150)
+  message   String           @db.Text
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user    UserAccount @relation(fields: [userId], references: [personId])
+  branch  Branch?     @relation(fields: [branchId], references: [id])
+  product Product?    @relation(fields: [productId], references: [id])
+
+  @@index([userId, read, createdAt])
+  @@map("notification")
 }

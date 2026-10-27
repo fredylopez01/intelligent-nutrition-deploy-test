@@ -7,6 +7,8 @@ import {
   jest,
 } from "@jest/globals";
 import type { ListConsolidatedQueryDto } from "./dto/list-consolidated-query.dto.js";
+import { LowStockService } from "../notifications/low-stock.service.js";
+import { GeneralStockService } from "../general-stock/general-stock.service.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
 
@@ -60,6 +62,8 @@ describe("InventoryService aggregated queries", () => {
         InventoryService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: {} },
+        { provide: LowStockService, useValue: { levels: async () => new Map(), notifyCrossings: async () => 0 } },
+        { provide: GeneralStockService, useValue: { consume: async () => undefined, increase: async () => undefined } },
       ],
     }).compile();
     service = testingModule.get(InventoryService);

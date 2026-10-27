@@ -11,6 +11,12 @@ import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUse
 import { CreatePurchaseDto } from "./dto/create-purchase.dto.js";
 import { ListPurchasesQueryDto } from "./dto/list-purchases-query.dto.js";
 import { ReceivePurchaseDto } from "./dto/receive-purchase.dto.js";
+import { GeneralStockService } from "../general-stock/general-stock.service.js";
+import {
+  formatExpirationDate,
+  isExpired,
+  toExpirationDate,
+} from "../../common/utils/expiration.util.js";
 
 const purchaseDetailSelect = {
   id: true,
@@ -106,6 +112,7 @@ export class PurchasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly generalStockService: GeneralStockService,
   ) {}
 
   async create(
@@ -327,12 +334,29 @@ export class PurchasesService {
   ) {
     const { items } = dto;
 
-    const detailIds = items.map((i) => i.purchaseDetailId);
-    const uniqueDetailIds = new Set(detailIds);
-    if (uniqueDetailIds.size !== detailIds.length) {
+    const lotKeys = items.map(
+      (i) => `${i.purchaseDetailId}:${i.expirationDate.slice(0, 10)}`,
+    );
+    if (new Set(lotKeys).size !== lotKeys.length) {
       throw new UnprocessableEntityException({
         code: "DUPLICATED_PURCHASE_DETAIL",
-        message: "Items contain duplicated purchase details.",
+        message:
+          "Items contain the same purchase detail twice with the same expiration date.",
+      });
+    }
+
+    const expiredItem = items.find(
+      (i) =>
+        i.receivedQuantity > 0 && isExpired(toExpirationDate(i.expirationDate)),
+    );
+    if (expiredItem) {
+      throw new UnprocessableEntityException({
+        code: "LOT_EXPIRED",
+        message: "Received lots cannot be already expired.",
+        details: {
+          purchaseDetailId: expiredItem.purchaseDetailId,
+          expirationDate: expiredItem.expirationDate.slice(0, 10),
+        },
       });
     }
 
@@ -404,6 +428,10 @@ export class PurchasesService {
       );
       const receivedNowByDetail = new Map<string, number>();
       const observationsByDetail = new Map<string, string | undefined>();
+      const lotsByDetail = new Map<
+        string,
+        Array<{ expirationDate: Date; quantity: number; observation?: string }>
+      >();
 
       for (const item of items) {
         const detail: any = detailMap.get(item.purchaseDetailId);
@@ -414,22 +442,36 @@ export class PurchasesService {
           });
         }
 
-        const newAccumulated = detail.receivedQuantity + item.receivedQuantity;
-        if (newAccumulated > detail.requestedQuantity) {
+        const receivedNow =
+          (receivedNowByDetail.get(detail.id) ?? 0) + item.receivedQuantity;
+        if (detail.receivedQuantity + receivedNow > detail.requestedQuantity) {
           throw new UnprocessableEntityException({
             code: "RECEIVED_EXCEEDS_REQUESTED",
             message: "Received quantity exceeds requested quantity.",
           });
         }
 
-        receivedNowByDetail.set(detail.id, item.receivedQuantity);
-        observationsByDetail.set(detail.id, item.observation);
+        receivedNowByDetail.set(detail.id, receivedNow);
+        if (item.observation !== undefined) {
+          observationsByDetail.set(detail.id, item.observation);
+        }
+        if (item.receivedQuantity > 0) {
+          lotsByDetail.set(detail.id, [
+            ...(lotsByDetail.get(detail.id) ?? []),
+            {
+              expirationDate: toExpirationDate(item.expirationDate),
+              quantity: item.receivedQuantity,
+              observation: item.observation,
+            },
+          ]);
+        }
       }
 
       const movementsData: Array<{
         productId: string;
         quantity: number;
         purchaseDetailId: string;
+        expirationDate: string;
       }> = [];
 
       for (const detail of purchase.details as any[]) {
@@ -453,24 +495,35 @@ export class PurchasesService {
           },
         });
 
-        movementsData.push({
-          productId: detail.productId,
-          quantity: receivedNow,
-          purchaseDetailId: detail.id,
-        });
+        for (const lot of lotsByDetail.get(detail.id) ?? []) {
+          await this.generalStockService.increase(
+            tx,
+            detail.productId,
+            lot.expirationDate,
+            lot.quantity,
+          );
 
-        await (tx as any).inventoryMovement.create({
-          data: {
+          movementsData.push({
             productId: detail.productId,
-            branchId: null,
-            originBranchId: null,
-            userId: currentUser.id,
-            movementType: "ENTRY",
-            quantity: receivedNow,
-            observation: itemObservation ?? null,
-            purchaseId,
-          },
-        });
+            quantity: lot.quantity,
+            purchaseDetailId: detail.id,
+            expirationDate: formatExpirationDate(lot.expirationDate),
+          });
+
+          await (tx as any).inventoryMovement.create({
+            data: {
+              productId: detail.productId,
+              branchId: null,
+              originBranchId: null,
+              userId: currentUser.id,
+              movementType: "ENTRY",
+              quantity: lot.quantity,
+              expirationDate: lot.expirationDate,
+              observation: lot.observation ?? null,
+              purchaseId,
+            },
+          });
+        }
       }
 
       const updatedDetails: any[] = await (tx as any).purchaseDetail.findMany({

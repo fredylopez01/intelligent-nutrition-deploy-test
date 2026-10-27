@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { generalStockService } from '../../services/generalStock.service'
 import { ApiError } from '../../services/http'
 import { inventoryService } from '../../services/inventory.service'
 import { productsService } from '../../services/products.service'
@@ -12,6 +13,10 @@ import { AssignProductForm } from './AssignProductForm'
 
 vi.mock('../../services/inventory.service', () => ({
   inventoryService: { getProductInBranch: vi.fn(), assign: vi.fn() },
+}))
+
+vi.mock('../../services/generalStock.service', () => ({
+  generalStockService: { getByProduct: vi.fn() },
 }))
 
 vi.mock('../../services/products.service', () => ({
@@ -25,6 +30,26 @@ vi.mock('../../hooks/useAuth', () => ({
 const listProducts = vi.mocked(productsService.list)
 const getProductInBranch = vi.mocked(inventoryService.getProductInBranch)
 const assign = vi.mocked(inventoryService.assign)
+const getGeneralStock = vi.mocked(generalStockService.getByProduct)
+
+function stockOf(lots: Array<[string, number]>) {
+  return {
+    product: {
+      id: 'product-whey',
+      name: 'Whey Protein 2 lb',
+      referenceCode: 'WHEY-2LB-001',
+      active: true,
+      unitOfMeasure: { abbreviation: 'und' },
+    },
+    totalQuantity: lots.reduce((sum, [, quantity]) => sum + quantity, 0),
+    lots: lots.map(([expirationDate, quantity]) => ({
+      id: `lot-${expirationDate}`,
+      expirationDate,
+      quantity,
+      expired: false,
+    })),
+  }
+}
 
 const whey = buildProduct()
 const creatine = buildProduct({
@@ -60,7 +85,9 @@ async function fillLot(
   { quantity = '20', date = '2027-12-31' }: { quantity?: string; date?: string } = {},
 ) {
   await user.type(screen.getByLabelText('Cantidad inicial'), quantity)
-  await user.type(screen.getByLabelText('Fecha de vencimiento'), date)
+  const lot = screen.getByLabelText('Lote del stock general')
+  await waitFor(() => expect(lot).toBeEnabled())
+  await user.selectOptions(lot, date)
 }
 
 function submit(user: ReturnType<typeof userEvent.setup>) {
@@ -71,6 +98,13 @@ beforeEach(() => {
   vi.resetAllMocks()
   listProducts.mockResolvedValue(optionsPage([whey, creatine]))
   getProductInBranch.mockRejectedValue(notAssigned)
+  getGeneralStock.mockResolvedValue(
+    stockOf([
+      ['2026-12-31', 100],
+      ['2027-03-31', 50],
+      ['2027-12-31', 100],
+    ]),
+  )
   assign.mockResolvedValue({
     id: 'lot-9',
     branchId: 'branch-centro',
@@ -136,7 +170,7 @@ describe('AssignProductForm', () => {
 
     expect(screen.getByText('Elige el producto que vas a asignar.')).toBeInTheDocument()
     expect(screen.getByText('Escribe la cantidad inicial del lote.')).toBeInTheDocument()
-    expect(screen.getByText('Elige la fecha de vencimiento del lote.')).toBeInTheDocument()
+    expect(screen.getByText('Elige el lote del stock general.')).toBeInTheDocument()
     expect(assign).not.toHaveBeenCalled()
   })
 
@@ -223,11 +257,11 @@ describe('AssignProductForm', () => {
     expect(assign).not.toHaveBeenCalled()
   })
 
-  it('rejects decimals and dates before today', async () => {
+  it('rejects decimals', async () => {
     const { user } = renderForm()
 
     await chooseProduct(user, 'Whey Protein 2 lb')
-    await fillLot(user, { quantity: '2.5', date: '2020-01-01' })
+    await fillLot(user, { quantity: '2.5' })
     await submit(user)
 
     expect(
@@ -235,10 +269,68 @@ describe('AssignProductForm', () => {
         'La cantidad debe ser un número entero de 0 en adelante, sin puntos ni comas.',
       ),
     ).toBeInTheDocument()
+    expect(assign).not.toHaveBeenCalled()
+  })
+
+  it('offers the general stock lots and proposes the one that expires first', async () => {
+    const { user } = renderForm()
+
+    await chooseProduct(user, 'Whey Protein 2 lb')
+
+    const lot = screen.getByLabelText('Lote del stock general')
+    await waitFor(() => expect(lot).toHaveValue('2026-12-31'))
+    expect(getGeneralStock).toHaveBeenCalledWith('product-whey', 'test-token')
     expect(
-      screen.getByText('La fecha de vencimiento no puede ser anterior a hoy.'),
+      within(lot)
+        .getAllByRole('option')
+        .slice(1)
+        .map((option) => option.textContent),
+    ).toEqual([
+      'Vence 31 dic 2026 · 100 und disponibles',
+      'Vence 31 mar 2027 · 50 und disponibles',
+      'Vence 31 dic 2027 · 100 und disponibles',
+    ])
+  })
+
+  it('does not ask for more units than the chosen lot has in the general stock', async () => {
+    const { user } = renderForm()
+
+    await chooseProduct(user, 'Whey Protein 2 lb')
+    await fillLot(user, { quantity: '51', date: '2027-03-31' })
+    await submit(user)
+
+    expect(
+      await screen.findByText('Solo hay 50 und de este lote en el stock general.'),
     ).toBeInTheDocument()
     expect(assign).not.toHaveBeenCalled()
+  })
+
+  it('explains that the product needs general stock before it can be assigned', async () => {
+    getGeneralStock.mockResolvedValue(stockOf([]))
+    const { user } = renderForm()
+
+    await chooseProduct(user, 'Whey Protein 2 lb')
+
+    expect(
+      await screen.findByText(/no tiene unidades vigentes en el stock general/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Asignar a la sede' })).toBeDisabled()
+  })
+
+  it('shows on the quantity that the general stock no longer has those units', async () => {
+    assign.mockRejectedValue(
+      new ApiError('Insufficient', 422, undefined, 'INSUFFICIENT_GENERAL_STOCK'),
+    )
+    const { user } = renderForm()
+
+    await chooseProduct(user, 'Whey Protein 2 lb')
+    await fillLot(user)
+    await submit(user)
+
+    expect(
+      await screen.findByText(/El stock general ya no tiene esa cantidad de este lote/),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('Cantidad inicial')).toHaveFocus()
   })
 
   it('shows the duplicated lot from the backend on the expiration date', async () => {
@@ -254,7 +346,7 @@ describe('AssignProductForm', () => {
     expect(
       await screen.findByText(/ya tiene un lote con esa fecha de vencimiento en la sede/),
     ).toBeInTheDocument()
-    expect(screen.getByLabelText('Fecha de vencimiento')).toHaveFocus()
+    expect(screen.getByLabelText('Lote del stock general')).toHaveFocus()
     expect(onAssigned).not.toHaveBeenCalled()
   })
 
@@ -314,9 +406,7 @@ describe('AssignProductForm', () => {
     listProducts.mockResolvedValue(optionsPage([]))
     renderForm()
 
-    expect(
-      await screen.findByText('No hay productos activos en el catálogo.'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('No hay productos activos en el catálogo.')).toBeInTheDocument()
   })
 
   it('shows an error when the product search fails', async () => {

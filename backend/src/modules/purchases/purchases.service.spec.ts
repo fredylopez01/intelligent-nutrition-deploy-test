@@ -1,5 +1,7 @@
 import { jest, describe, beforeEach, it, expect } from "@jest/globals";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
+import { LowStockService } from "../notifications/low-stock.service.js";
+import { GeneralStockService } from "../general-stock/general-stock.service.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
 type TransactionOperation = (client: unknown) => Promise<unknown>;
@@ -138,6 +140,20 @@ describe("PurchasesService.create", () => {
         PurchasesService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
+        {
+          provide: LowStockService,
+          useValue: {
+            levels: async () => new Map(),
+            notifyCrossings: async () => 0,
+          },
+        },
+        {
+          provide: GeneralStockService,
+          useValue: {
+            consume: async () => undefined,
+            increase: async () => undefined,
+          },
+        },
       ],
     }).compile();
     service = module.get(PurchasesService);
@@ -285,6 +301,20 @@ describe("PurchasesService.findAll", () => {
         PurchasesService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
+        {
+          provide: LowStockService,
+          useValue: {
+            levels: async () => new Map(),
+            notifyCrossings: async () => 0,
+          },
+        },
+        {
+          provide: GeneralStockService,
+          useValue: {
+            consume: async () => undefined,
+            increase: async () => undefined,
+          },
+        },
       ],
     }).compile();
     service = module.get(PurchasesService);
@@ -372,6 +402,20 @@ describe("PurchasesService.findOne", () => {
         PurchasesService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
+        {
+          provide: LowStockService,
+          useValue: {
+            levels: async () => new Map(),
+            notifyCrossings: async () => 0,
+          },
+        },
+        {
+          provide: GeneralStockService,
+          useValue: {
+            consume: async () => undefined,
+            increase: async () => undefined,
+          },
+        },
       ],
     }).compile();
     service = module.get(PurchasesService);
@@ -443,6 +487,7 @@ describe("PurchasesService.findOne", () => {
 
   describe("PurchasesService.receive", () => {
     let service: InstanceType<typeof PurchasesService>;
+    const generalStockMock = { increase: jest.fn<AsyncMock>() };
 
     const purchaseWithReceivedQuantity = (
       status: string,
@@ -496,12 +541,14 @@ describe("PurchasesService.findOne", () => {
       transactionMock.purchase.update.mockResolvedValue({});
       transactionMock.inventoryMovement.create.mockResolvedValue({});
       auditMock.createAuditLog.mockResolvedValue({});
+      generalStockMock.increase.mockResolvedValue(undefined);
 
       const module = await Test.createTestingModule({
         providers: [
           PurchasesService,
           { provide: PrismaService, useValue: prismaMock },
           { provide: AuditService, useValue: auditMock },
+          { provide: GeneralStockService, useValue: generalStockMock },
         ],
       }).compile();
       service = module.get(PurchasesService);
@@ -523,6 +570,7 @@ describe("PurchasesService.findOne", () => {
             {
               purchaseDetailId: "detail-1",
               receivedQuantity: 5,
+              expirationDate: "2027-06-30",
               observation: "Entrega completa",
             },
           ],
@@ -539,6 +587,12 @@ describe("PurchasesService.findOne", () => {
           observation: "Entrega completa",
         },
       });
+      expect(generalStockMock.increase).toHaveBeenCalledWith(
+        transactionMock,
+        "product-1",
+        new Date("2027-06-30T00:00:00.000Z"),
+        5,
+      );
       expect(transactionMock.inventoryMovement.create).toHaveBeenCalledWith({
         data: {
           productId: "product-1",
@@ -547,6 +601,7 @@ describe("PurchasesService.findOne", () => {
           userId: currentUser.id,
           movementType: "ENTRY",
           quantity: 5,
+          expirationDate: new Date("2027-06-30T00:00:00.000Z"),
           observation: "Entrega completa",
           purchaseId: "purchase-1",
         },
@@ -586,7 +641,13 @@ describe("PurchasesService.findOne", () => {
       const result = await service.receive(
         "purchase-1",
         {
-          items: [{ purchaseDetailId: "detail-1", receivedQuantity: 2 }],
+          items: [
+            {
+              purchaseDetailId: "detail-1",
+              receivedQuantity: 2,
+              expirationDate: "2027-06-30",
+            },
+          ],
         },
         currentUser,
       );
@@ -622,7 +683,15 @@ describe("PurchasesService.findOne", () => {
       await expect(
         service.receive(
           "purchase-1",
-          { items: [{ purchaseDetailId: "detail-1", receivedQuantity: 1 }] },
+          {
+            items: [
+              {
+                purchaseDetailId: "detail-1",
+                receivedQuantity: 1,
+                expirationDate: "2027-06-30",
+              },
+            ],
+          },
           currentUser,
         ),
       ).rejects.toMatchObject({
@@ -640,7 +709,15 @@ describe("PurchasesService.findOne", () => {
       await expect(
         service.receive(
           "missing-purchase",
-          { items: [{ purchaseDetailId: "detail-1", receivedQuantity: 1 }] },
+          {
+            items: [
+              {
+                purchaseDetailId: "detail-1",
+                receivedQuantity: 1,
+                expirationDate: "2027-06-30",
+              },
+            ],
+          },
           currentUser,
         ),
       ).rejects.toMatchObject({

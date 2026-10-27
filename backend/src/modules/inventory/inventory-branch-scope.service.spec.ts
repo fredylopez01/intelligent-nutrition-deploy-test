@@ -47,7 +47,12 @@ describe("InventoryService branch scope", () => {
   beforeEach(() => {
     jest.resetAllMocks();
     prismaMock.branchInventory.findMany.mockResolvedValue([lot]);
-    service = new InventoryService(prismaMock as never, auditMock as never);
+    service = new InventoryService(
+      prismaMock as never,
+      auditMock as never,
+      {} as never,
+      {} as never,
+    );
   });
 
   it("lets a branch assistant read the inventory of an assigned branch without thresholds", async () => {

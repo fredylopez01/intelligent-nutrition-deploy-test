@@ -15,6 +15,11 @@ import { ListSalesQueryDto } from "./dto/list-sales-query.dto.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
 
+const lowStockMock = {
+  levels: async () => new Map(),
+  notifyCrossings: async () => 0,
+};
+
 const saleId = "99999999-9999-4999-8999-999999999999";
 const branchId = "11111111-1111-4111-8111-111111111111";
 const otherBranchId = "22222222-2222-4222-8222-222222222222";
@@ -47,6 +52,8 @@ const { Test } = await import("@nestjs/testing");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
 const { AuditService } = await import("../audit/audit.service.js");
+const { LowStockService } =
+  await import("../notifications/low-stock.service.js");
 const { SalesService } = await import("./sales.service.js");
 const { SalesController } = await import("./sales.controller.js");
 const { Reflector } = await import("@nestjs/core");
@@ -159,6 +166,7 @@ describe("SalesService read operations (GET /sales)", () => {
         SalesService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
+        { provide: LowStockService, useValue: lowStockMock },
       ],
     }).compile();
     service = testingModule.get(SalesService);

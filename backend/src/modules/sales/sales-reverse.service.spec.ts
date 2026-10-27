@@ -4,6 +4,11 @@ import type { ExecutionContext } from "@nestjs/common";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
+
+const lowStockMock = {
+  levels: async () => new Map(),
+  notifyCrossings: async () => 0,
+};
 type TransactionClient = typeof transactionMock;
 
 const saleId = "99999999-9999-4999-8999-999999999999";
@@ -20,8 +25,12 @@ const transactionMock = {
   branchInventory: {
     findMany: jest.fn<AsyncMock>(),
     update: jest.fn<AsyncMock>(),
+    create: jest.fn<AsyncMock>(),
   },
-  inventoryMovement: { create: jest.fn<AsyncMock>() },
+  inventoryMovement: {
+    create: jest.fn<AsyncMock>(),
+    findMany: jest.fn<AsyncMock>(),
+  },
   sale: {
     findUnique: jest.fn<AsyncMock>(),
     update: jest.fn<AsyncMock>(),
@@ -49,6 +58,8 @@ const { Test } = await import("@nestjs/testing");
 const { PrismaService } =
   await import("../../database/prisma/prisma.service.js");
 const { AuditService } = await import("../audit/audit.service.js");
+const { LowStockService } =
+  await import("../notifications/low-stock.service.js");
 const { SalesService } = await import("./sales.service.js");
 const { Reflector } = await import("@nestjs/core");
 const { RolesGuard } = await import("../../common/guards/roles.guard.js");
@@ -123,6 +134,8 @@ describe("SalesService.reverse", () => {
     ]);
     transactionMock.branchInventory.update.mockResolvedValue({});
     transactionMock.inventoryMovement.create.mockResolvedValue({});
+    transactionMock.inventoryMovement.findMany.mockResolvedValue([]);
+    transactionMock.branchInventory.create.mockResolvedValue({});
     transactionMock.sale.update.mockResolvedValue({});
     transactionMock.sale.findUnique.mockResolvedValue(buildUpdatedSale());
     auditMock.createAuditLog.mockResolvedValue({});
@@ -132,6 +145,7 @@ describe("SalesService.reverse", () => {
         SalesService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
+        { provide: LowStockService, useValue: lowStockMock },
       ],
     }).compile();
     service = module.get(SalesService);
@@ -161,6 +175,7 @@ describe("SalesService.reverse", () => {
         userId,
         movementType: "ENTRY",
         quantity: 2,
+        expirationDate: new Date("2027-10-26T00:00:00.000Z"),
         observation: `Reversal of sale V-20261026-0001: ${reversalReason}`,
         saleId,
         purchaseId: null,
@@ -196,6 +211,40 @@ describe("SalesService.reverse", () => {
       reversalReason,
       items: [{ productId, quantity: 2 }],
     });
+  });
+
+  it("returns each unit to the lot it was sold from, recreating a lot that no longer exists", async () => {
+    transactionMock.sale.findUnique
+      .mockResolvedValueOnce(buildSale("COMPLETED"))
+      .mockResolvedValueOnce(buildUpdatedSale());
+    transactionMock.inventoryMovement.findMany.mockResolvedValue([
+      {
+        productId,
+        quantity: 1,
+        expirationDate: new Date("2027-10-26T00:00:00.000Z"),
+      },
+      {
+        productId,
+        quantity: 1,
+        expirationDate: new Date("2027-12-31T00:00:00.000Z"),
+      },
+    ]);
+
+    await service.reverse(saleId, { reason: reversalReason }, superadmin);
+
+    expect(transactionMock.branchInventory.update).toHaveBeenCalledWith({
+      where: { id: lotId },
+      data: { quantity: { increment: 1 } },
+    });
+    expect(transactionMock.branchInventory.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        branchId,
+        productId,
+        quantity: 1,
+        expirationDate: new Date("2027-12-31T00:00:00.000Z"),
+      }),
+    });
+    expect(transactionMock.inventoryMovement.create).toHaveBeenCalledTimes(2);
   });
 
   it("throws SALE_ALREADY_REVERSED when the sale has already been reversed", async () => {
