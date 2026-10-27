@@ -58,3 +58,10 @@ export interface CreatePurchasePayload {
   observation?: string
   items: { productId: string; requestedQuantity: number; unitPrice: string; observation?: string }[]
 }
+
+export interface ReceiptItemPayload {
+  purchaseDetailId: string
+  receivedQuantity: number
+  expirationDate: string
+  observation?: string
+}

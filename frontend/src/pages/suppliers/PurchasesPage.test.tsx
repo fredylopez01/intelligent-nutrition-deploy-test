@@ -16,7 +16,7 @@ import { PurchasesPage } from './PurchasesPage'
 const auth = vi.hoisted(() => ({ role: 'SUPERADMIN' }))
 
 vi.mock('../../services/purchases.service', () => ({
-  purchasesService: { list: vi.fn(), get: vi.fn(), create: vi.fn() },
+  purchasesService: { list: vi.fn(), get: vi.fn(), create: vi.fn(), receive: vi.fn() },
 }))
 
 vi.mock('../../services/suppliers.service', () => ({
@@ -144,6 +144,33 @@ describe('PurchasesPage', () => {
     const dialog = within(await screen.findByRole('dialog', { name: 'Compra C-20261026-0001' }))
     expect(await dialog.findByText('5 / 20')).toBeInTheDocument()
     expect(dialog.getByLabelText('Recibido 5 de 35')).toBeInTheDocument()
+  })
+
+  it('lets the superadmin register the receipt from the detail', async () => {
+    vi.mocked(purchasesService.receive).mockResolvedValue(
+      buildPurchase({ status: 'FULLY_RECEIVED' }),
+    )
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Ver la compra C-20261026-0001' }))
+    await user.click(await screen.findByRole('button', { name: 'Registrar recepción' }))
+    await user.type(screen.getByLabelText('Vencimiento de Whey Protein 2 lb, lote 1'), '2027-06-30')
+    await user.type(screen.getByLabelText('Vencimiento de Creatina 300 g, lote 1'), '2027-06-30')
+    await user.click(screen.getByRole('button', { name: 'Confirmar recepción' }))
+
+    expect(
+      await screen.findByText(/quedó recibida completa y sus unidades entraron al stock general/),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the receipt with the superadmin', async () => {
+    auth.role = 'BRANCH_LEADER'
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Ver la compra C-20261026-0001' }))
+
+    expect(await screen.findByText(/La recepción la confirma el superadmin/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Registrar recepción' })).not.toBeInTheDocument()
   })
 
   it('opens the purchase order form', async () => {

@@ -7,6 +7,7 @@ import type { PurchaseStatus, PurchaseSupplier } from '../types/purchase'
 import { isValidPrice } from './products'
 
 export const PURCHASE_MANAGE_ROLES: RoleName[] = ['SUPERADMIN', 'BRANCH_LEADER']
+export const PURCHASE_RECEIVE_ROLES: RoleName[] = ['SUPERADMIN']
 export const PURCHASE_TEXT_MAX_LENGTH = 500
 
 export const PURCHASE_STATUS_LABELS: Record<PurchaseStatus, string> = {
@@ -65,6 +66,14 @@ export function resolvePurchaseError(error: unknown, fallback: string): string {
       return 'Uno de los productos ya no existe. Quítalo de la orden.'
     case 'DUPLICATED_PRODUCT':
       return 'Un producto está repetido en la orden.'
+    case 'PURCHASE_ALREADY_RECEIVED':
+      return 'La compra ya se recibió completa. Recarga el listado.'
+    case 'RECEIVED_EXCEEDS_REQUESTED':
+      return 'Lo recibido supera lo pedido en una de las líneas. Revisa las cantidades.'
+    case 'LOT_EXPIRED':
+      return 'Uno de los lotes ya está vencido: no puede entrar al stock general.'
+    case 'DUPLICATED_PURCHASE_DETAIL':
+      return 'Repetiste el mismo lote en una línea. Une las cantidades en una sola fila.'
     case 'PURCHASE_NOT_FOUND':
       return 'La compra ya no existe. Recarga el listado.'
     case 'SEARCH_TOO_SHORT':
