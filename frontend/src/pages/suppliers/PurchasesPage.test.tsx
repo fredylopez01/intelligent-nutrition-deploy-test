@@ -16,7 +16,7 @@ import { PurchasesPage } from './PurchasesPage'
 const auth = vi.hoisted(() => ({ role: 'SUPERADMIN' }))
 
 vi.mock('../../services/purchases.service', () => ({
-  purchasesService: { list: vi.fn(), get: vi.fn() },
+  purchasesService: { list: vi.fn(), get: vi.fn(), create: vi.fn() },
 }))
 
 vi.mock('../../services/suppliers.service', () => ({
@@ -144,6 +144,15 @@ describe('PurchasesPage', () => {
     const dialog = within(await screen.findByRole('dialog', { name: 'Compra C-20261026-0001' }))
     expect(await dialog.findByText('5 / 20')).toBeInTheDocument()
     expect(dialog.getByLabelText('Recibido 5 de 35')).toBeInTheDocument()
+  })
+
+  it('opens the purchase order form', async () => {
+    const { user } = renderPage()
+    await screen.findByText('C-20261026-0001')
+
+    await user.click(screen.getByRole('button', { name: 'Registrar orden de compra' }))
+
+    expect(screen.getByRole('dialog', { name: 'Registrar orden de compra' })).toBeInTheDocument()
   })
 
   it('explains an empty list and shows the error state', async () => {

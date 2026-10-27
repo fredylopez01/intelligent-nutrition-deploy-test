@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { PurchaseDetail } from '../../components/purchases/PurchaseDetail'
+import { PurchaseForm } from '../../components/purchases/PurchaseForm'
 import { PurchasesTable } from '../../components/purchases/PurchasesTable'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
@@ -18,6 +19,7 @@ import { useSupplierOptions } from '../../hooks/useSupplierOptions'
 import { AppLayout } from '../../layouts/AppLayout'
 import { purchasesService } from '../../services/purchases.service'
 import type { Purchase, PurchaseStatus, PurchaseSummary } from '../../types/purchase'
+import { formatPrice } from '../../utils/products'
 import { PURCHASE_STATUS_LABELS, resolvePurchaseError } from '../../utils/purchases'
 
 import '../inventory/InventoryPage.css'
@@ -51,7 +53,9 @@ export function PurchasesPage() {
     !invalidRange,
   )
 
+  const [creating, setCreating] = useState(false)
   const [viewing, setViewing] = useState<PurchaseSummary | null>(null)
+  const [feedback, setFeedback] = useState<string | null>(null)
 
   const handleSearch = (term: string) => {
     if (term === search) refetch()
@@ -67,6 +71,15 @@ export function PurchasesPage() {
       },
       { replace: true },
     )
+
+  const handleCreated = (purchase: Purchase) => {
+    setCreating(false)
+    setFeedback(
+      `Orden ${purchase.purchaseNumber} registrada por ${formatPrice(purchase.total)}. El stock entra cuando se reciba la mercancía.`,
+    )
+    if (params.page === 1) refetch()
+    else setPage(1)
+  }
 
   const renderList = () => {
     if (invalidRange) {
@@ -102,7 +115,9 @@ export function PurchasesPage() {
           variant="sin-registros"
           title="Todavía no hay órdenes de compra"
           description="Las órdenes registran lo que se pide a cada proveedor. El stock general sube cuando se recibe la mercancía."
-        />
+        >
+          <Button onClick={() => setCreating(true)}>Registrar orden de compra</Button>
+        </EmptyState>
       )
     }
     return <PurchasesTable purchases={purchases} onView={setViewing} />
@@ -118,6 +133,16 @@ export function PurchasesPage() {
           value={search}
           onSearch={handleSearch}
         />
+        <Button
+          className="inventory-page__primary"
+          onClick={() => {
+            setFeedback(null)
+            setCreating(true)
+          }}
+          disabled={supplierOptions.status === 'loading'}
+        >
+          Registrar orden de compra
+        </Button>
       </div>
       <div className="inventory-page__toolbar movements-page__filters">
         <label className="sr-only" htmlFor="purchases-supplier-filter">
@@ -175,6 +200,12 @@ export function PurchasesPage() {
         <ReloadButton onReload={refetch} loading={status === 'loading'} />
       </div>
 
+      {feedback && (
+        <div className="inventory-page__feedback">
+          <Alert tone="success">{feedback}</Alert>
+        </div>
+      )}
+
       <div className="inventory-page__card">{renderList()}</div>
 
       <div className="inventory-page__footer">
@@ -191,6 +222,22 @@ export function PurchasesPage() {
           />
         )}
       </div>
+
+      <Modal
+        open={creating}
+        title="Registrar orden de compra"
+        description="El backend calcula subtotales y total con las cantidades y costos de cada línea."
+        size="wide"
+        onClose={() => setCreating(false)}
+      >
+        {creating && (
+          <PurchaseForm
+            suppliers={supplierOptions.suppliers}
+            onCreated={handleCreated}
+            onCancel={() => setCreating(false)}
+          />
+        )}
+      </Modal>
 
       <Modal
         open={viewing !== null}

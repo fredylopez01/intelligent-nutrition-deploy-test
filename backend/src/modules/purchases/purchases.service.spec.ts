@@ -339,8 +339,8 @@ describe("PurchasesService.findAll", () => {
       status: "PARTIALLY_RECEIVED",
       purchaseNumber: { contains: "c-2", mode: "insensitive" },
       purchaseAt: {
-        gte: new Date("2026-10-01T00:00:00Z"),
-        lte: new Date("2026-10-24T23:59:59.999Z"),
+        gte: new Date("2026-10-01T05:00:00.000Z"),
+        lte: new Date("2026-10-25T04:59:59.999Z"),
       },
       details: { some: { productId: "product-1" } },
     };

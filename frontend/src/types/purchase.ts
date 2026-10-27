@@ -52,3 +52,9 @@ export interface PurchasesListResponse {
   data: PurchaseSummary[]
   meta: PaginationMeta
 }
+
+export interface CreatePurchasePayload {
+  supplierId: string
+  observation?: string
+  items: { productId: string; requestedQuantity: number; unitPrice: string; observation?: string }[]
+}

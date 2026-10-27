@@ -2,6 +2,7 @@ import { Type } from "class-transformer";
 import {
   ArrayMinSize,
   IsArray,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -18,6 +19,7 @@ export class CreatePurchaseItemDto {
   @IsNotEmpty()
   productId!: string;
 
+  @IsInt()
   @Min(1)
   @IsNotEmpty()
   requestedQuantity!: number;

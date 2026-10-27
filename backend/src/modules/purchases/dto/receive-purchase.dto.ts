@@ -1,4 +1,4 @@
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import {
   ArrayMinSize,
   IsArray,
@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   Min,
   ValidateNested,
 } from "class-validator";
@@ -28,8 +29,12 @@ export class ReceivePurchaseItemDto {
   expirationDate!: string;
 
   @IsOptional()
+  @Transform(({ value }): unknown =>
+    typeof value === "string" ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty()
+  @MaxLength(500)
   observation?: string;
 }
 

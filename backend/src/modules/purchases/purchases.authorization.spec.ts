@@ -57,7 +57,7 @@ describe("POST /purchases role guard", () => {
       getHandler: () => handler,
     }) as ExecutionContext;
 
-  it.each(["DEV", "SUPERADMIN", "BRANCH_LEADER"])(
+  it.each(["SUPERADMIN", "BRANCH_LEADER"])(
     "allows the %s role to create purchases",
     (roleName) => {
       const user: AuthenticatedUser = {
@@ -105,7 +105,7 @@ describe("POST /purchases role guard", () => {
   });
 
   it("has the expected roles configured on the purchase endpoint", () => {
-    expect(endpoint.roles).toEqual(["DEV", "SUPERADMIN", "BRANCH_LEADER"]);
+    expect(endpoint.roles).toEqual(["SUPERADMIN", "BRANCH_LEADER"]);
   });
 });
 
@@ -150,7 +150,7 @@ describe("GET /purchases role guards", () => {
       };
 
       expect(guard.canActivate(contextFor(endpoint.handler, user))).toBe(true);
-      expect(endpoint.roles).toEqual(["DEV", "SUPERADMIN", "BRANCH_LEADER"]);
+      expect(endpoint.roles).toEqual(["SUPERADMIN", "BRANCH_LEADER"]);
     },
   );
 
@@ -207,34 +207,43 @@ describe("POST /purchases/:purchaseId/receipts role guard", () => {
       getHandler: () => endpoint.handler,
     }) as ExecutionContext;
 
-  it.each(["SUPERADMIN", "BRANCH_LEADER"])(
-    "allows the %s role to register receipts",
+  it("allows the SUPERADMIN role to register receipts", () => {
+    const user: AuthenticatedUser = {
+      id: "authorized-user",
+      active: true,
+      role: { name: "SUPERADMIN" },
+    };
+
+    expect(guard.canActivate(contextFor(user))).toBe(true);
+  });
+
+  it.each(["BRANCH_LEADER", "BRANCH_ASSISTANT"])(
+    "denies the %s role because only the superadmin confirms receipts",
     (roleName) => {
       const user: AuthenticatedUser = {
-        id: "authorized-user",
+        id: "branch-user",
         active: true,
         role: { name: roleName },
       };
 
-      expect(guard.canActivate(contextFor(user))).toBe(true);
+      expect(() => guard.canActivate(contextFor(user))).toThrow(
+        expect.objectContaining({
+          status: 403,
+          response: expect.objectContaining({
+            code: "INSUFFICIENT_PERMISSIONS",
+          }),
+        }),
+      );
+      expect(endpoint.roles).toEqual(["SUPERADMIN"]);
     },
   );
+});
 
-  it("denies users without receipt permissions", () => {
-    const user: AuthenticatedUser = {
-      id: "assistant-user",
-      active: true,
-      role: { name: "BRANCH_ASSISTANT" },
-    };
-
-    expect(() => guard.canActivate(contextFor(user))).toThrow(
-      expect.objectContaining({
-        status: 403,
-        response: expect.objectContaining({
-          code: "INSUFFICIENT_PERMISSIONS",
-        }),
-      }),
-    );
-    expect(endpoint.roles).toEqual(["SUPERADMIN", "BRANCH_LEADER"]);
-  });
+describe("purchase roles from the contract", () => {
+  it.each(["create", "findAll", "findOne"] as const)(
+    "keeps DEV out of %s",
+    (method) => {
+      expect(handlerWithRoles(method).roles).not.toContain("DEV");
+    },
+  );
 });

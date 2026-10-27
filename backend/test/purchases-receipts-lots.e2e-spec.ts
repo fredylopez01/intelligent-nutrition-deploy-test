@@ -171,6 +171,16 @@ describe("POST /api/v1/purchases/:purchaseId/receipts by lot (e2e)", () => {
     }
   }, 30000);
 
+  it("does not let the branch leader confirm receipts", async () => {
+    await receive(tokens.BRANCH_LEADER, [
+      {
+        purchaseDetailId: detailId,
+        receivedQuantity: 1,
+        expirationDate: "2027-06-30",
+      },
+    ]).expect(403);
+  });
+
   it("requires the expiration date of each received lot", async () => {
     await receive(tokens.SUPERADMIN, [
       { purchaseDetailId: detailId, receivedQuantity: 1 },
@@ -201,7 +211,7 @@ describe("POST /api/v1/purchases/:purchaseId/receipts by lot (e2e)", () => {
         receivedQuantity: 2,
         expirationDate: "2027-09-30",
       },
-    ]).expect(201);
+    ]).expect(200);
 
     const purchase = purchaseOf(response.body);
     expect(purchase.status).toBe("PARTIALLY_RECEIVED");
@@ -239,7 +249,7 @@ describe("POST /api/v1/purchases/:purchaseId/receipts by lot (e2e)", () => {
         receivedQuantity: 4,
         expirationDate: "2027-03-31",
       },
-    ]).expect(201);
+    ]).expect(200);
 
     expect(purchaseOf(response.body).status).toBe("FULLY_RECEIVED");
     expect(await generalLot("2027-03-31")).toBe(8);
