@@ -9,7 +9,7 @@ import { AppModule } from "../src/app.module.js";
 import { configureApp } from "../src/app.setup.js";
 import { PrismaService } from "../src/database/prisma/prisma.service.js";
 
-type RoleName = "SUPERADMIN" | "BRANCH_ASSISTANT";
+type RoleName = "SUPERADMIN" | "DEV";
 
 interface ReversedSaleResponse {
   id: string;
@@ -105,7 +105,7 @@ describe("POST /api/v1/sales/:saleId/reverse (e2e)", () => {
     ).id;
 
     let actorSequence = 0;
-    for (const roleName of ["SUPERADMIN", "BRANCH_ASSISTANT"] as const) {
+    for (const roleName of ["SUPERADMIN", "DEV"] as const) {
       actorSequence += 1;
       const role = await prisma.role.upsert({
         where: { name: roleName },
@@ -323,7 +323,7 @@ describe("POST /api/v1/sales/:saleId/reverse (e2e)", () => {
     const response = await postReverse(
       completedSaleId,
       reversalReason,
-      tokens.BRANCH_ASSISTANT,
+      tokens.DEV,
     ).expect(403);
 
     expect(errorOf(response.body).code).toBe("INSUFFICIENT_PERMISSIONS");

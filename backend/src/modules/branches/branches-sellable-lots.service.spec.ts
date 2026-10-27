@@ -46,4 +46,39 @@ describe("BranchesService sellable products", () => {
       _sum: { quantity: true },
     });
   });
+
+  it("rejects a branch role outside its branches", async () => {
+    const service = new BranchesService(prisma as never, {} as never);
+
+    await expect(
+      service.findSellableProducts(
+        branchId,
+        { page: 1, limit: 20 },
+        {
+          id: "assistant",
+          active: true,
+          role: { name: "BRANCH_ASSISTANT" },
+          branches: [{ id: "another-branch", name: "Norte" }],
+        },
+      ),
+    ).rejects.toMatchObject({ response: { code: "BRANCH_SCOPE_VIOLATION" } });
+    expect(prisma.branch.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("lets a branch role read its own branch", async () => {
+    const service = new BranchesService(prisma as never, {} as never);
+
+    await expect(
+      service.findSellableProducts(
+        branchId,
+        { page: 1, limit: 20 },
+        {
+          id: "leader",
+          active: true,
+          role: { name: "BRANCH_LEADER" },
+          branches: [{ id: branchId, name: "Centro" }],
+        },
+      ),
+    ).resolves.toMatchObject({ data: [] });
+  });
 });

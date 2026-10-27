@@ -83,7 +83,12 @@ export class BranchesController {
   findSellableProducts(
     @Param("id", new ParseUUIDPipe()) branchId: string,
     @Query() query: ListSellableProductsQueryDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
   ) {
-    return this.branchesService.findSellableProducts(branchId, query);
+    return this.branchesService.findSellableProducts(
+      branchId,
+      query,
+      currentUser,
+    );
   }
 }

@@ -11,11 +11,6 @@ export const PENDING_MODULES: PendingModule[] = [
     description: 'Ventas del día, stock por sede y alertas de inventario en una sola vista.',
   },
   {
-    path: '/pos',
-    title: 'POS',
-    description: 'Punto de venta en sede, con descuento automático de inventario.',
-  },
-  {
     path: '/pos/ventas',
     title: 'Ventas',
     description: 'Historial de ventas por sede y reversión de tiquetes con motivo.',

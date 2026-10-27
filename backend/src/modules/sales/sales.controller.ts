@@ -40,18 +40,17 @@ export class SalesController {
   }
 
   @Post()
-  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  @Roles("BRANCH_LEADER", "BRANCH_ASSISTANT")
   create(
     @Body() createSaleDto: CreateSaleDto,
     @CurrentUser() currentUser: AuthenticatedUser,
-    @Ip() ipAddress: string,
   ) {
-    return this.salesService.create(createSaleDto, currentUser, ipAddress);
+    return this.salesService.create(createSaleDto, currentUser);
   }
 
   @Post(":saleId/reverse")
   @HttpCode(200)
-  @Roles("SUPERADMIN", "BRANCH_LEADER")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   reverse(
     @Param("saleId", new ParseUUIDPipe()) saleId: string,
     @Body() reverseSaleDto: ReverseSaleDto,
