@@ -1,3 +1,16 @@
+# Perfil "test": runner de pruebas del backend.
+#
+# Uso obligatorio con ambos archivos, porque test-runner depende de postgres
+# (definido en docker-compose.yml):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml --profile test up --build
+#
+# El runner corre los specs unitarios (config jest en backend/package.json) y
+# luego los e2e (backend/test/jest-e2e.json) contra la base intelligent_nutrition_test.
+#
+# Incluye un S3 mock (adobe/s3mock) porque product-images-storage.e2e-spec.ts
+# necesita un endpoint S3 real. MinIO ya no publica imagenes comunitarias, por
+# eso se usa s3mock (soporta CreateBucket, URLs firmadas, HeadObject y Delete).
 services:
   smoke-test:
     build:
@@ -12,11 +25,58 @@ services:
       - backend
       - frontend
 
+  s3mock:
+    image: adobe/s3mock:latest
+    container_name: intelligent-nutrition-test-s3mock
+    profiles: ["test"]
+    environment:
+      # Crea el bucket al arrancar; el spec tolera que ya exista.
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: ${STORAGE_BUCKET_TEST:-products-images-test}
+      COM_ADOBE_TESTING_S3MOCK_STORE_REGION: us-east-1
+
   test-runner:
     build:
       context: ./backend
       dockerfile: Dockerfile.test
     container_name: intelligent-nutrition-test-runner
     profiles: ["test"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-intelligent_nutrition}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-intelligent_nutrition}:${POSTGRES_PASSWORD:-change_me}@postgres:5432/${POSTGRES_DB:-intelligent_nutrition}?schema=public"
+      DATABASE_URL_TEST: "postgresql://${POSTGRES_USER:-intelligent_nutrition}:${POSTGRES_PASSWORD:-change_me}@postgres:5432/intelligent_nutrition_test?schema=public"
+      JWT_SECRET: ${JWT_SECRET:-test-secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      # Valores dummy: los specs de bootstrap instancian StorageService y exigen
+      # que estas variables existan. Apuntan al S3 mock del perfil test.
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT_TEST:-http://s3mock:9090}
+      STORAGE_BUCKET: ${STORAGE_BUCKET_TEST:-products-images-test}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-test-access-key}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-test-secret-key}
+      # URL publica ficticia: @IsUrl() exige un TLD valido y el spec no la descarga.
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL_TEST:-http://cdn.products-images.test}
+      STORAGE_FORCE_PATH_STYLE: "true"
+      # Variantes *_TEST que prioriza product-images-storage.e2e-spec.ts.
+      STORAGE_ENDPOINT_TEST: ${STORAGE_ENDPOINT_TEST:-http://s3mock:9090}
+      STORAGE_BUCKET_TEST: ${STORAGE_BUCKET_TEST:-products-images-test}
+      STORAGE_ACCESS_KEY_TEST: ${STORAGE_ACCESS_KEY:-test-access-key}
+      STORAGE_SECRET_KEY_TEST: ${STORAGE_SECRET_KEY:-test-secret-key}
+      STORAGE_PUBLIC_URL_TEST: ${STORAGE_PUBLIC_URL_TEST:-http://cdn.products-images.test}
+      STORAGE_REGION_TEST: ${STORAGE_REGION_TEST:-us-east-1}
+      STORAGE_FORCE_PATH_STYLE_TEST: "true"
+      # Dummy: EmailService exige estas variables al instanciarse (no envia correos en tests).
+      RESEND_API_KEY: ${RESEND_API_KEY:-re_test_dummy}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-test@example.com}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      s3mock:
+        condition: service_started
+    # Espera a s3mock (arranque en frio), crea la BD de test y corre unit + e2e
+    # siempre; sale con error si cualquiera de los dos falla.
+    command: >
+      sh -c "until node -e \"require('http').get('http://s3mock:9090/favicon.ico',r=>{r.resume();process.exit(0)}).on('error',()=>process.exit(1))\";
+      do echo 'esperando s3mock...'; sleep 1; done;
+      PGPASSWORD=$$POSTGRES_PASSWORD createdb -h postgres -U $$POSTGRES_USER intelligent_nutrition_test || true;
+      npm test; unit=$$?; npm run test:e2e; e2e=$$?; [ $$unit -eq 0 ] && [ $$e2e -eq 0 ]"
