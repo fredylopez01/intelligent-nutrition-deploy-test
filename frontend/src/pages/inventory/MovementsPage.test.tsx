@@ -29,6 +29,7 @@ vi.mock('../../services/inventoryMovements.service', () => ({
   inventoryMovementsService: {
     list: vi.fn(),
     create: vi.fn(),
+    transfer: vi.fn(),
   },
 }))
 
@@ -234,23 +235,31 @@ describe('MovementsPage list', () => {
 })
 
 describe('MovementsPage actions by role', () => {
-  it.each(['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'])(
-    'lets the %s register an entry or exit',
-    async (role) => {
-      auth.role = role
-      renderPage()
-      await screen.findByText('Salida')
+  it.each([
+    ['SUPERADMIN', ['Registrar entrada o salida', 'Trasladar']],
+    ['BRANCH_LEADER', ['Registrar entrada o salida', 'Trasladar']],
+    ['BRANCH_ASSISTANT', ['Registrar entrada o salida']],
+  ])('shows the actions the %s can perform', async (role, actions) => {
+    auth.role = role
+    renderPage()
+    await screen.findByText('Salida')
 
-      expect(screen.getByRole('button', { name: 'Registrar entrada o salida' })).toBeInTheDocument()
-    },
-  )
+    for (const name of ['Registrar entrada o salida', 'Trasladar']) {
+      const button = screen.queryByRole('button', { name })
+      if (actions.includes(name)) expect(button).toBeInTheDocument()
+      else expect(button).not.toBeInTheDocument()
+    }
+  })
 
-  it('opens the entry or exit dialog', async () => {
+  it.each([
+    ['Registrar entrada o salida', 'Registrar entrada o salida'],
+    ['Trasladar', 'Trasladar entre sedes'],
+  ])('opens the %s dialog', async (button, title) => {
     const { user } = renderPage()
     await screen.findByText('Salida')
 
-    await user.click(screen.getByRole('button', { name: 'Registrar entrada o salida' }))
+    await user.click(screen.getByRole('button', { name: button }))
 
-    expect(screen.getByRole('dialog', { name: 'Registrar entrada o salida' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: title })).toBeInTheDocument()
   })
 })

@@ -12,6 +12,7 @@ export const MOVEMENT_REGISTER_ROLES: RoleName[] = [
   'BRANCH_LEADER',
   'BRANCH_ASSISTANT',
 ]
+export const MOVEMENT_TRANSFER_ROLES: RoleName[] = ['SUPERADMIN', 'BRANCH_LEADER']
 
 export const MOVEMENT_TEXT_MAX_LENGTH = 500
 
@@ -170,6 +171,18 @@ export const movementSchema = z
 
 export type MovementValues = z.infer<typeof movementSchema>
 
+export const transferSchema = z.object({
+  branchId: z.string().min(1, 'Elige la sede destino.'),
+  quantity: quantitySchema,
+  expirationDate: lotSchema,
+  observation: z
+    .string()
+    .trim()
+    .max(MOVEMENT_TEXT_MAX_LENGTH, 'La observación no puede superar 500 caracteres.'),
+})
+
+export type TransferValues = z.infer<typeof transferSchema>
+
 export type MovementErrorField = 'quantity' | 'expirationDate' | 'branchId'
 
 export function movementFieldError(
@@ -205,6 +218,14 @@ export function movementFieldError(
         field: 'expirationDate',
         message: 'La sede ya no tiene ese lote. Recarga los lotes y elige otro.',
       }
+    case 'PRODUCT_NOT_ASSIGNED_IN_DESTINATION':
+      return {
+        field: 'branchId',
+        message:
+          'El producto no está asignado en la sede destino. Pide que lo asignen desde Inventario antes de trasladarlo.',
+      }
+    case 'SAME_BRANCH_TRANSFER':
+      return { field: 'branchId', message: 'La sede destino debe ser distinta a la de origen.' }
   }
   return null
 }

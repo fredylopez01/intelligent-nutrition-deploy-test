@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { MovementDetail } from '../../components/inventory-movements/MovementDetail'
 import { MovementForm } from '../../components/inventory-movements/MovementForm'
 import { MovementsTable } from '../../components/inventory-movements/MovementsTable'
+import { TransferForm } from '../../components/inventory-movements/TransferForm'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -26,6 +27,7 @@ import { hasRole } from '../../utils/categories'
 import { formatQuantity } from '../../utils/inventory'
 import {
   MOVEMENT_REGISTER_ROLES,
+  MOVEMENT_TRANSFER_ROLES,
   MOVEMENT_TYPE_OPTIONS,
   signedQuantity,
 } from '../../utils/inventoryMovements'
@@ -46,13 +48,15 @@ const REGISTERED_LABELS: Record<MovementType, string> = {
   ADJUSTMENT_EXIT: 'Ajuste de salida registrado',
 }
 
-type Dialog = { kind: 'register' } | { kind: 'detail'; movement: InventoryMovement }
+type Dialog =
+  { kind: 'register' } | { kind: 'transfer' } | { kind: 'detail'; movement: InventoryMovement }
 
 export function MovementsPage() {
   const { user } = useAuth()
   const roleName = user?.role.name
   const isSuperadmin = roleName === 'SUPERADMIN'
   const canRegister = hasRole(MOVEMENT_REGISTER_ROLES, roleName)
+  const canTransfer = hasRole(MOVEMENT_TRANSFER_ROLES, roleName)
   const branchOptions = useInventoryBranches()
 
   const [, setSearchParams] = useSearchParams()
@@ -116,9 +120,15 @@ export function MovementsPage() {
   const handleRegistered = (movement: RegisteredMovement) => {
     closeDialog()
     const quantity = signedQuantity(movement, movement.branch?.id)
-    setFeedback(
-      `${REGISTERED_LABELS[movement.movementType]}: ${quantity} de ${movement.product.name} en ${movement.branch?.name ?? 'la sede'}. Ahora hay ${formatQuantity(movement.resultingQuantity, movement.product.unit)}.`,
-    )
+    if (movement.movementType === 'TRANSFER') {
+      setFeedback(
+        `Traslado registrado: ${formatQuantity(movement.quantity, movement.product.unit)} de ${movement.product.name} de ${movement.originBranch?.name ?? 'origen'} a ${movement.branch?.name ?? 'destino'}. ${movement.originBranch?.name ?? 'El origen'} queda con ${formatQuantity(movement.originResultingQuantity ?? 0, movement.product.unit)}.`,
+      )
+    } else {
+      setFeedback(
+        `${REGISTERED_LABELS[movement.movementType]}: ${quantity} de ${movement.product.name} en ${movement.branch?.name ?? 'la sede'}. Ahora hay ${formatQuantity(movement.resultingQuantity, movement.product.unit)}.`,
+      )
+    }
     if (params.page === 1) refetch()
     else setPage(1)
   }
@@ -231,6 +241,15 @@ export function MovementsPage() {
           </select>
         </div>
         <div className="movements-page__actions">
+          {canTransfer && (
+            <Button
+              variant="outline"
+              onClick={() => openDialog({ kind: 'transfer' })}
+              disabled={formBranches.length === 0}
+            >
+              Trasladar
+            </Button>
+          )}
           {canRegister && (
             <Button
               onClick={() => openDialog({ kind: 'register' })}
@@ -337,6 +356,22 @@ export function MovementsPage() {
           <MovementForm
             branches={formBranches}
             defaultBranchId={defaultFormBranchId}
+            onRegistered={handleRegistered}
+            onCancel={closeDialog}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={dialog?.kind === 'transfer'}
+        title="Trasladar entre sedes"
+        description="El lote sale de la sede origen y entra con la misma fecha de vencimiento a la sede destino."
+        onClose={closeDialog}
+      >
+        {dialog?.kind === 'transfer' && (
+          <TransferForm
+            originBranches={formBranches}
+            defaultOriginId={defaultFormBranchId}
             onRegistered={handleRegistered}
             onCancel={closeDialog}
           />
