@@ -23,9 +23,18 @@ vi.mock('../../hooks/useAuth', () => ({
 }))
 
 vi.mock('../../layouts/AppLayout', () => ({
-  AppLayout: ({ title, children }: { title: string; children: ReactNode }) => (
+  AppLayout: ({
+    title,
+    actions,
+    children,
+  }: {
+    title: string
+    actions?: ReactNode
+    children: ReactNode
+  }) => (
     <main>
       <h1>{title}</h1>
+      {actions}
       {children}
     </main>
   ),
@@ -120,18 +129,19 @@ describe('AuditLogsPage filters', () => {
       page: 1,
       limit: 10,
       userId: undefined,
+      entity: undefined,
       action: undefined,
-      fromDate: undefined,
-      toDate: undefined,
+      from: undefined,
+      to: undefined,
     })
     expect(listLogs.mock.calls[0]?.[1]).toBe('test-token')
   })
 
-  it('applies the affected user filter', async () => {
+  it('applies the filter by the user who executed the change', async () => {
     const { user } = renderPage()
     await screen.findByRole('cell', { name: /Admin Sistema/ })
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Usuario afectado' }), 'user-1')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Ejecutado por' }), 'user-1')
 
     await waitFor(() => expect(lastListParams()).toMatchObject({ userId: 'user-1', page: 1 }))
   })
@@ -154,8 +164,8 @@ describe('AuditLogsPage filters', () => {
 
     await waitFor(() =>
       expect(lastListParams()).toMatchObject({
-        fromDate: '2026-09-01',
-        toDate: '2026-09-30',
+        from: '2026-09-01',
+        to: '2026-09-30',
         page: 1,
       }),
     )
@@ -165,7 +175,7 @@ describe('AuditLogsPage filters', () => {
     const { user } = renderPage()
     await screen.findByRole('cell', { name: /Admin Sistema/ })
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Usuario afectado' }), 'user-1')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Ejecutado por' }), 'user-1')
     await user.selectOptions(screen.getByRole('combobox', { name: 'Acción' }), 'UPDATE')
     await user.type(screen.getByLabelText('Desde'), '2026-09-01')
     await user.type(screen.getByLabelText('Hasta'), '2026-09-30')
@@ -175,9 +185,10 @@ describe('AuditLogsPage filters', () => {
         page: 1,
         limit: 10,
         userId: 'user-1',
+        entity: undefined,
         action: 'UPDATE',
-        fromDate: '2026-09-01',
-        toDate: '2026-09-30',
+        from: '2026-09-01',
+        to: '2026-09-30',
       }),
     )
   })
@@ -226,8 +237,66 @@ describe('AuditLogsPage empty list', () => {
 
     expect(await screen.findByText('Ningún registro coincide con los filtros')).toBeInTheDocument()
     expect(
-      screen.getByText('Ajusta el usuario, la acción o el rango de fechas.'),
+      screen.getByText('Ajusta el usuario, la entidad, la acción o el rango de fechas.'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+})
+
+describe('AuditLogsPage entity filter and detail', () => {
+  it('filters by entity', async () => {
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: /Admin Sistema/ })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Entidad' }), 'PURCHASE')
+
+    await waitFor(() => expect(lastListParams()).toMatchObject({ entity: 'PURCHASE', page: 1 }))
+  })
+
+  it('shows the executor name sent by the api', async () => {
+    listLogs.mockResolvedValue(
+      pageOf([makeLog({ user: { id: 'person-9', fullName: 'Laura Pérez' }, userAccount: null })]),
+    )
+    renderPage()
+
+    expect(await screen.findByText('Laura Pérez')).toBeInTheDocument()
+  })
+
+  it('expands the changes of a record inline', async () => {
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: /Admin Sistema/ })
+
+    const toggle = screen.getByRole('button', { name: 'Ver cambios' })
+    await user.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText(/"firstName": "Ana"/)).toBeInTheDocument()
+    expect(screen.getByText(/"firstName": "María"/)).toBeInTheDocument()
+    expect(screen.getByText('127.0.0.1')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Ocultar' }))
+    expect(screen.queryByText(/"firstName": "Ana"/)).not.toBeInTheDocument()
+  })
+
+  it('exports every page that matches the filters as CSV', async () => {
+    const createObjectURL = vi.fn(() => 'blob:audit')
+    const revokeObjectURL = vi.fn()
+    Object.assign(URL, { createObjectURL, revokeObjectURL })
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    listLogs.mockResolvedValue({
+      data: [makeLog()],
+      meta: { page: 1, limit: 10, total: 150, totalPages: 2 },
+    })
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: /Admin Sistema/ })
+
+    await user.click(screen.getByRole('button', { name: 'Exportar CSV' }))
+
+    await waitFor(() => expect(click).toHaveBeenCalled())
+    expect(listLogs).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 2, limit: 100 }),
+      'test-token',
+    )
+    expect(createObjectURL).toHaveBeenCalled()
+    click.mockRestore()
   })
 })

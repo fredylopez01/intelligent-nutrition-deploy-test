@@ -7,16 +7,18 @@ function buildAuditLogsQuery({
   limit,
   userId,
   action,
-  fromDate,
-  toDate,
+  entity,
+  from,
+  to,
 }: AuditLogsListParams): string {
   const params = new URLSearchParams()
   if (page !== undefined) params.set('page', String(page))
   if (limit !== undefined) params.set('limit', String(limit))
   if (userId) params.set('userId', userId)
   if (action) params.set('action', action)
-  if (fromDate) params.set('fromDate', fromDate)
-  if (toDate) params.set('toDate', toDate)
+  if (entity) params.set('entity', entity)
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
   const query = params.toString()
   return query ? `?${query}` : ''
 }

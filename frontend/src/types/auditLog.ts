@@ -16,6 +16,7 @@ export interface AuditLog {
   reason: string
   ipAddress: string | null
   createdAt: string
+  user?: { id: string; fullName: string } | null
   userAccount: { person: AuditActorPerson } | null
 }
 
@@ -31,8 +32,9 @@ export interface AuditLogsListParams {
   limit?: number
   userId?: string
   action?: string
-  fromDate?: string
-  toDate?: string
+  entity?: string
+  from?: string
+  to?: string
 }
 
 export interface AuditLogsListResponse {
