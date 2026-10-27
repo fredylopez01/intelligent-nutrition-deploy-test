@@ -1,102 +1,90 @@
-import "reflect-metadata";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  jest,
-} from "@jest/globals";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { ValidationPipe } from "@nestjs/common";
-import type { TestingModule } from "@nestjs/testing";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { UpdateCountsDto } from "./dto/update-counts.dto.js";
+import { InventoryClosuresService } from "./inventory-closures.service.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
-type TransactionCallback = (client: typeof transactionMock) => Promise<unknown>;
 
-const branchId   = "11111111-1111-4111-8111-111111111111";
-const userId     = "22222222-2222-4222-8222-222222222222";
-const closureId  = "33333333-3333-4333-8333-333333333333";
-const productAId = "44444444-4444-4444-8444-444444444444";
-const productBId = "55555555-5555-4555-8555-555555555555";
-const detailAId  = "66666666-6666-4666-8666-666666666666";
-const detailBId  = "77777777-7777-4777-8777-777777777777";
+const branchId = "11111111-1111-4111-8111-111111111111";
+const otherBranchId = "44444444-4444-4444-8444-444444444444";
+const closureId = "33333333-3333-4333-8333-333333333333";
+const wheyId = "55555555-5555-4555-8555-555555555555";
 
-const today = new Date("2026-10-23T00:00:00.000Z");
+const day = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
-const productA = {
-  name: "Proteína",
-  referenceCode: "P-001",
-  unitOfMeasure: { abreviation: "kg" },
+const leader: AuthenticatedUser = {
+  id: "leader-id",
+  active: true,
+  role: { name: "BRANCH_LEADER" },
+  branches: [{ id: branchId, name: "Centro" }],
 };
-const productB = {
-  name: "Creatina",
-  referenceCode: "P-002",
-  unitOfMeasure: { abreviation: "g" },
+const assistant: AuthenticatedUser = {
+  id: "assistant-id",
+  active: true,
+  role: { name: "BRANCH_ASSISTANT" },
+  branches: [{ id: branchId, name: "Centro" }],
 };
-
-const pendingClosure = {
-  id: closureId,
-  branchId,
-  status: "PENDING",
-  locked: false,
-  details: [
-    { id: detailAId, productId: productAId, systemQuantity: 7 },
-    { id: detailBId, productId: productBId, systemQuantity: 5 },
-  ],
+const outsider: AuthenticatedUser = {
+  id: "outsider-id",
+  active: true,
+  role: { name: "BRANCH_ASSISTANT" },
+  branches: [{ id: otherBranchId, name: "Norte" }],
 };
 
-const updatedClosureRecord = {
-  id: closureId,
-  branchId,
-  closureDate: today,
-  status: "PENDING",
-  confirmed: false,
-  locked: false,
-  closedAt: null,
-  details: [
-    {
-      productId: productAId,
-      physicalQuantity: 8,
-      observation: null,
-      product: productA,
-    },
-    {
-      productId: productBId,
-      physicalQuantity: 4,
-      observation: "Vencimiento próximo",
-      product: productB,
-    },
-  ],
-};
-
-const transactionMock = {
+const tx = {
   inventoryClosure: {
     findUnique: jest.fn<AsyncMock>(),
-  },
-  inventoryClosureDetail: {
+    findUniqueOrThrow: jest.fn<AsyncMock>(),
     update: jest.fn<AsyncMock>(),
   },
+  inventoryClosureDetail: { update: jest.fn<AsyncMock>() },
 };
-
-const prismaMock = {
-  $transaction:
-    jest.fn<(callback: TransactionCallback) => Promise<unknown>>(),
+const prisma = {
+  $transaction: jest.fn<(arg: unknown) => Promise<unknown>>(),
 };
+const audit = { createAuditLog: jest.fn<AsyncMock>() };
 
-const auditMock = {
-  createAuditLog: jest.fn<AsyncMock>(),
-};
+function lot(
+  expirationDate: string,
+  systemQuantity: number,
+  physicalQuantity: number | null = null,
+) {
+  return {
+    id: `detail-${expirationDate}`,
+    productId: wheyId,
+    expirationDate: day(expirationDate),
+    systemQuantity,
+    physicalQuantity,
+    difference:
+      physicalQuantity === null ? null : physicalQuantity - systemQuantity,
+    observation: null,
+    product: {
+      name: "Whey Protein 2 lb",
+      referenceCode: "WHEY",
+      unitOfMeasure: { abreviation: "und" },
+    },
+  };
+}
 
-jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
-  PrismaService: jest.fn().mockImplementation(() => prismaMock),
-}));
-
-const { Test }                       = await import("@nestjs/testing");
-const { PrismaService }              = await import("../../database/prisma/prisma.service.js");
-const { AuditService }               = await import("../audit/audit.service.js");
-const { InventoryClosuresService }   = await import("./inventory-closures.service.js");
+function closure(
+  details: ReturnType<typeof lot>[],
+  status: "PENDING" | "CONFIRMED" | "NOT_CONFIRMED" = "PENDING",
+  locked = status !== "PENDING",
+) {
+  return {
+    id: closureId,
+    branchId,
+    closureDate: day("2026-10-26"),
+    status,
+    confirmed: status === "CONFIRMED",
+    locked,
+    closedAt: null,
+    branch: { name: "Centro" },
+    user: { person: { firstName: "Laura", lastName: null } },
+    details,
+  };
+}
 
 const validationPipe = new ValidationPipe({
   whitelist: true,
@@ -105,379 +93,193 @@ const validationPipe = new ValidationPipe({
   transformOptions: { enableImplicitConversion: false },
 });
 
-const superadmin: AuthenticatedUser = {
-  id: userId,
-  active: true,
-  role: { name: "SUPERADMIN" },
-};
-
-const userWithRole = (
-  roleName: string,
-  assignedBranchIds: string[] = [],
-): AuthenticatedUser => ({
-  id: userId,
-  active: true,
-  role: { name: roleName },
-  branches: assignedBranchIds.map((id) => ({ id, name: "Sede Centro" })),
-});
-
-function validDto(): UpdateCountsDto {
-  return {
-    counts: [
-      { productId: productAId, physicalQuantity: 8 },
-      { productId: productBId, physicalQuantity: 4, observation: "Vencimiento próximo" },
-    ],
-  } as UpdateCountsDto;
-}
-
-async function validateBody(body: Record<string, unknown>) {
+function validateBody(body: Record<string, unknown>) {
   return validationPipe.transform(body, {
     type: "body",
     metatype: UpdateCountsDto,
   }) as Promise<UpdateCountsDto>;
 }
 
-const ipAddress = "127.0.0.1";
+const count = (
+  expirationDate: string,
+  physicalQuantity: number,
+  observation?: string,
+) => ({ productId: wheyId, expirationDate, physicalQuantity, observation });
 
 describe("InventoryClosuresService.updateCounts", () => {
-  let service: InstanceType<typeof InventoryClosuresService>;
-  let testingModule: TestingModule;
+  let service: InventoryClosuresService;
+  const pending = closure([lot("2026-09-30", 2), lot("2027-06-30", 8)]);
 
-  beforeEach(async () => {
-    jest.clearAllMocks();
+  beforeEach(() => {
+    jest.resetAllMocks();
+    prisma.$transaction.mockImplementation((arg) =>
+      (arg as (client: typeof tx) => Promise<unknown>)(tx),
+    );
+    tx.inventoryClosure.findUnique.mockResolvedValue(pending);
+    tx.inventoryClosure.findUniqueOrThrow.mockResolvedValue(
+      closure([lot("2026-09-30", 2, 0), lot("2027-06-30", 8, 7)]),
+    );
+    service = new InventoryClosuresService(prisma as never, audit as never);
+  });
 
-    prismaMock.$transaction.mockImplementation((callback) =>
-      callback(transactionMock),
+  it("stores the count of each lot with its difference and observation", async () => {
+    await service.updateCounts(
+      closureId,
+      {
+        items: [
+          count("2027-06-30", 7, "Una unidad abierta"),
+          count("2026-09-30", 0),
+        ],
+      },
+      assistant,
     );
 
-    transactionMock.inventoryClosure.findUnique
-      .mockResolvedValueOnce(pendingClosure)
-      .mockResolvedValueOnce(updatedClosureRecord);
-
-    transactionMock.inventoryClosureDetail.update.mockResolvedValue({});
-    auditMock.createAuditLog.mockResolvedValue({});
-
-    testingModule = await Test.createTestingModule({
-      providers: [
-        InventoryClosuresService,
-        { provide: PrismaService, useValue: prismaMock },
-        { provide: AuditService, useValue: auditMock },
-      ],
-    }).compile();
-    service = testingModule.get(InventoryClosuresService);
-  });
-
-  afterEach(async () => {
-    await testingModule.close();
-  });
-
-  describe("closure lookup", () => {
-    it("rejects when the closure does not exist", async () => {
-      transactionMock.inventoryClosure.findUnique.mockReset();
-      transactionMock.inventoryClosure.findUnique.mockResolvedValue(null);
-
-      await expect(
-        service.updateCounts(closureId, validDto(), superadmin, ipAddress),
-      ).rejects.toMatchObject({
-        status: 404,
-        response: { code: "CLOSURE_NOT_FOUND" },
-      });
-
-      expect(transactionMock.inventoryClosureDetail.update).not.toHaveBeenCalled();
+    expect(tx.inventoryClosureDetail.update).toHaveBeenCalledWith({
+      where: { id: "detail-2027-06-30" },
+      data: {
+        physicalQuantity: 7,
+        difference: -1,
+        observation: "Una unidad abierta",
+      },
+    });
+    expect(tx.inventoryClosureDetail.update).toHaveBeenCalledWith({
+      where: { id: "detail-2026-09-30" },
+      data: { physicalQuantity: 0, difference: -2, observation: null },
     });
   });
 
-  describe("authorization", () => {
-    it("allows SUPERADMIN to update counts for any branch closure", async () => {
-      await expect(
-        service.updateCounts(closureId, validDto(), superadmin, ipAddress),
-      ).resolves.toBeDefined();
+  it("keeps the answer blind while the closure is pending", async () => {
+    const result = await service.updateCounts(
+      closureId,
+      { items: [count("2027-06-30", 7)] },
+      leader,
+    );
+
+    expect(result).toMatchObject({
+      status: "PENDING",
+      countedItems: 2,
+      totalItems: 2,
     });
-
-    it("allows DEV to update counts for any branch closure", async () => {
-      await expect(
-        service.updateCounts(closureId, validDto(), userWithRole("DEV"), ipAddress),
-      ).resolves.toBeDefined();
-    });
-
-    it("allows BRANCH_LEADER assigned to the closure branch", async () => {
-      const leader = userWithRole("BRANCH_LEADER", [branchId]);
-
-      await expect(
-        service.updateCounts(closureId, validDto(), leader, ipAddress),
-      ).resolves.toBeDefined();
-    });
-
-    it("rejects BRANCH_LEADER not assigned to the closure branch", async () => {
-      const leader = userWithRole("BRANCH_LEADER", ["99999999-9999-4999-8999-999999999999"]);
-
-      await expect(
-        service.updateCounts(closureId, validDto(), leader, ipAddress),
-      ).rejects.toMatchObject({
-        status: 403,
-        response: { code: "FORBIDDEN_BRANCH" },
-      });
-    });
-
-    it("rejects BRANCH_ASSISTANT not assigned to the closure branch", async () => {
-      const assistant = userWithRole("BRANCH_ASSISTANT");
-
-      await expect(
-        service.updateCounts(closureId, validDto(), assistant, ipAddress),
-      ).rejects.toMatchObject({
-        status: 403,
-        response: { code: "FORBIDDEN_BRANCH" },
-      });
-    });
+    for (const item of result.items) {
+      expect(item).not.toHaveProperty("systemQuantity");
+      expect(item).not.toHaveProperty("difference");
+    }
   });
 
-  describe("closure state validation", () => {
-    it("rejects when the closure status is not PENDING", async () => {
-      transactionMock.inventoryClosure.findUnique.mockReset();
-      transactionMock.inventoryClosure.findUnique.mockResolvedValue({
-        ...pendingClosure,
-        status: "CONFIRMED",
-      });
+  it("accepts saving only part of the lots", async () => {
+    await service.updateCounts(
+      closureId,
+      { items: [count("2027-06-30", 8)] },
+      leader,
+    );
 
-      await expect(
-        service.updateCounts(closureId, validDto(), superadmin, ipAddress),
-      ).rejects.toMatchObject({
-        status: 422,
-        response: { code: "CLOSURE_NOT_PENDING" },
-      });
-
-      expect(transactionMock.inventoryClosureDetail.update).not.toHaveBeenCalled();
-    });
-
-    it("rejects when the closure is locked", async () => {
-      transactionMock.inventoryClosure.findUnique.mockReset();
-      transactionMock.inventoryClosure.findUnique.mockResolvedValue({
-        ...pendingClosure,
-        locked: true,
-      });
-
-      await expect(
-        service.updateCounts(closureId, validDto(), superadmin, ipAddress),
-      ).rejects.toMatchObject({
-        status: 422,
-        response: { code: "CLOSURE_LOCKED" },
-      });
-
-      expect(transactionMock.inventoryClosureDetail.update).not.toHaveBeenCalled();
-    });
+    expect(tx.inventoryClosureDetail.update).toHaveBeenCalledTimes(1);
   });
 
-  describe("counts payload validation", () => {
-    it("rejects when counts contain duplicated productIds", async () => {
-      const dto: UpdateCountsDto = {
-        counts: [
-          { productId: productAId, physicalQuantity: 5 },
-          { productId: productAId, physicalQuantity: 8 },
-        ],
-      } as UpdateCountsDto;
-
-      await expect(
-        service.updateCounts(closureId, dto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
-        status: 422,
-        response: { code: "DUPLICATED_PRODUCT" },
-      });
-
-      expect(transactionMock.inventoryClosureDetail.update).not.toHaveBeenCalled();
-    });
-
-    it("rejects when a productId in counts is not part of the closure", async () => {
-      const unknownProductId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-      const dto: UpdateCountsDto = {
-        counts: [{ productId: unknownProductId, physicalQuantity: 3 }],
-      } as UpdateCountsDto;
-
-      await expect(
-        service.updateCounts(closureId, dto, superadmin, ipAddress),
-      ).rejects.toMatchObject({
-        status: 422,
-        response: { code: "PRODUCT_NOT_IN_CLOSURE" },
-      });
-
-      expect(transactionMock.inventoryClosureDetail.update).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("happy path", () => {
-    it("updates each detail with the correct physicalQuantity and calculated difference", async () => {
-      await service.updateCounts(closureId, validDto(), superadmin, ipAddress);
-
-      expect(transactionMock.inventoryClosureDetail.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: detailAId },
-          data:  expect.objectContaining({
-            physicalQuantity: 8,
-            difference:       1,   // 8 - 7
-          }),
-        }),
-      );
-
-      expect(transactionMock.inventoryClosureDetail.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: detailBId },
-          data:  expect.objectContaining({
-            physicalQuantity: 4,
-            difference:       -1,  // 4 - 5
-          }),
-        }),
-      );
-    });
-
-    it("stores the item observation when provided", async () => {
-      await service.updateCounts(closureId, validDto(), superadmin, ipAddress);
-
-      expect(transactionMock.inventoryClosureDetail.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: detailBId },
-          data:  expect.objectContaining({ observation: "Vencimiento próximo" }),
-        }),
-      );
-    });
-
-    it("stores null observation when not provided", async () => {
-      await service.updateCounts(closureId, validDto(), superadmin, ipAddress);
-
-      expect(transactionMock.inventoryClosureDetail.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: detailAId },
-          data:  expect.objectContaining({ observation: null }),
-        }),
-      );
-    });
-
-    it("allows physicalQuantity of zero (valid count result)", async () => {
-      const dto: UpdateCountsDto = {
-        counts: [{ productId: productAId, physicalQuantity: 0 }],
-      } as UpdateCountsDto;
-
-      await expect(
-        service.updateCounts(closureId, dto, superadmin, ipAddress),
-      ).resolves.toBeDefined();
-
-      expect(transactionMock.inventoryClosureDetail.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ physicalQuantity: 0, difference: -7 }),
-        }),
-      );
-    });
-
-    it("accepts a partial update affecting only one of the closure products", async () => {
-      const dto: UpdateCountsDto = {
-        counts: [{ productId: productAId, physicalQuantity: 10 }],
-      } as UpdateCountsDto;
-
-      await expect(
-        service.updateCounts(closureId, dto, superadmin, ipAddress),
-      ).resolves.toBeDefined();
-
-      expect(transactionMock.inventoryClosureDetail.update).toHaveBeenCalledTimes(1);
-    });
-
-    it("re-fetches the closure after updates to build the response", async () => {
-      await service.updateCounts(closureId, validDto(), superadmin, ipAddress);
-
-      expect(transactionMock.inventoryClosure.findUnique).toHaveBeenCalledTimes(2);
-    });
-
-    it("records an audit log with action UPDATE and entity INVENTORY_CLOSURE", async () => {
-      await service.updateCounts(closureId, validDto(), superadmin, ipAddress);
-
-      expect(auditMock.createAuditLog).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId,
-          action:    "UPDATE",
-          entity:    "INVENTORY_CLOSURE",
-          entityId:  closureId,
-          newData:   { countsUpdated: 2 },
-          ipAddress,
-        }),
-        transactionMock,
-      );
-    });
-
-    it("returns the updated closure shape with items from the re-fetched record", async () => {
-      const result = (await service.updateCounts(
+  it("rejects a lot that is not part of the closure", async () => {
+    await expect(
+      service.updateCounts(
         closureId,
-        validDto(),
-        superadmin,
-        ipAddress,
-      )) as any;
-
-      expect(result).toMatchObject({
-        id:        closureId,
-        branchId,
-        status:    "PENDING",
-        confirmed: false,
-        locked:    false,
-        items: [
-          expect.objectContaining({
-            productId:        productAId,
-            productName:      "Proteína",
-            referenceCode:    "P-001",
-            unit:             "kg",
-            physicalQuantity: 8,
-            observation:      null,
-          }),
-          expect.objectContaining({
-            productId:        productBId,
-            productName:      "Creatina",
-            referenceCode:    "P-002",
-            unit:             "g",
-            physicalQuantity: 4,
-            observation:      "Vencimiento próximo",
-          }),
-        ],
-      });
+        { items: [count("2028-01-01", 3)] },
+        leader,
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        code: "PRODUCT_NOT_IN_CLOSURE",
+        details: { productId: wheyId, expirationDate: "2028-01-01" },
+      },
     });
+    expect(tx.inventoryClosureDetail.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects the same lot twice", async () => {
+    await expect(
+      service.updateCounts(
+        closureId,
+        { items: [count("2027-06-30", 3), count("2027-06-30", 4)] },
+        leader,
+      ),
+    ).rejects.toMatchObject({ response: { code: "DUPLICATED_ITEM" } });
+  });
+
+  it.each([
+    ["confirmed", closure([lot("2027-06-30", 8, 8)], "CONFIRMED")],
+    [
+      "locked by the nightly job",
+      closure([lot("2027-06-30", 8)], "NOT_CONFIRMED"),
+    ],
+  ])(
+    "rejects counting a %s closure with CLOSURE_LOCKED",
+    async (_label, locked) => {
+      tx.inventoryClosure.findUnique.mockResolvedValue(locked);
+
+      await expect(
+        service.updateCounts(
+          closureId,
+          { items: [count("2027-06-30", 3)] },
+          leader,
+        ),
+      ).rejects.toMatchObject({ response: { code: "CLOSURE_LOCKED" } });
+    },
+  );
+
+  it("rejects a closure of another branch", async () => {
+    await expect(
+      service.updateCounts(
+        closureId,
+        { items: [count("2027-06-30", 3)] },
+        outsider,
+      ),
+    ).rejects.toMatchObject({ response: { code: "BRANCH_SCOPE_VIOLATION" } });
+  });
+
+  it("answers CLOSURE_NOT_FOUND", async () => {
+    tx.inventoryClosure.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.updateCounts(
+        closureId,
+        { items: [count("2027-06-30", 3)] },
+        leader,
+      ),
+    ).rejects.toMatchObject({ response: { code: "CLOSURE_NOT_FOUND" } });
+  });
+
+  it("does not write an audit log for every save", async () => {
+    await service.updateCounts(
+      closureId,
+      { items: [count("2027-06-30", 8)] },
+      leader,
+    );
+
+    expect(audit.createAuditLog).not.toHaveBeenCalled();
   });
 
   describe("DTO validation", () => {
-    it("rejects an empty counts array", async () => {
+    it("accepts a zero count and trims the observation", async () => {
       await expect(
-        validateBody({ counts: [] }),
-      ).rejects.toThrow();
+        validateBody({ items: [count("2027-06-30", 0, "  vacío  ")] }),
+      ).resolves.toMatchObject({
+        items: [{ physicalQuantity: 0, observation: "vacío" }],
+      });
     });
 
-    it("rejects when productId is not a UUID", async () => {
-      await expect(
-        validateBody({
-          counts: [{ productId: "not-a-uuid", physicalQuantity: 5 }],
-        }),
-      ).rejects.toThrow();
-    });
-
-    it("rejects when physicalQuantity is negative", async () => {
-      await expect(
-        validateBody({
-          counts: [{ productId: productAId, physicalQuantity: -1 }],
-        }),
-      ).rejects.toThrow();
-    });
-
-    it("accepts physicalQuantity of zero", async () => {
-      await expect(
-        validateBody({
-          counts: [{ productId: productAId, physicalQuantity: 0 }],
-        }),
-      ).resolves.toBeDefined();
-    });
-
-    it("rejects when counts is missing entirely", async () => {
-      await expect(validateBody({})).rejects.toThrow();
-    });
-
-    it("rejects unknown top-level fields", async () => {
-      await expect(
-        validateBody({
-          counts: [{ productId: productAId, physicalQuantity: 5 }],
-          extra: "value",
-        }),
-      ).rejects.toThrow();
+    it.each([
+      ["an empty list", { items: [] }],
+      ["the old counts field", { counts: [count("2027-06-30", 1)] }],
+      ["a negative count", { items: [count("2027-06-30", -1)] }],
+      ["a decimal count", { items: [count("2027-06-30", 1.5)] }],
+      [
+        "a missing lot",
+        { items: [{ productId: wheyId, physicalQuantity: 1 }] },
+      ],
+      ["an invalid lot date", { items: [count("30/06/2027", 1)] }],
+      [
+        "a non-UUID product",
+        { items: [{ ...count("2027-06-30", 1), productId: "whey" }] },
+      ],
+    ])("rejects %s", async (_label, body) => {
+      await expect(validateBody(body)).rejects.toThrow();
     });
   });
 });

@@ -5,6 +5,7 @@ export const ROUTE_ROLES: Record<string, RoleName[]> = {
   '/inventario': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
   '/inventario/consolidado': ['SUPERADMIN'],
   '/inventario/movimientos': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
+  '/inventario/cierre': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
   '/catalogo': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
   '/catalogo/categorias': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],
   '/catalogo/unidades': ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'],

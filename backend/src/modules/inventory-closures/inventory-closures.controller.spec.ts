@@ -32,14 +32,10 @@ describe("InventoryClosuresController", () => {
     const closure = { id: closureId, branchId, status: "PENDING" };
     serviceMock.create.mockResolvedValue(closure);
 
-    const result = await controller.create(branchId, currentUser, "127.0.0.1");
+    const result = await controller.create(branchId, currentUser);
 
     expect(serviceMock.create).toHaveBeenCalledTimes(1);
-    expect(serviceMock.create).toHaveBeenCalledWith(
-      branchId,
-      currentUser,
-      "127.0.0.1",
-    );
+    expect(serviceMock.create).toHaveBeenCalledWith(branchId, currentUser);
     expect(result).toBe(closure);
   });
 
@@ -47,12 +43,10 @@ describe("InventoryClosuresController", () => {
     const error = new Error("branch not found");
     serviceMock.create.mockRejectedValue(error);
 
-    await expect(
-      controller.create(branchId, currentUser, "127.0.0.1"),
-    ).rejects.toBe(error);
+    await expect(controller.create(branchId, currentUser)).rejects.toBe(error);
   });
 
-  it("is restricted to the allowed roles", () => {
+  it("is restricted to the branch roles that count the stock", () => {
     const descriptor = Object.getOwnPropertyDescriptor(
       InventoryClosuresController.prototype,
       "create",
@@ -61,11 +55,6 @@ describe("InventoryClosuresController", () => {
       ? (Reflect.getMetadata(ROLES_KEY, descriptor.value as object) as unknown)
       : undefined;
 
-    expect(roles).toEqual([
-      "DEV",
-      "SUPERADMIN",
-      "BRANCH_LEADER",
-      "BRANCH_ASSISTANT",
-    ]);
+    expect(roles).toEqual(["BRANCH_LEADER", "BRANCH_ASSISTANT"]);
   });
 });

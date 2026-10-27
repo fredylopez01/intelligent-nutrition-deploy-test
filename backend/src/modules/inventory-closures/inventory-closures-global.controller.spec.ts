@@ -16,7 +16,22 @@ const currentUser: AuthenticatedUser = {
   role: { name: "BRANCH_LEADER" },
 };
 
-const serviceMock = { confirm: jest.fn<AsyncMock>() };
+const serviceMock = {
+  confirm: jest.fn<AsyncMock>(),
+  findOne: jest.fn<AsyncMock>(),
+  findAll: jest.fn<AsyncMock>(),
+  updateCounts: jest.fn<AsyncMock>(),
+};
+
+function rolesOf(method: keyof InventoryClosuresGlobalController): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    InventoryClosuresGlobalController.prototype,
+    method,
+  );
+  return descriptor
+    ? (Reflect.getMetadata(ROLES_KEY, descriptor.value as object) as unknown)
+    : undefined;
+}
 
 describe("InventoryClosuresGlobalController.confirm", () => {
   let controller: InventoryClosuresGlobalController;
@@ -56,16 +71,39 @@ describe("InventoryClosuresGlobalController.confirm", () => {
     ).rejects.toBe(error);
   });
 
-  it("is restricted to the allowed roles", () => {
-    const descriptor = Object.getOwnPropertyDescriptor(
-      InventoryClosuresGlobalController.prototype,
-      "confirm",
-    );
-    const roles = descriptor
-      ? (Reflect.getMetadata(ROLES_KEY, descriptor.value as object) as unknown)
-      : undefined;
+  it("lets the branch roles confirm, as the contract says", () => {
+    expect(rolesOf("confirm")).toEqual(["BRANCH_LEADER", "BRANCH_ASSISTANT"]);
+  });
 
-    expect(roles).toEqual(["DEV", "SUPERADMIN", "BRANCH_LEADER"]);
-    expect(roles).not.toContain("BRANCH_ASSISTANT");
+  it("lets only the branch roles register counts", () => {
+    expect(rolesOf("updateCounts")).toEqual([
+      "BRANCH_LEADER",
+      "BRANCH_ASSISTANT",
+    ]);
+  });
+
+  it.each(["findOne", "findAll"] as const)(
+    "lets the superadmin and the branch roles read with %s",
+    (method) => {
+      expect(rolesOf(method)).toEqual([
+        "SUPERADMIN",
+        "BRANCH_LEADER",
+        "BRANCH_ASSISTANT",
+      ]);
+    },
+  );
+
+  it("passes the user to the detail and the list to apply the blind count", async () => {
+    serviceMock.findOne.mockResolvedValue({ id: closureId });
+    serviceMock.findAll.mockResolvedValue({ data: [] });
+
+    await controller.findOne(closureId, currentUser);
+    await controller.findAll({ page: 1, limit: 20, branchId }, currentUser);
+
+    expect(serviceMock.findOne).toHaveBeenCalledWith(closureId, currentUser);
+    expect(serviceMock.findAll).toHaveBeenCalledWith(
+      { page: 1, limit: 20, branchId },
+      currentUser,
+    );
   });
 });

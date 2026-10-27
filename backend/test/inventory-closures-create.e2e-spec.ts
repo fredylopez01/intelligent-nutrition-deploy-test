@@ -8,6 +8,7 @@ import type { App } from "supertest/types.js";
 import { AppModule } from "../src/app.module.js";
 import { configureApp } from "../src/app.setup.js";
 import { PrismaService } from "../src/database/prisma/prisma.service.js";
+import { businessDate } from "../src/common/utils/business-day.util.js";
 
 type RoleName = "SUPERADMIN" | "BRANCH_LEADER" | "BRANCH_ASSISTANT" | "DEV";
 
@@ -19,6 +20,7 @@ interface ClosureItem {
   productName: string;
   referenceCode: string;
   unit: string;
+  expirationDate: string | null;
   physicalQuantity: number | null;
   observation: string | null;
 }
@@ -41,7 +43,7 @@ interface ApiError {
 const runId = Date.now().toString(36);
 const DOCUMENT_CODE = `CC-IC-${runId}`;
 const UNIT_ABREVIATION = `IC${runId.slice(-6)}`;
-const ALLOWED_ROLES: RoleName[] = ["BRANCH_LEADER", "BRANCH_ASSISTANT", "DEV"];
+const ALLOWED_ROLES: RoleName[] = ["BRANCH_LEADER", "BRANCH_ASSISTANT"];
 
 const closureOf = (body: unknown) => (body as { data: ClosureBody }).data;
 const errorOf = (body: unknown) => (body as ApiError).error;
@@ -99,8 +101,7 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
     prisma = app.get(PrismaService);
     const jwtService = app.get(JwtService);
 
-    todayUtc = new Date();
-    todayUtc.setUTCHours(0, 0, 0, 0);
+    todayUtc = businessDate();
 
     documentTypeId = (
       await prisma.documentType.create({
@@ -184,6 +185,22 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
         },
       });
     }
+
+    // The leader also runs the closures of the shared test branches, since
+    // only the branch roles start closures.
+    await prisma.userBranch.createMany({
+      data: [
+        mainBranchId,
+        emptyBranchId,
+        duplicateBranchId,
+        inactiveBranchId,
+      ].map((branchId) => ({
+        userId: actorIds.BRANCH_LEADER,
+        branchId,
+        assignmentDate: today,
+        active: true,
+      })),
+    });
 
     categoryId = (
       await prisma.category.create({
@@ -350,10 +367,10 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
   }, 30000);
 
   describe("successful creation", () => {
-    it("creates a pending closure with the active products of the branch", async () => {
+    it("creates a pending closure with one line per lot of the active products", async () => {
       const response = await postClosure(
         mainBranchId,
-        tokens.SUPERADMIN,
+        tokens.BRANCH_LEADER,
       ).expect(201);
 
       const closure = closureOf(response.body);
@@ -365,17 +382,23 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
         locked: false,
         closedAt: null,
       });
-      expect(closure.closureDate).toBe(todayUtc.toISOString());
-      expect(closure.items).toHaveLength(2);
+      expect(closure.closureDate).toBe(todayUtc.toISOString().slice(0, 10));
+      expect(closure.items).toHaveLength(3);
+      expect(
+        closure.items
+          .filter(({ productId }) => productId === productAId)
+          .map(({ expirationDate }) => expirationDate),
+      ).toEqual(["2027-01-01", "2027-02-01"]);
 
-      const itemA = closure.items.find(
-        ({ productId }) => productId === productAId,
+      const itemB = closure.items.find(
+        ({ productId }) => productId === productBId,
       );
-      expect(itemA).toEqual({
-        productId: productAId,
-        productName: `${runId} Product A`,
-        referenceCode: `IC-${runId}-A`,
+      expect(itemB).toEqual({
+        productId: productBId,
+        productName: `${runId} Product B`,
+        referenceCode: `IC-${runId}-B`,
         unit: UNIT_ABREVIATION,
+        expirationDate: "2027-03-01",
         physicalQuantity: null,
         observation: null,
       });
@@ -385,65 +408,45 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
       expect(await closureCount(mainBranchId)).toBe(1);
     });
 
-    it("adds up the lots of the same product and leaves out inactive products", async () => {
+    it("snapshots the system quantity of each lot without revealing it", async () => {
       const closure = await closureOfBranch(mainBranchId);
       const details = await prisma.inventoryClosureDetail.findMany({
         where: { closureId: closure.id },
-        select: {
-          productId: true,
-          systemQuantity: true,
-          physicalQuantity: true,
-          difference: true,
-        },
+        orderBy: { expirationDate: "asc" },
+        select: { productId: true, expirationDate: true, systemQuantity: true },
       });
 
-      expect(details).toHaveLength(2);
-      expect(details.find(({ productId }) => productId === productAId)).toEqual(
+      expect(details).toEqual([
         {
           productId: productAId,
-          systemQuantity: 7,
-          physicalQuantity: null,
-          difference: null,
+          expirationDate: new Date("2027-01-01T00:00:00.000Z"),
+          systemQuantity: 3,
         },
-      );
-      expect(details.find(({ productId }) => productId === productBId)).toEqual(
+        {
+          productId: productAId,
+          expirationDate: new Date("2027-02-01T00:00:00.000Z"),
+          systemQuantity: 4,
+        },
         {
           productId: productBId,
+          expirationDate: new Date("2027-03-01T00:00:00.000Z"),
           systemQuantity: 5,
-          physicalQuantity: null,
-          difference: null,
         },
-      );
-      expect(
-        details.some(({ productId }) => productId === inactiveProductId),
-      ).toBe(false);
+      ]);
     });
 
-    it("records the creation in the audit log", async () => {
+    it("does not write an audit log when the count starts", async () => {
       const closure = await closureOfBranch(mainBranchId);
-      const logs = await prisma.auditLog.findMany({
-        where: { entity: "INVENTORY_CLOSURE", entityId: closure.id },
-      });
 
-      expect(logs).toHaveLength(1);
-      expect(logs[0]).toMatchObject({
-        userId: actorIds.SUPERADMIN,
-        action: "CREATE",
-        entity: "INVENTORY_CLOSURE",
-        entityId: closure.id,
-        newData: {
-          branchId: mainBranchId,
-          closureDate: todayUtc.toISOString().slice(0, 10),
-          itemsCount: 2,
-        },
-        ipAddress: expect.any(String),
-      });
+      expect(
+        await prisma.auditLog.count({ where: { entityId: closure.id } }),
+      ).toBe(0);
     });
 
     it("creates a closure without items when the branch has no inventory", async () => {
       const response = await postClosure(
         emptyBranchId,
-        tokens.SUPERADMIN,
+        tokens.BRANCH_LEADER,
       ).expect(201);
 
       const closure = closureOf(response.body);
@@ -472,7 +475,7 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
     it("answers 409 when the branch already has a closure for today", async () => {
       const response = await postClosure(
         duplicateBranchId,
-        tokens.SUPERADMIN,
+        tokens.BRANCH_LEADER,
       ).expect(409);
 
       expect(errorOf(response.body)).toMatchObject({
@@ -485,22 +488,19 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
   });
 
   describe("missing or inactive branch", () => {
-    it("answers 404 when the branch does not exist", async () => {
+    it("answers 403 for a branch that does not exist, since it is outside the assignment", async () => {
       const response = await postClosure(
         randomUUID(),
-        tokens.SUPERADMIN,
-      ).expect(404);
+        tokens.BRANCH_LEADER,
+      ).expect(403);
 
-      expect(errorOf(response.body)).toMatchObject({
-        code: "BRANCH_NOT_FOUND",
-        message: "Branch not found.",
-      });
+      expect(errorOf(response.body).code).toBe("BRANCH_SCOPE_VIOLATION");
     });
 
     it("answers 422 when the branch is inactive", async () => {
       const response = await postClosure(
         inactiveBranchId,
-        tokens.SUPERADMIN,
+        tokens.BRANCH_LEADER,
       ).expect(422);
 
       expect(errorOf(response.body)).toMatchObject({
@@ -518,15 +518,18 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
       expect(await closureCount(noAccessBranchId)).toBe(0);
     });
 
-    it("rejects a role that is not allowed", async () => {
-      const response = await postClosure(
-        noAccessBranchId,
-        tokens[NO_ACCESS_ROLE],
-      ).expect(403);
+    it.each<TokenKey>(["SUPERADMIN", "DEV", NO_ACCESS_ROLE])(
+      "rejects the %s role, since only the branch roles count the stock",
+      async (tokenKey) => {
+        const response = await postClosure(
+          noAccessBranchId,
+          tokens[tokenKey],
+        ).expect(403);
 
-      expect(errorOf(response.body).code).toBe("INSUFFICIENT_PERMISSIONS");
-      expect(await closureCount(noAccessBranchId)).toBe(0);
-    });
+        expect(errorOf(response.body).code).toBe("INSUFFICIENT_PERMISSIONS");
+        expect(await closureCount(noAccessBranchId)).toBe(0);
+      },
+    );
 
     it("rejects a branch leader out of its assigned branch", async () => {
       const response = await postClosure(
@@ -535,7 +538,7 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
       ).expect(403);
 
       expect(errorOf(response.body)).toMatchObject({
-        code: "FORBIDDEN_BRANCH",
+        code: "BRANCH_SCOPE_VIOLATION",
         message: "You do not have access to this branch.",
       });
       expect(await closureCount(foreignBranchId)).toBe(0);

@@ -11,11 +11,6 @@ export const PENDING_MODULES: PendingModule[] = [
     description: 'Ventas del día, stock por sede y alertas de inventario en una sola vista.',
   },
   {
-    path: '/inventario/cierre',
-    title: 'Cierre diario',
-    description: 'Conteo ciego por sede y reporte de discrepancias contra el sistema.',
-  },
-  {
     path: '/pos',
     title: 'POS',
     description: 'Punto de venta en sede, con descuento automático de inventario.',

@@ -15,6 +15,7 @@ import { ListSalesQueryDto } from "./dto/list-sales-query.dto.js";
 import { ReverseSaleDto } from "./dto/reverse-sale.dto.js";
 import { LowStockService } from "../notifications/low-stock.service.js";
 import { startOfTodayUtc } from "../../common/utils/expiration.util.js";
+import { businessDate } from "../../common/utils/business-day.util.js";
 
 const saleSelect = {
   id: true,
@@ -174,8 +175,7 @@ export class SalesService {
       }
 
       const now = new Date();
-      const closureDate = new Date(now);
-      closureDate.setUTCHours(0, 0, 0, 0);
+      const closureDate = businessDate(now);
 
       const closure = await tx.inventoryClosure.findUnique({
         where: { branchId_closureDate: { branchId, closureDate } },
@@ -742,9 +742,7 @@ export class SalesService {
         });
       }
 
-      const saleDate = new Date(sale.saleAt);
-      const closureDate = new Date(saleDate);
-      closureDate.setUTCHours(0, 0, 0, 0);
+      const closureDate = businessDate(new Date(sale.saleAt));
 
       const closure = await tx.inventoryClosure.findUnique({
         where: {

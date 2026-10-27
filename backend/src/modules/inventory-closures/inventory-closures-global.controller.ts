@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Ip,
   Param,
   ParseUUIDPipe,
@@ -18,32 +19,54 @@ import { ListClosuresQueryDto } from "./dto/list-closures-query.dto.js";
 
 @Controller("inventory-closures")
 export class InventoryClosuresGlobalController {
-  constructor(private readonly inventoryClosuresService: InventoryClosuresService) {}
+  constructor(
+    private readonly inventoryClosuresService: InventoryClosuresService,
+  ) {}
 
   @Get()
-  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
-  findAll(@Query() query: ListClosuresQueryDto) {
-    return this.inventoryClosuresService.findAll(query);
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  findAll(
+    @Query() query: ListClosuresQueryDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ) {
+    return this.inventoryClosuresService.findAll(query, currentUser);
+  }
+
+  @Get(":closureId")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  findOne(
+    @Param("closureId", new ParseUUIDPipe()) closureId: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ) {
+    return this.inventoryClosuresService.findOne(closureId, currentUser);
   }
 
   @Put(":closureId/counts")
-  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
+  @Roles("BRANCH_LEADER", "BRANCH_ASSISTANT")
   updateCounts(
     @Param("closureId", new ParseUUIDPipe()) closureId: string,
     @Body() dto: UpdateCountsDto,
     @CurrentUser() currentUser: AuthenticatedUser,
-    @Ip() ipAddress: string,
   ) {
-    return this.inventoryClosuresService.updateCounts(closureId, dto, currentUser, ipAddress);
+    return this.inventoryClosuresService.updateCounts(
+      closureId,
+      dto,
+      currentUser,
+    );
   }
 
   @Post(":closureId/confirm")
-  @Roles("DEV", "SUPERADMIN", "BRANCH_LEADER")
+  @HttpCode(200)
+  @Roles("BRANCH_LEADER", "BRANCH_ASSISTANT")
   confirm(
     @Param("closureId", new ParseUUIDPipe()) closureId: string,
     @CurrentUser() currentUser: AuthenticatedUser,
     @Ip() ipAddress: string,
   ) {
-    return this.inventoryClosuresService.confirm(closureId, currentUser, ipAddress);
+    return this.inventoryClosuresService.confirm(
+      closureId,
+      currentUser,
+      ipAddress,
+    );
   }
 }
