@@ -9,9 +9,17 @@ interface ModalProps {
   description?: string
   onClose: () => void
   children: ReactNode
+  size?: 'default' | 'wide'
 }
 
-export function Modal({ open, title, description, onClose, children }: ModalProps) {
+export function Modal({
+  open,
+  title,
+  description,
+  onClose,
+  children,
+  size = 'default',
+}: ModalProps) {
   const titleId = useId()
   const descriptionId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
@@ -47,7 +55,7 @@ export function Modal({ open, title, description, onClose, children }: ModalProp
       />
       <div
         ref={panelRef}
-        className="ui-modal__panel"
+        className={`ui-modal__panel${size === 'wide' ? ' ui-modal__panel--wide' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

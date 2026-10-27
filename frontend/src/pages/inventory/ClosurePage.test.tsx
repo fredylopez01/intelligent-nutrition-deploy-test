@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { branchesService } from '../../services/branches.service'
 import { ApiError } from '../../services/http'
 import { inventoryClosuresService } from '../../services/inventoryClosures.service'
-import { buildClosure, buildSummary } from '../../test-utils/inventoryClosures'
+import { buildClosure, buildItem, buildSummary } from '../../test-utils/inventoryClosures'
 import type { ClosureSummary, ClosuresListParams } from '../../types/inventoryClosure'
 
 import { ClosurePage } from './ClosurePage'
@@ -23,6 +23,7 @@ vi.mock('../../services/inventoryClosures.service', () => ({
     get: vi.fn(),
     list: vi.fn(),
     saveCounts: vi.fn(),
+    confirm: vi.fn(),
   },
 }))
 
@@ -57,6 +58,10 @@ function page(data: ClosureSummary[]) {
 
 function isTodayQuery(params: ClosuresListParams) {
   return params.from === '2026-10-26' && params.to === '2026-10-26' && params.limit === 1
+}
+
+function historyCalls() {
+  return list.mock.calls.map(([params]) => params).filter((params) => !isTodayQuery(params))
 }
 
 function mockClosures(today: ClosureSummary | null, history: ClosureSummary[] = [yesterday]) {
@@ -119,12 +124,23 @@ describe('ClosurePage today', () => {
     expect(get).toHaveBeenCalledWith('closure-1', 'test-token')
   })
 
-  it('tells that the closure of today is already closed', async () => {
+  it('shows the leader the report of a confirmed closure', async () => {
     mockClosures(buildSummary({ id: 'closure-1', closureDate: '2026-10-26' }))
-    get.mockResolvedValue(buildClosure({ status: 'CONFIRMED', locked: true, confirmed: true }))
+    get.mockResolvedValue(
+      buildClosure({
+        status: 'CONFIRMED',
+        locked: true,
+        confirmed: true,
+        totalDifferences: 1,
+        items: [buildItem({ systemQuantity: 8, physicalQuantity: 7, difference: -1 })],
+      }),
+    )
     renderPage()
 
-    expect(await screen.findByText(/El cierre de hoy ya se cerró/)).toBeInTheDocument()
+    expect(
+      await screen.findByText('Cierre del lunes, 26 de octubre confirmado'),
+    ).toBeInTheDocument()
+    expect(screen.getAllByText('−1 und').length).toBeGreaterThan(0)
   })
 
   it('shows the error of today and retries', async () => {
@@ -151,8 +167,73 @@ describe('ClosurePage today', () => {
     } as never)
     renderPage()
 
-    expect(await screen.findByRole('option', { name: 'Centro' })).toBeInTheDocument()
+    expect(await screen.findByText('25 oct 2026')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Iniciar cierre del día' })).not.toBeInTheDocument()
-    expect(list).not.toHaveBeenCalled()
+    expect(historyCalls()[0].branchId).toBeUndefined()
+    expect(screen.getByRole('columnheader', { name: 'Sede' })).toBeInTheDocument()
+  })
+})
+
+describe('ClosurePage history', () => {
+  it('lists the closures with progress and differences for the leader', async () => {
+    renderPage()
+
+    const row = (await screen.findByText('25 oct 2026')).closest('tr') as HTMLElement
+    expect(within(row).getByText('Confirmado')).toBeInTheDocument()
+    expect(within(row).getByText('2 de 2 lotes')).toBeInTheDocument()
+    expect(within(row).getByText('1')).toBeInTheDocument()
+    expect(within(row).getByText('Laura Pérez')).toBeInTheDocument()
+  })
+
+  it('hides the differences column from the assistant', async () => {
+    auth.role = 'BRANCH_ASSISTANT'
+    renderPage()
+
+    await screen.findByText('25 oct 2026')
+    expect(screen.queryByRole('columnheader', { name: 'Diferencias' })).not.toBeInTheDocument()
+  })
+
+  it('filters by status and dates', async () => {
+    const { user } = renderPage()
+    await screen.findByText('25 oct 2026')
+
+    await user.selectOptions(screen.getByLabelText('Filtrar por estado'), 'NOT_CONFIRMED')
+    await user.type(screen.getByLabelText('Desde'), '2026-10-01')
+
+    await waitFor(() =>
+      expect(historyCalls().at(-1)).toMatchObject({
+        branchId: 'branch-centro',
+        status: 'NOT_CONFIRMED',
+        from: '2026-10-01',
+      }),
+    )
+  })
+
+  it('opens the report of a past closure', async () => {
+    get.mockResolvedValue(
+      buildClosure({
+        id: 'closure-yesterday',
+        closureDate: '2026-10-25',
+        status: 'NOT_CONFIRMED',
+        locked: true,
+        items: [buildItem({ systemQuantity: 4, physicalQuantity: null, difference: null })],
+      }),
+    )
+    const { user } = renderPage()
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Ver el cierre del 25 oct 2026 de Centro' }),
+    )
+
+    const dialog = within(await screen.findByRole('dialog'))
+    expect(await dialog.findByText(/sin confirmar/)).toBeInTheDocument()
+    expect(get).toHaveBeenCalledWith('closure-yesterday', 'test-token')
+  })
+
+  it('explains an empty history', async () => {
+    mockClosures(null, [])
+    renderPage()
+
+    expect(await screen.findByText('Todavía no hay cierres')).toBeInTheDocument()
   })
 })

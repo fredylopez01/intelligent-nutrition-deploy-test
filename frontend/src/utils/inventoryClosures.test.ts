@@ -5,6 +5,7 @@ import { ApiError } from '../services/http'
 import {
   businessToday,
   countError,
+  differenceLabel,
   formatClosureDay,
   resolveClosureError,
 } from './inventoryClosures'
@@ -28,6 +29,13 @@ describe('inventory closure helpers', () => {
     ['diez', 'Escribe un número entero de 0 en adelante, sin puntos ni comas.'],
   ])('validates the count %s', (value, error) => {
     expect(countError(value)).toBe(error)
+  })
+
+  it('labels the differences with their sign', () => {
+    expect(differenceLabel(-2, 'und')).toBe('−2 und')
+    expect(differenceLabel(5, 'g')).toBe('+5 g')
+    expect(differenceLabel(0, 'und')).toBe('Sin diferencia')
+    expect(differenceLabel(null, 'und')).toBe('—')
   })
 
   it('explains a locked closure', () => {

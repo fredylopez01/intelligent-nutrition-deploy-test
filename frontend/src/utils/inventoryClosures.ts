@@ -1,9 +1,22 @@
 import { ApiError } from '../services/http'
 import type { RoleName } from '../types/auth'
-import type { ClosureItem } from '../types/inventoryClosure'
+import type { ClosureItem, ClosureStatus } from '../types/inventoryClosure'
 
 export const CLOSURE_COUNT_ROLES: RoleName[] = ['BRANCH_LEADER', 'BRANCH_ASSISTANT']
+export const CLOSURE_REVIEW_ROLES: RoleName[] = ['SUPERADMIN', 'BRANCH_LEADER']
 export const CLOSURE_OBSERVATION_MAX_LENGTH = 500
+
+export const CLOSURE_STATUS_LABELS: Record<ClosureStatus, string> = {
+  PENDING: 'En conteo',
+  CONFIRMED: 'Confirmado',
+  NOT_CONFIRMED: 'Sin confirmar',
+}
+
+export const CLOSURE_STATUS_TONES: Record<ClosureStatus, string> = {
+  PENDING: 'pendiente',
+  CONFIRMED: 'activo',
+  NOT_CONFIRMED: 'inactivo',
+}
 
 const BUSINESS_TIME_ZONE = 'America/Bogota'
 
@@ -44,6 +57,13 @@ export function countError(value: string): string | null {
     : 'Escribe un número entero de 0 en adelante, sin puntos ni comas.'
 }
 
+export function differenceLabel(difference: number | null | undefined, unit: string): string {
+  if (difference === null || difference === undefined) return '—'
+  if (difference === 0) return 'Sin diferencia'
+  const sign = difference > 0 ? '+' : '−'
+  return `${sign}${new Intl.NumberFormat('es-CO').format(Math.abs(difference))} ${unit}`
+}
+
 export function resolveClosureError(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) return fallback
   switch (error.code) {
@@ -51,6 +71,8 @@ export function resolveClosureError(error: unknown, fallback: string): string {
       return 'La sede ya tiene un cierre para hoy. Recarga para continuar con ese conteo.'
     case 'CLOSURE_LOCKED':
       return 'El cierre ya se confirmó o se bloqueó: los conteos no se pueden cambiar. Si hay una diferencia, el superadmin puede registrar un ajuste.'
+    case 'INCOMPLETE_COUNT':
+      return 'Faltan lotes por contar. Escribe la cantidad de cada lote antes de confirmar.'
     case 'PRODUCT_NOT_IN_CLOSURE':
       return 'Uno de los lotes ya no pertenece al cierre. Recarga la página.'
     case 'BRANCH_INACTIVE':
