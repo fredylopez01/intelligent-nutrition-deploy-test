@@ -7,6 +7,7 @@ import { RolesModule } from "./modules/roles/roles.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { ConfigModule } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
 import { DocumentTypesModule } from "./modules/document-types/document-types.module.js";
 import { AuditModule } from "./modules/audit/audit.module.js";
 import { BranchesModule } from "./modules/branches/branches.module.js";
@@ -23,12 +24,14 @@ import { InventoryMovementsModule } from "./modules/inventory-movements/inventor
 import { SalesModule } from "./modules/sales/sales.module.js";
 import { GeneralStockModule } from "./modules/general-stock/general-stock.module.js";
 import { NotificationsModule } from "./modules/notifications/notifications.module.js";
+import { NightlyJobsModule } from "./modules/nightly-jobs/nightly-jobs.module.js";
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     RolesModule,
@@ -50,6 +53,7 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
     SalesModule,
     GeneralStockModule,
     NotificationsModule,
+    NightlyJobsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
