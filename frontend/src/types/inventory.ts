@@ -77,9 +77,15 @@ export interface InventoryProductRef {
   referenceCode: string
 }
 
+export interface AvailabilityBranch {
+  branchId: string
+  branchName: string
+  quantity: number
+}
+
 export interface ProductAvailability {
   product: InventoryProductRef
-  branches: { branchId: string; branchName: string; quantity: number }[]
+  branches: AvailabilityBranch[]
 }
 
 export interface ConsolidatedBranch {

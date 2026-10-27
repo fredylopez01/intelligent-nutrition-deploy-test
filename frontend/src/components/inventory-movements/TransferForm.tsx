@@ -33,6 +33,8 @@ import './MovementForms.css'
 interface TransferFormProps {
   originBranches: InventoryBranchOption[]
   defaultOriginId?: string
+  initialItem?: BranchInventoryItem
+  defaultDestinationId?: string
   onRegistered: (movement: RegisteredMovement) => void
   onCancel: () => void
 }
@@ -46,12 +48,14 @@ interface DestinationsResult {
 export function TransferForm({
   originBranches,
   defaultOriginId,
+  initialItem,
+  defaultDestinationId,
   onRegistered,
   onCancel,
 }: TransferFormProps) {
   const { token } = useAuth()
   const [originId, setOriginId] = useState(defaultOriginId ?? originBranches[0]?.id ?? '')
-  const [item, setItem] = useState<BranchInventoryItem | null>(null)
+  const [item, setItem] = useState<BranchInventoryItem | null>(initialItem ?? null)
   const [productError, setProductError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [destinations, setDestinations] = useState<DestinationsResult | null>(null)
@@ -68,7 +72,12 @@ export function TransferForm({
     formState: { errors, isSubmitting },
   } = useForm<TransferValues>({
     resolver: zodResolver(transferSchema),
-    defaultValues: { branchId: '', quantity: '', expirationDate: '', observation: '' },
+    defaultValues: {
+      branchId: defaultDestinationId ?? '',
+      quantity: '',
+      expirationDate: '',
+      observation: '',
+    },
   })
   const selectedLot = useWatch({ control, name: 'expirationDate' })
   const destinationId = useWatch({ control, name: 'branchId' })

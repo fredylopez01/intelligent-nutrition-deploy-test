@@ -110,6 +110,37 @@ describe('TransferForm', () => {
     expect(onRegistered).toHaveBeenCalled()
   })
 
+  it('starts with the product and destination requested from the availability', async () => {
+    const onRegistered = vi.fn()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) })
+    render(
+      <TransferForm
+        originBranches={[CENTRO, NORTE]}
+        defaultOriginId={CENTRO.id}
+        initialItem={{ ...WHEY_ITEM, totalQuantity: 8 }}
+        defaultDestinationId={NORTE.id}
+        onRegistered={onRegistered}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText(/8 und en Centro/)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByLabelText('Lote de la sede origen')).toHaveValue('2027-01-31'),
+    )
+    await waitFor(() => expect(screen.getByLabelText('Sede destino')).toHaveValue(NORTE.id))
+    await user.type(screen.getByLabelText('Cantidad'), '3')
+    await user.click(screen.getByRole('button', { name: 'Registrar traslado' }))
+
+    await waitFor(() =>
+      expect(transfer).toHaveBeenCalledWith(
+        expect.objectContaining({ originBranchId: CENTRO.id, branchId: NORTE.id, quantity: 3 }),
+        'test-token',
+      ),
+    )
+    expect(inventoryService.listByBranch).not.toHaveBeenCalled()
+  })
+
   it('shows how many current units each destination has', async () => {
     const { user } = renderForm()
     await pickWhey(user)

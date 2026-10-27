@@ -66,9 +66,18 @@ vi.mock('../../hooks/useAuth', () => ({
 }))
 
 vi.mock('../../layouts/AppLayout', () => ({
-  AppLayout: ({ title, children }: { title: string; children: ReactNode }) => (
+  AppLayout: ({
+    title,
+    actions,
+    children,
+  }: {
+    title: string
+    actions?: ReactNode
+    children: ReactNode
+  }) => (
     <main>
       <h1>{title}</h1>
+      {actions}
       {children}
     </main>
   ),
@@ -481,5 +490,51 @@ describe('InventoryPage', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Disponibilidad en otras sedes' })
     expect(await within(dialog).findByText('Norte')).toBeInTheDocument()
     expect(availability).toHaveBeenCalledWith('product-whey', 'test-token')
+  })
+
+  it('looks up a product in every branch and requests the transfer to this one', async () => {
+    listProducts.mockResolvedValue({
+      data: [buildProduct({ id: 'product-whey', name: 'Whey Protein 2 lb' })],
+      meta: { page: 1, limit: 6, total: 1, totalPages: 1 },
+    })
+    availability.mockResolvedValue({
+      product: { id: 'product-whey', name: 'Whey Protein 2 lb', referenceCode: 'WHEY-2LB-001' },
+      branches: [
+        { branchId: 'branch-norte', branchName: 'Norte', quantity: 12 },
+        { branchId: 'branch-centro', branchName: 'Centro', quantity: 0 },
+      ],
+    })
+    getProductInBranch.mockResolvedValue(buildInventoryDetail({ branchId: 'branch-norte' }))
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Consultar disponibilidad' }))
+    const lookup = within(await screen.findByRole('dialog', { name: 'Consultar disponibilidad' }))
+    await user.click(await lookup.findByRole('button', { name: /Whey Protein 2 lb/ }))
+    await user.click(await lookup.findByRole('button', { name: 'Solicitar traslado desde Norte' }))
+
+    const transfer = within(await screen.findByRole('dialog', { name: 'Solicitar traslado' }))
+    expect(transfer.getByText(/12 und en Norte/)).toBeInTheDocument()
+    expect(transfer.getByLabelText('Sede origen')).toHaveValue('branch-norte')
+  })
+
+  it('tells the assistant who registers the transfers', async () => {
+    auth.role = 'BRANCH_ASSISTANT'
+    auth.branches = [{ id: 'branch-centro', name: 'Centro' }]
+    availability.mockResolvedValue({
+      product: { id: 'product-whey', name: 'Whey Protein 2 lb', referenceCode: 'WHEY-2LB-001' },
+      branches: [
+        { branchId: 'branch-norte', branchName: 'Norte', quantity: 12 },
+        { branchId: 'branch-centro', branchName: 'Centro', quantity: 35 },
+      ],
+    })
+    const { user } = renderPage()
+
+    await openRowAction(user, 'Whey Protein 2 lb', 'Ver en otras sedes')
+
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Disponibilidad en otras sedes' }),
+    )
+    expect(await dialog.findByText(/Los traslados los registra el superadmin/)).toBeInTheDocument()
+    expect(dialog.queryByRole('button', { name: /Solicitar traslado/ })).not.toBeInTheDocument()
   })
 })

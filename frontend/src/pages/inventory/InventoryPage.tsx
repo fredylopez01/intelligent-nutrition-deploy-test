@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { AssignProductForm } from '../../components/inventory/AssignProductForm'
+import { AvailabilityLookup } from '../../components/inventory/AvailabilityLookup'
 import { InventoryLots } from '../../components/inventory/InventoryLots'
 import { InventoryTable } from '../../components/inventory/InventoryTable'
 import { MinimumStockForm } from '../../components/inventory/MinimumStockForm'
 import { ProductAvailability } from '../../components/inventory/ProductAvailability'
+import { TransferForm } from '../../components/inventory-movements/TransferForm'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -20,9 +22,17 @@ import { useCatalogOptions } from '../../hooks/useCatalogOptions'
 import { useInventoryBranches } from '../../hooks/useInventoryBranches'
 import { usePagination } from '../../hooks/usePagination'
 import { AppLayout } from '../../layouts/AppLayout'
-import type { AssignedLot, BranchInventoryItem, MinimumStockResult } from '../../types/inventory'
+import type {
+  AssignedLot,
+  AvailabilityBranch,
+  BranchInventoryItem,
+  InventoryProduct,
+  MinimumStockResult,
+} from '../../types/inventory'
+import type { RegisteredMovement } from '../../types/inventoryMovement'
 import { hasRole } from '../../utils/categories'
 import { INVENTORY_MANAGE_ROLES, formatQuantity } from '../../utils/inventory'
+import { MOVEMENT_TRANSFER_ROLES } from '../../utils/inventoryMovements'
 
 import './InventoryPage.css'
 
@@ -41,11 +51,14 @@ type Dialog =
   | { kind: 'lots'; item: BranchInventoryItem }
   | { kind: 'minimum'; item: BranchInventoryItem }
   | { kind: 'availability'; item: BranchInventoryItem }
+  | { kind: 'lookup' }
+  | { kind: 'transfer'; item: BranchInventoryItem; originId: string }
 
 export function InventoryPage() {
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const canManage = hasRole(INVENTORY_MANAGE_ROLES, user?.role.name)
+  const canTransfer = hasRole(MOVEMENT_TRANSFER_ROLES, user?.role.name)
   const branchOptions = useInventoryBranches()
   const categoryOptions = useCatalogOptions({ activeOnly: false })
 
@@ -71,6 +84,10 @@ export function InventoryPage() {
 
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null)
+  const transferOrigins = canTransfer
+    ? branchOptions.branches.filter((option) => option.active)
+    : []
+  const transferOriginIds = transferOrigins.map((option) => option.id)
 
   const { status, items, meta, error, refetch, updateItem } = useBranchInventory(
     branch?.id ?? null,
@@ -110,6 +127,23 @@ export function InventoryPage() {
     closeDialog()
     setFeedbackMessage(
       `Se asignaron ${formatQuantity(lot.quantity, lot.product.unitOfMeasure.abbreviation)} de ${lot.product.name} a ${branch?.name ?? 'la sede'}.`,
+    )
+    refetch()
+  }
+
+  const requestTransfer = branch?.active
+    ? (product: InventoryProduct, origin: AvailabilityBranch) =>
+        openDialog({
+          kind: 'transfer',
+          item: { product, totalQuantity: origin.quantity },
+          originId: origin.branchId,
+        })
+    : undefined
+
+  const handleTransferred = (movement: RegisteredMovement) => {
+    closeDialog()
+    setFeedbackMessage(
+      `Traslado registrado: ${formatQuantity(movement.quantity, movement.product.unit)} de ${movement.product.name} de ${movement.originBranch?.name ?? 'la sede origen'} a ${movement.branch?.name ?? 'la sede destino'}.`,
     )
     refetch()
   }
@@ -201,7 +235,14 @@ export function InventoryPage() {
   }
 
   return (
-    <AppLayout title="Inventario">
+    <AppLayout
+      title="Inventario"
+      actions={
+        <Button variant="outline" onClick={() => openDialog({ kind: 'lookup' })} disabled={!branch}>
+          Consultar disponibilidad
+        </Button>
+      }
+    >
       <div className="inventory-page__toolbar">
         <div className="inventory-page__branch">
           <label className="inventory-page__branch-label" htmlFor="inventory-branch">
@@ -362,6 +403,7 @@ export function InventoryPage() {
 
       <Modal
         open={dialog?.kind === 'availability'}
+        size="wide"
         title="Disponibilidad en otras sedes"
         description={
           dialog?.kind === 'availability'
@@ -371,7 +413,50 @@ export function InventoryPage() {
         onClose={closeDialog}
       >
         {dialog?.kind === 'availability' && branch && (
-          <ProductAvailability branchId={branch.id} item={dialog.item} onClose={closeDialog} />
+          <ProductAvailability
+            branchId={branch.id}
+            product={dialog.item.product}
+            transferOriginIds={transferOriginIds}
+            onRequestTransfer={
+              requestTransfer ? (origin) => requestTransfer(dialog.item.product, origin) : undefined
+            }
+            onClose={closeDialog}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={dialog?.kind === 'lookup'}
+        size="wide"
+        title="Consultar disponibilidad"
+        description={`Busca un producto para ver sus existencias vigentes en cada sede activa${branch ? ` y traerlo a ${branch.name}` : ''}.`}
+        onClose={closeDialog}
+      >
+        {dialog?.kind === 'lookup' && branch && (
+          <AvailabilityLookup
+            branchId={branch.id}
+            transferOriginIds={transferOriginIds}
+            onRequestTransfer={requestTransfer}
+            onClose={closeDialog}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={dialog?.kind === 'transfer'}
+        title="Solicitar traslado"
+        description={`El lote sale de la sede origen y entra con la misma fecha de vencimiento a ${branch?.name ?? 'la sede destino'}.`}
+        onClose={closeDialog}
+      >
+        {dialog?.kind === 'transfer' && branch && (
+          <TransferForm
+            originBranches={transferOrigins}
+            defaultOriginId={dialog.originId}
+            initialItem={dialog.item}
+            defaultDestinationId={branch.id}
+            onRegistered={handleTransferred}
+            onCancel={closeDialog}
+          />
         )}
       </Modal>
     </AppLayout>
