@@ -45,6 +45,7 @@ const NAV_ITEMS: NavItem[] = [
     subs: [
       { label: 'Punto de venta', to: '/pos' },
       { label: 'Ventas', to: '/pos/ventas' },
+      { label: 'Métodos de pago', to: '/pos/metodos-pago' },
     ],
   },
   {
