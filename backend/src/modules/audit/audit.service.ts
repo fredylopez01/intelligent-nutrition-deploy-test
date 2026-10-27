@@ -46,12 +46,14 @@ export class AuditService {
   }
 
   async findAll(query: ListAuditLogsQueryDto) {
-    const { page, limit, userId, action, fromDate, toDate } = query;
-    const startDate = fromDate ? new Date(fromDate) : undefined;
-    let endDate = toDate ? new Date(toDate) : undefined;
+    const { page, limit, userId, action, entity, entityId } = query;
+    const fromValue = query.from ?? query.fromDate;
+    const toValue = query.to ?? query.toDate;
+    const startDate = fromValue ? new Date(fromValue) : undefined;
+    let endDate = toValue ? new Date(toValue) : undefined;
 
-    if (toDate && /^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
-      endDate = new Date(`${toDate}T23:59:59.999Z`);
+    if (toValue && /^\d{4}-\d{2}-\d{2}$/.test(toValue)) {
+      endDate = new Date(`${toValue}T23:59:59.999Z`);
     }
     if (startDate && endDate && startDate > endDate) {
       throw new BadRequestException(
@@ -59,9 +61,11 @@ export class AuditService {
       );
     }
 
-    const where = {
-      ...(userId ? { entity: "USER", entityId: userId } : {}),
+    const where: Prisma.AuditLogWhereInput = {
+      ...(userId ? { userId } : {}),
       ...(action ? { action } : {}),
+      ...(entity ? { entity: { equals: entity, mode: "insensitive" } } : {}),
+      ...(entityId ? { entityId } : {}),
       ...(startDate || endDate
         ? {
             createdAt: {
@@ -87,6 +91,7 @@ export class AuditService {
                   id: true,
                   firstName: true,
                   lastName: true,
+                  businessName: true,
                   email: true,
                 },
               },
@@ -97,7 +102,21 @@ export class AuditService {
     ]);
 
     return {
-      data: logs.map(({ id, ...log }) => ({ id: id.toString(), ...log })),
+      data: logs.map(({ id, userAccount, ...log }) => {
+        const person = userAccount?.person;
+        const { businessName, ...personData } = person ?? {};
+        const fullName = person
+          ? [person.firstName, person.lastName].filter(Boolean).join(" ") ||
+            businessName ||
+            person.email
+          : null;
+        return {
+          id: id.toString(),
+          ...log,
+          user: person ? { id: person.id, fullName } : null,
+          userAccount: person ? { person: personData } : null,
+        };
+      }),
       meta: {
         page,
         limit,
