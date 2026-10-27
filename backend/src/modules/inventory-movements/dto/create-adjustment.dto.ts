@@ -1,7 +1,5 @@
-import { Type } from "class-transformer";
+import { Transform } from "class-transformer";
 import {
-  ArrayMinSize,
-  IsArray,
   IsDateString,
   IsEnum,
   IsInt,
@@ -11,49 +9,39 @@ import {
   MaxLength,
   Min,
   MinLength,
-  ValidateNested,
 } from "class-validator";
 
-export enum AdjustmentType {
-  ENTRY = "ENTRY",
-  EXIT = "EXIT",
-}
-
-export class AdjustmentItemDto {
-  @IsUUID()
-  productId: string;
-
-  @IsInt()
-  @Min(1)
-  quantity: number;
-
-  @IsDateString(
-    { strict: true },
-    { message: "expirationDate must be a valid ISO 8601 date (YYYY-MM-DD)" },
-  )
-  expirationDate: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  observation?: string;
+export enum AdjustmentMovementType {
+  ADJUSTMENT_ENTRY = "ADJUSTMENT_ENTRY",
+  ADJUSTMENT_EXIT = "ADJUSTMENT_EXIT",
 }
 
 export class CreateAdjustmentDto {
   @IsUUID()
-  branchId: string;
+  branchId!: string;
 
-  @IsEnum(AdjustmentType)
-  adjustmentType: AdjustmentType;
+  @IsUUID()
+  productId!: string;
 
+  @IsEnum(AdjustmentMovementType)
+  movementType!: AdjustmentMovementType;
+
+  @IsInt()
+  @Min(1)
+  quantity!: number;
+
+  @IsOptional()
+  @IsDateString(
+    { strict: true },
+    { message: "expirationDate must be a valid ISO 8601 date (YYYY-MM-DD)" },
+  )
+  expirationDate?: string;
+
+  @Transform(({ value }): unknown =>
+    typeof value === "string" ? value.trim() : value,
+  )
   @IsString()
-  @MinLength(3)
+  @MinLength(10)
   @MaxLength(500)
-  reason: string;
-
-  @IsArray()
-  @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => AdjustmentItemDto)
-  items: AdjustmentItemDto[];
+  reason!: string;
 }

@@ -26,11 +26,18 @@ const auth = vi.hoisted(() => ({
 }))
 
 vi.mock('../../services/inventoryMovements.service', () => ({
-  inventoryMovementsService: { list: vi.fn() },
+  inventoryMovementsService: {
+    list: vi.fn(),
+    create: vi.fn(),
+  },
 }))
 
 vi.mock('../../services/inventory.service', () => ({
-  inventoryService: { listByBranch: vi.fn() },
+  inventoryService: {
+    listByBranch: vi.fn(),
+    getProductInBranch: vi.fn(),
+    availability: vi.fn(),
+  },
 }))
 
 vi.mock('../../services/branches.service', () => ({
@@ -39,6 +46,10 @@ vi.mock('../../services/branches.service', () => ({
 
 vi.mock('../../services/products.service', () => ({
   productsService: { list: vi.fn() },
+}))
+
+vi.mock('../../services/generalStock.service', () => ({
+  generalStockService: { getByProduct: vi.fn() },
 }))
 
 vi.mock('../../hooks/useAuth', () => ({
@@ -219,5 +230,27 @@ describe('MovementsPage list', () => {
 
     expect(await screen.findByText('No tienes sedes asignadas')).toBeInTheDocument()
     expect(listMovements).not.toHaveBeenCalled()
+  })
+})
+
+describe('MovementsPage actions by role', () => {
+  it.each(['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT'])(
+    'lets the %s register an entry or exit',
+    async (role) => {
+      auth.role = role
+      renderPage()
+      await screen.findByText('Salida')
+
+      expect(screen.getByRole('button', { name: 'Registrar entrada o salida' })).toBeInTheDocument()
+    },
+  )
+
+  it('opens the entry or exit dialog', async () => {
+    const { user } = renderPage()
+    await screen.findByText('Salida')
+
+    await user.click(screen.getByRole('button', { name: 'Registrar entrada o salida' }))
+
+    expect(screen.getByRole('dialog', { name: 'Registrar entrada o salida' })).toBeInTheDocument()
   })
 })

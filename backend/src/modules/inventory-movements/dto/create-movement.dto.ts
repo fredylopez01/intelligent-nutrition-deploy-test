@@ -1,7 +1,5 @@
-import { Type } from "class-transformer";
+import { Transform } from "class-transformer";
 import {
-  ArrayMinSize,
-  IsArray,
   IsDateString,
   IsEnum,
   IsInt,
@@ -10,7 +8,8 @@ import {
   IsUUID,
   MaxLength,
   Min,
-  ValidateNested,
+  MinLength,
+  ValidateIf,
 } from "class-validator";
 
 export enum DirectMovementType {
@@ -18,41 +17,38 @@ export enum DirectMovementType {
   EXIT = "EXIT",
 }
 
-export class MovementItemDto {
+const trim = ({ value }: { value: unknown }): unknown =>
+  typeof value === "string" ? value.trim() : value;
+
+export class CreateMovementDto {
   @IsUUID()
-  productId: string;
+  branchId!: string;
+
+  @IsUUID()
+  productId!: string;
+
+  @IsEnum(DirectMovementType)
+  movementType!: DirectMovementType;
 
   @IsInt()
   @Min(1)
-  quantity: number;
+  quantity!: number;
 
+  @IsOptional()
   @IsDateString(
     { strict: true },
     { message: "expirationDate must be a valid ISO 8601 date (YYYY-MM-DD)" },
   )
-  expirationDate: string;
+  expirationDate?: string;
 
-  @IsOptional()
+  @Transform(trim)
+  @ValidateIf(
+    (dto: CreateMovementDto) =>
+      dto.movementType === DirectMovementType.EXIT ||
+      dto.observation !== undefined,
+  )
   @IsString()
+  @MinLength(3)
   @MaxLength(500)
   observation?: string;
-}
-
-export class CreateMovementDto {
-  @IsUUID()
-  branchId: string;
-
-  @IsEnum(DirectMovementType)
-  movementType: DirectMovementType;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  observation?: string;
-
-  @IsArray()
-  @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => MovementItemDto)
-  items: MovementItemDto[];
 }

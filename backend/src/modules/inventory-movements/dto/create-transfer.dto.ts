@@ -1,7 +1,5 @@
-import { Type } from "class-transformer";
+import { Transform } from "class-transformer";
 import {
-  ArrayMinSize,
-  IsArray,
   IsDateString,
   IsInt,
   IsOptional,
@@ -9,39 +7,34 @@ import {
   IsUUID,
   MaxLength,
   Min,
-  ValidateNested,
 } from "class-validator";
 
-export class TransferItemDto {
+export class CreateTransferDto {
   @IsUUID()
-  productId: string;
+  originBranchId!: string;
+
+  @IsUUID()
+  branchId!: string;
+
+  @IsUUID()
+  productId!: string;
 
   @IsInt()
   @Min(1)
-  quantity: number;
+  quantity!: number;
 
+  @IsOptional()
   @IsDateString(
     { strict: true },
     { message: "expirationDate must be a valid ISO 8601 date (YYYY-MM-DD)" },
   )
-  expirationDate: string;
+  expirationDate?: string;
 
   @IsOptional()
+  @Transform(({ value }): unknown =>
+    typeof value === "string" ? value.trim() : value,
+  )
   @IsString()
   @MaxLength(500)
   observation?: string;
-}
-
-export class CreateTransferDto {
-  @IsUUID()
-  originBranchId: string;
-
-  @IsUUID()
-  destinationBranchId: string;
-
-  @IsArray()
-  @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => TransferItemDto)
-  items: TransferItemDto[];
 }

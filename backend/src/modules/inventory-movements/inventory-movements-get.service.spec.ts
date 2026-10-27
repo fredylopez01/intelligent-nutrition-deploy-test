@@ -10,15 +10,17 @@ import { ValidationPipe } from "@nestjs/common";
 import { Test, type TestingModule } from "@nestjs/testing";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { ListInventoryMovementsQueryDto } from "./dto/list-inventory-movements-query.dto.js";
+import { LowStockService } from "../notifications/low-stock.service.js";
+import { GeneralStockService } from "../general-stock/general-stock.service.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
 
-const branchId       = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const branchId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const originBranchId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const productId      = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-const userId         = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
-const movementId     = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
-const otherBranchId  = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+const productId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const userId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const movementId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const otherBranchId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 
 const movementAt = new Date("2026-10-20T10:00:00.000Z");
 
@@ -26,10 +28,18 @@ const listMovementRecord = {
   id: movementId,
   movementType: "TRANSFER",
   quantity: 10,
+  expirationDate: new Date("2027-12-31T00:00:00.000Z"),
   movementAt,
   observation: null,
-  product: { id: productId, name: "Leche Entera", referenceCode: "LECHE-001" },
-  branch:       { id: branchId,       name: "Sede Centro" },
+  saleId: null,
+  purchaseId: null,
+  product: {
+    id: productId,
+    name: "Leche Entera",
+    referenceCode: "LECHE-001",
+    unitOfMeasure: { abreviation: "L" },
+  },
+  branch: { id: branchId, name: "Sede Centro" },
   originBranch: { id: originBranchId, name: "Sede Origen" },
   user: {
     personId: userId,
@@ -37,21 +47,13 @@ const listMovementRecord = {
   },
 };
 
-const detailMovementRecord = {
-  ...listMovementRecord,
-  product: {
-    id: productId,
-    name: "Leche Entera",
-    referenceCode: "LECHE-001",
-    unitOfMeasure: { abreviation: "L" },
-  },
-};
+const detailMovementRecord = listMovementRecord;
 
 const prismaMock = {
   $transaction: jest.fn<(ops: Promise<unknown>[]) => Promise<unknown[]>>(),
   inventoryMovement: {
-    count:      jest.fn<AsyncMock>(),
-    findMany:   jest.fn<AsyncMock>(),
+    count: jest.fn<AsyncMock>(),
+    findMany: jest.fn<AsyncMock>(),
     findUnique: jest.fn<AsyncMock>(),
   },
 };
@@ -64,9 +66,11 @@ jest.unstable_mockModule("../../database/prisma/prisma.service.js", () => ({
   PrismaService: jest.fn().mockImplementation(() => prismaMock),
 }));
 
-const { PrismaService }             = await import("../../database/prisma/prisma.service.js");
-const { AuditService }              = await import("../audit/audit.service.js");
-const { InventoryMovementsService } = await import("./inventory-movements.service.js");
+const { PrismaService } =
+  await import("../../database/prisma/prisma.service.js");
+const { AuditService } = await import("../audit/audit.service.js");
+const { InventoryMovementsService } =
+  await import("./inventory-movements.service.js");
 
 const validationPipe = new ValidationPipe({
   whitelist: true,
@@ -114,13 +118,29 @@ describe("InventoryMovementsService.findAll", () => {
       Promise.all(ops),
     );
     prismaMock.inventoryMovement.count.mockResolvedValue(1);
-    prismaMock.inventoryMovement.findMany.mockResolvedValue([listMovementRecord]);
+    prismaMock.inventoryMovement.findMany.mockResolvedValue([
+      listMovementRecord,
+    ]);
 
     testingModule = await Test.createTestingModule({
       providers: [
         InventoryMovementsService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
+        {
+          provide: LowStockService,
+          useValue: {
+            levels: async () => new Map(),
+            notifyCrossings: async () => 0,
+          },
+        },
+        {
+          provide: GeneralStockService,
+          useValue: {
+            consume: async () => undefined,
+            increase: async () => undefined,
+          },
+        },
       ],
     }).compile();
     service = testingModule.get(InventoryMovementsService);
@@ -153,19 +173,12 @@ describe("InventoryMovementsService.findAll", () => {
       );
     });
 
-    it("BRANCH_LEADER with no filter scopes the OR to their own branch ids", async () => {
-      await service.findAll(baseQuery(), leaderUser);
+    it("requires the branchId for a BRANCH_LEADER, as the contract asks", async () => {
+      await expect(
+        service.findAll(baseQuery(), leaderUser),
+      ).rejects.toMatchObject({ response: { code: "BRANCH_REQUIRED" } });
 
-      expect(prismaMock.inventoryMovement.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            OR: [
-              { branchId: { in: [branchId] } },
-              { originBranchId: { in: [branchId] } },
-            ],
-          }),
-        }),
-      );
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
     });
 
     it("BRANCH_LEADER with their own branchId filter applies an OR clause", async () => {
@@ -185,14 +198,14 @@ describe("InventoryMovementsService.findAll", () => {
     it("rejects BRANCH_LEADER filtering by a branch they do not own", async () => {
       const query = { ...baseQuery(), branchId: otherBranchId };
 
-      await expect(
-        service.findAll(query, leaderUser),
-      ).rejects.toMatchObject({ response: { code: "FORBIDDEN_BRANCH" } });
+      await expect(service.findAll(query, leaderUser)).rejects.toMatchObject({
+        response: { code: "BRANCH_SCOPE_VIOLATION" },
+      });
 
       expect(prismaMock.$transaction).not.toHaveBeenCalled();
     });
 
-    it("BRANCH_ASSISTANT with no filter scopes the result to their branches", async () => {
+    it("requires the branchId for a BRANCH_ASSISTANT too", async () => {
       const assistant: AuthenticatedUser = {
         id: userId,
         active: true,
@@ -200,22 +213,34 @@ describe("InventoryMovementsService.findAll", () => {
         branches: [{ id: branchId, name: "Sede Centro" }],
       };
 
-      await service.findAll(baseQuery(), assistant);
-
-      expect(prismaMock.inventoryMovement.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            OR: [
-              { branchId: { in: [branchId] } },
-              { originBranchId: { in: [branchId] } },
-            ],
-          }),
-        }),
-      );
+      await expect(
+        service.findAll(baseQuery(), assistant),
+      ).rejects.toMatchObject({ response: { code: "BRANCH_REQUIRED" } });
     });
   });
 
   describe("optional filters", () => {
+    it("applies the userId filter to see who registered the movements", async () => {
+      await service.findAll({ ...baseQuery(), userId }, superadminUser);
+
+      expect(prismaMock.inventoryMovement.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId }),
+        }),
+      );
+    });
+
+    it("returns the lot as a date and the product unit", async () => {
+      const result = await service.findAll(baseQuery(), superadminUser);
+
+      expect(result.data[0]).toMatchObject({
+        expirationDate: "2027-12-31",
+        product: { unit: "L" },
+        saleId: null,
+        purchaseId: null,
+      });
+    });
+
     it("applies movementType filter to the where clause", async () => {
       const query = { ...baseQuery(), movementType: "TRANSFER" };
 
@@ -240,7 +265,7 @@ describe("InventoryMovementsService.findAll", () => {
       );
     });
 
-    it("applies from date filter as movementAt.gte", async () => {
+    it("applies from as the start of that Bogota day", async () => {
       const query = { ...baseQuery(), from: "2026-01-01" };
 
       await service.findAll(query, superadminUser);
@@ -249,14 +274,14 @@ describe("InventoryMovementsService.findAll", () => {
         expect.objectContaining({
           where: expect.objectContaining({
             movementAt: expect.objectContaining({
-              gte: new Date("2026-01-01T00:00:00Z"),
+              gte: new Date("2026-01-01T05:00:00.000Z"),
             }),
           }),
         }),
       );
     });
 
-    it("applies to date filter as movementAt.lte", async () => {
+    it("applies to as the end of that Bogota day", async () => {
       const query = { ...baseQuery(), to: "2026-12-31" };
 
       await service.findAll(query, superadminUser);
@@ -265,7 +290,7 @@ describe("InventoryMovementsService.findAll", () => {
         expect.objectContaining({
           where: expect.objectContaining({
             movementAt: expect.objectContaining({
-              lte: new Date("2026-12-31T23:59:59.999Z"),
+              lte: new Date("2027-01-01T04:59:59.999Z"),
             }),
           }),
         }),
@@ -288,7 +313,10 @@ describe("InventoryMovementsService.findAll", () => {
       prismaMock.inventoryMovement.count.mockResolvedValue(0);
       prismaMock.inventoryMovement.findMany.mockResolvedValue([]);
 
-      const result = (await service.findAll(baseQuery(), superadminUser)) as any;
+      const result = (await service.findAll(
+        baseQuery(),
+        superadminUser,
+      )) as any;
 
       expect(result.meta.totalPages).toBe(0);
     });
@@ -296,7 +324,10 @@ describe("InventoryMovementsService.findAll", () => {
     it("returns correct totalPages for a non-zero total", async () => {
       prismaMock.inventoryMovement.count.mockResolvedValue(25);
 
-      const result = (await service.findAll({ ...baseQuery(), limit: 10 }, superadminUser)) as any;
+      const result = (await service.findAll(
+        { ...baseQuery(), limit: 10 },
+        superadminUser,
+      )) as any;
 
       expect(result.meta.totalPages).toBe(3);
     });
@@ -304,33 +335,51 @@ describe("InventoryMovementsService.findAll", () => {
     it("includes page, limit and total in the meta", async () => {
       prismaMock.inventoryMovement.count.mockResolvedValue(5);
 
-      const result = (await service.findAll({ ...baseQuery(), page: 2, limit: 10 }, superadminUser)) as any;
+      const result = (await service.findAll(
+        { ...baseQuery(), page: 2, limit: 10 },
+        superadminUser,
+      )) as any;
 
-      expect(result.meta).toEqual({ page: 2, limit: 10, total: 5, totalPages: 1 });
+      expect(result.meta).toEqual({
+        page: 2,
+        limit: 10,
+        total: 5,
+        totalPages: 1,
+      });
     });
   });
 
   describe("response shape", () => {
     it("returns data and meta at the top level", async () => {
-      const result = (await service.findAll(baseQuery(), superadminUser)) as any;
+      const result = (await service.findAll(
+        baseQuery(),
+        superadminUser,
+      )) as any;
 
       expect(result).toHaveProperty("data");
       expect(result).toHaveProperty("meta");
     });
 
     it("maps each movement to the expected fields", async () => {
-      const result = (await service.findAll(baseQuery(), superadminUser)) as any;
+      const result = (await service.findAll(
+        baseQuery(),
+        superadminUser,
+      )) as any;
 
       expect(result.data[0]).toMatchObject({
-        id:           movementId,
+        id: movementId,
         movementType: "TRANSFER",
-        quantity:     10,
+        quantity: 10,
         movementAt,
-        observation:  null,
-        product:      { id: productId, name: "Leche Entera", referenceCode: "LECHE-001" },
-        branch:       { id: branchId,       name: "Sede Centro" },
+        observation: null,
+        product: {
+          id: productId,
+          name: "Leche Entera",
+          referenceCode: "LECHE-001",
+        },
+        branch: { id: branchId, name: "Sede Centro" },
         originBranch: { id: originBranchId, name: "Sede Origen" },
-        user:         { id: userId, fullName: "Karen Castro" },
+        user: { id: userId, fullName: "Karen Castro" },
       });
     });
 
@@ -339,7 +388,10 @@ describe("InventoryMovementsService.findAll", () => {
         { ...listMovementRecord, branch: null },
       ]);
 
-      const result = (await service.findAll(baseQuery(), superadminUser)) as any;
+      const result = (await service.findAll(
+        baseQuery(),
+        superadminUser,
+      )) as any;
 
       expect(result.data[0].branch).toBeNull();
     });
@@ -349,7 +401,10 @@ describe("InventoryMovementsService.findAll", () => {
         { ...listMovementRecord, originBranch: null },
       ]);
 
-      const result = (await service.findAll(baseQuery(), superadminUser)) as any;
+      const result = (await service.findAll(
+        baseQuery(),
+        superadminUser,
+      )) as any;
 
       expect(result.data[0].originBranch).toBeNull();
     });
@@ -369,7 +424,9 @@ describe("InventoryMovementsService.findAll", () => {
     });
 
     it("rejects an invalid movementType value", async () => {
-      await expect(validateQuery({ movementType: "INVALID" })).rejects.toThrow();
+      await expect(
+        validateQuery({ movementType: "INVALID" }),
+      ).rejects.toThrow();
     });
 
     it("rejects a from date in wrong format", async () => {
@@ -377,12 +434,22 @@ describe("InventoryMovementsService.findAll", () => {
     });
 
     it("rejects unknown query fields", async () => {
-      await expect(validateQuery({ unexpectedParam: "value" })).rejects.toThrow();
+      await expect(
+        validateQuery({ unexpectedParam: "value" }),
+      ).rejects.toThrow();
     });
 
     it("accepts all valid MOVEMENT_TYPE values", async () => {
-      for (const type of ["ENTRY", "EXIT", "ADJUSTMENT_ENTRY", "ADJUSTMENT_EXIT", "TRANSFER"]) {
-        await expect(validateQuery({ movementType: type })).resolves.toBeDefined();
+      for (const type of [
+        "ENTRY",
+        "EXIT",
+        "ADJUSTMENT_ENTRY",
+        "ADJUSTMENT_EXIT",
+        "TRANSFER",
+      ]) {
+        await expect(
+          validateQuery({ movementType: type }),
+        ).resolves.toBeDefined();
       }
     });
   });
@@ -399,13 +466,29 @@ describe("InventoryMovementsService.findOne", () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    prismaMock.inventoryMovement.findUnique.mockResolvedValue(detailMovementRecord);
+    prismaMock.inventoryMovement.findUnique.mockResolvedValue(
+      detailMovementRecord,
+    );
 
     testingModule = await Test.createTestingModule({
       providers: [
         InventoryMovementsService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
+        {
+          provide: LowStockService,
+          useValue: {
+            levels: async () => new Map(),
+            notifyCrossings: async () => 0,
+          },
+        },
+        {
+          provide: GeneralStockService,
+          useValue: {
+            consume: async () => undefined,
+            increase: async () => undefined,
+          },
+        },
       ],
     }).compile();
     service = testingModule.get(InventoryMovementsService);
@@ -433,7 +516,11 @@ describe("InventoryMovementsService.findOne", () => {
     });
 
     it("allows DEV to see any movement", async () => {
-      const dev: AuthenticatedUser = { id: userId, active: true, role: { name: "DEV" } };
+      const dev: AuthenticatedUser = {
+        id: userId,
+        active: true,
+        role: { name: "DEV" },
+      };
 
       await expect(service.findOne(movementId, dev)).resolves.toBeDefined();
     });
@@ -463,9 +550,9 @@ describe("InventoryMovementsService.findOne", () => {
         branches: [{ id: otherBranchId, name: "Otra Sede" }],
       };
 
-      await expect(
-        service.findOne(movementId, leader),
-      ).rejects.toMatchObject({ response: { code: "FORBIDDEN_BRANCH" } });
+      await expect(service.findOne(movementId, leader)).rejects.toMatchObject({
+        response: { code: "BRANCH_SCOPE_VIOLATION" },
+      });
     });
 
     it("allows BRANCH_ASSISTANT when their branch is involved", async () => {
@@ -476,7 +563,9 @@ describe("InventoryMovementsService.findOne", () => {
         branches: [{ id: branchId, name: "Sede Centro" }],
       };
 
-      await expect(service.findOne(movementId, assistant)).resolves.toBeDefined();
+      await expect(
+        service.findOne(movementId, assistant),
+      ).resolves.toBeDefined();
     });
 
     it("allows BRANCH_LEADER to see an ENTRY movement with no originBranch", async () => {
@@ -496,20 +585,20 @@ describe("InventoryMovementsService.findOne", () => {
       const result = (await service.findOne(movementId, superadminUser)) as any;
 
       expect(result).toMatchObject({
-        id:           movementId,
+        id: movementId,
         movementType: "TRANSFER",
-        quantity:     10,
+        quantity: 10,
         movementAt,
-        observation:  null,
+        observation: null,
         product: {
-          id:            productId,
-          name:          "Leche Entera",
+          id: productId,
+          name: "Leche Entera",
           referenceCode: "LECHE-001",
-          unit:          "L",
+          unit: "L",
         },
-        branch:       { id: branchId,       name: "Sede Centro" },
+        branch: { id: branchId, name: "Sede Centro" },
         originBranch: { id: originBranchId, name: "Sede Origen" },
-        user:         { id: userId, fullName: "Karen Castro" },
+        user: { id: userId, fullName: "Karen Castro" },
       });
     });
 

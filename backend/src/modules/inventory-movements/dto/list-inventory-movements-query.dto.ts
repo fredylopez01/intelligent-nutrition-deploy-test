@@ -1,4 +1,4 @@
-import { Transform, Type } from "class-transformer";
+import { Type } from "class-transformer";
 import {
   IsIn,
   IsInt,
@@ -44,14 +44,18 @@ export class ListInventoryMovementsQueryDto {
   movementType?: string;
 
   @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: "from must be a date in YYYY-MM-DD format" })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: "from must be a date in YYYY-MM-DD format",
+  })
   from?: string;
 
   @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: "to must be a date in YYYY-MM-DD format" })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: "to must be a date in YYYY-MM-DD format",
+  })
   to?: string;
 
   @IsOptional()
-  @Transform(({ value }) => value === "true")
-  includeMerged?: boolean;
+  @IsUUID()
+  userId?: string;
 }
