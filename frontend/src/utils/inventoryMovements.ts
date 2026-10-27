@@ -13,7 +13,9 @@ export const MOVEMENT_REGISTER_ROLES: RoleName[] = [
   'BRANCH_ASSISTANT',
 ]
 export const MOVEMENT_TRANSFER_ROLES: RoleName[] = ['SUPERADMIN', 'BRANCH_LEADER']
+export const MOVEMENT_ADJUST_ROLES: RoleName[] = ['SUPERADMIN']
 
+export const ADJUSTMENT_REASON_MIN_LENGTH = 10
 export const MOVEMENT_TEXT_MAX_LENGTH = 500
 
 export const MOVEMENT_TYPE_OPTIONS: { value: MovementType; label: string }[] = [
@@ -183,6 +185,35 @@ export const transferSchema = z.object({
 
 export type TransferValues = z.infer<typeof transferSchema>
 
+export const NEW_LOT_VALUE = 'nuevo'
+
+export const adjustmentSchema = z
+  .object({
+    movementType: z.enum(['ADJUSTMENT_ENTRY', 'ADJUSTMENT_EXIT']),
+    quantity: quantitySchema,
+    expirationDate: lotSchema,
+    newLotDate: z.string(),
+    reason: z
+      .string()
+      .trim()
+      .min(
+        ADJUSTMENT_REASON_MIN_LENGTH,
+        `Explica el ajuste con al menos ${ADJUSTMENT_REASON_MIN_LENGTH} caracteres.`,
+      )
+      .max(MOVEMENT_TEXT_MAX_LENGTH, 'La razón no puede superar 500 caracteres.'),
+  })
+  .superRefine((values, context) => {
+    if (values.expirationDate === NEW_LOT_VALUE && !values.newLotDate) {
+      context.addIssue({
+        code: 'custom',
+        path: ['newLotDate'],
+        message: 'Escribe la fecha de vencimiento del lote nuevo.',
+      })
+    }
+  })
+
+export type AdjustmentValues = z.infer<typeof adjustmentSchema>
+
 export type MovementErrorField = 'quantity' | 'expirationDate' | 'branchId'
 
 export function movementFieldError(
@@ -249,6 +280,8 @@ export function resolveMovementError(error: unknown, fallback: string): string {
       return 'El producto está inactivo y no admite movimientos.'
     case 'PRODUCT_NOT_FOUND':
       return 'El producto ya no existe. Recarga y elige otro producto.'
+    case 'EXPIRATION_DATE_REQUIRED':
+      return 'La sede no tiene lotes vigentes de este producto: elige "Lote nuevo" y escribe su vencimiento.'
   }
   const fieldError = movementFieldError(error)
   if (fieldError) return fieldError.message

@@ -30,6 +30,7 @@ vi.mock('../../services/inventoryMovements.service', () => ({
     list: vi.fn(),
     create: vi.fn(),
     transfer: vi.fn(),
+    adjust: vi.fn(),
   },
 }))
 
@@ -236,7 +237,7 @@ describe('MovementsPage list', () => {
 
 describe('MovementsPage actions by role', () => {
   it.each([
-    ['SUPERADMIN', ['Registrar entrada o salida', 'Trasladar']],
+    ['SUPERADMIN', ['Registrar entrada o salida', 'Trasladar', 'Registrar ajuste']],
     ['BRANCH_LEADER', ['Registrar entrada o salida', 'Trasladar']],
     ['BRANCH_ASSISTANT', ['Registrar entrada o salida']],
   ])('shows the actions the %s can perform', async (role, actions) => {
@@ -244,7 +245,7 @@ describe('MovementsPage actions by role', () => {
     renderPage()
     await screen.findByText('Salida')
 
-    for (const name of ['Registrar entrada o salida', 'Trasladar']) {
+    for (const name of ['Registrar entrada o salida', 'Trasladar', 'Registrar ajuste']) {
       const button = screen.queryByRole('button', { name })
       if (actions.includes(name)) expect(button).toBeInTheDocument()
       else expect(button).not.toBeInTheDocument()

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import { AdjustmentForm } from '../../components/inventory-movements/AdjustmentForm'
 import { MovementDetail } from '../../components/inventory-movements/MovementDetail'
 import { MovementForm } from '../../components/inventory-movements/MovementForm'
 import { MovementsTable } from '../../components/inventory-movements/MovementsTable'
@@ -26,6 +27,7 @@ import type {
 import { hasRole } from '../../utils/categories'
 import { formatQuantity } from '../../utils/inventory'
 import {
+  MOVEMENT_ADJUST_ROLES,
   MOVEMENT_REGISTER_ROLES,
   MOVEMENT_TRANSFER_ROLES,
   MOVEMENT_TYPE_OPTIONS,
@@ -49,7 +51,10 @@ const REGISTERED_LABELS: Record<MovementType, string> = {
 }
 
 type Dialog =
-  { kind: 'register' } | { kind: 'transfer' } | { kind: 'detail'; movement: InventoryMovement }
+  | { kind: 'register' }
+  | { kind: 'transfer' }
+  | { kind: 'adjust' }
+  | { kind: 'detail'; movement: InventoryMovement }
 
 export function MovementsPage() {
   const { user } = useAuth()
@@ -57,6 +62,7 @@ export function MovementsPage() {
   const isSuperadmin = roleName === 'SUPERADMIN'
   const canRegister = hasRole(MOVEMENT_REGISTER_ROLES, roleName)
   const canTransfer = hasRole(MOVEMENT_TRANSFER_ROLES, roleName)
+  const canAdjust = hasRole(MOVEMENT_ADJUST_ROLES, roleName)
   const branchOptions = useInventoryBranches()
 
   const [, setSearchParams] = useSearchParams()
@@ -241,6 +247,11 @@ export function MovementsPage() {
           </select>
         </div>
         <div className="movements-page__actions">
+          {canAdjust && (
+            <Button variant="outline" onClick={() => openDialog({ kind: 'adjust' })}>
+              Registrar ajuste
+            </Button>
+          )}
           {canTransfer && (
             <Button
               variant="outline"
@@ -372,6 +383,22 @@ export function MovementsPage() {
           <TransferForm
             originBranches={formBranches}
             defaultOriginId={defaultFormBranchId}
+            onRegistered={handleRegistered}
+            onCancel={closeDialog}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={dialog?.kind === 'adjust'}
+        title="Registrar ajuste de inventario"
+        description="Corrige una diferencia entre el sistema y el conteo físico. No toca el stock general."
+        onClose={closeDialog}
+      >
+        {dialog?.kind === 'adjust' && (
+          <AdjustmentForm
+            branches={activeBranches}
+            defaultBranchId={defaultFormBranchId}
             onRegistered={handleRegistered}
             onCancel={closeDialog}
           />

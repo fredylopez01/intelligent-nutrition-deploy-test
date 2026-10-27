@@ -4,6 +4,7 @@ import { ApiError } from '../services/http'
 import { buildMovement } from '../test-utils/inventoryMovements'
 
 import {
+  adjustmentSchema,
   fefoLot,
   formatMovementDate,
   movementDirection,
@@ -120,6 +121,21 @@ describe('schemas', () => {
     expect(
       movementSchema.safeParse({ ...exit, quantity, observation: 'Empaque roto' }).success,
     ).toBe(false)
+  })
+
+  it('requires 10 characters of reason and the date of a new lot', () => {
+    const base = {
+      movementType: 'ADJUSTMENT_ENTRY' as const,
+      quantity: '1',
+      expirationDate: '2027-01-31',
+      newLotDate: '',
+    }
+    expect(adjustmentSchema.safeParse({ ...base, reason: 'Conteo' }).success).toBe(false)
+    expect(
+      adjustmentSchema.safeParse({ ...base, expirationDate: 'nuevo', reason: 'Conteo físico' })
+        .success,
+    ).toBe(false)
+    expect(adjustmentSchema.safeParse({ ...base, reason: 'Conteo físico' }).success).toBe(true)
   })
 })
 

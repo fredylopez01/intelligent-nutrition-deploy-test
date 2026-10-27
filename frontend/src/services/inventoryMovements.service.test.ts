@@ -67,4 +67,21 @@ describe('inventoryMovementsService', () => {
       token: 'token',
     })
   })
+
+  it('registers an adjustment', async () => {
+    vi.mocked(http.post).mockResolvedValue({})
+    const payload = {
+      branchId: 'branch-centro',
+      productId: 'product-whey',
+      movementType: 'ADJUSTMENT_EXIT' as const,
+      quantity: 1,
+      reason: 'Diferencia del conteo físico',
+    }
+
+    await inventoryMovementsService.adjust(payload, 'token')
+
+    expect(http.post).toHaveBeenCalledWith('/inventory-movements/adjustments', payload, {
+      token: 'token',
+    })
+  })
 })
