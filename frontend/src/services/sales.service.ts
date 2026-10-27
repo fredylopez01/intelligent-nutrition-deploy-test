@@ -1,4 +1,10 @@
-import type { SellableProductsParams, SellableProductsResponse } from '../types/sale'
+import type {
+  Sale,
+  SalesListParams,
+  SalesListResponse,
+  SellableProductsParams,
+  SellableProductsResponse,
+} from '../types/sale'
 
 import { http } from './http'
 
@@ -17,4 +23,9 @@ export const salesService = {
       `/branches/${branchId}/sellable-products${buildQuery(params)}`,
       { token },
     ),
+
+  list: (params: SalesListParams, token: string | null) =>
+    http.get<SalesListResponse>(`/sales${buildQuery(params)}`, { token }),
+
+  get: (saleId: string, token: string | null) => http.get<Sale>(`/sales/${saleId}`, { token }),
 }
