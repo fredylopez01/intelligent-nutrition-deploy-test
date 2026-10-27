@@ -1,0 +1,70 @@
+.movements-page__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.movements-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.movements-page__filters {
+  align-items: flex-end;
+}
+
+.movements-page__product-filter {
+  max-width: 260px;
+}
+
+.movements-page__dates {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.movements-page__date {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--color-text-faint);
+}
+
+.movements-page__date input {
+  cursor: text;
+  color-scheme: light dark;
+}
+
+@media (max-width: 767px) {
+  .movements-page__actions {
+    flex-direction: column-reverse;
+    width: 100%;
+  }
+
+  .movements-page__actions .ui-button {
+    width: 100%;
+  }
+
+  .movements-page__filters > .inventory-page__filter {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  .movements-page__dates {
+    flex: 1 1 100%;
+    flex-direction: column;
+  }
+
+  .movements-page__date span {
+    width: 3rem;
+  }
+
+  .movements-page__date input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}

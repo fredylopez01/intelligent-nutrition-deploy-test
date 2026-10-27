@@ -15,6 +15,7 @@ import { ForbiddenPage } from '../pages/ForbiddenPage'
 import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
 import { ConsolidatedInventoryPage } from '../pages/inventory/ConsolidatedInventoryPage'
 import { InventoryPage } from '../pages/inventory/InventoryPage'
+import { MovementsPage } from '../pages/inventory/MovementsPage'
 import { LandingPage } from '../pages/LandingPage'
 import { PrivacyPolicyPage } from '../pages/legal/PrivacyPolicyPage'
 import { TermsOfServicePage } from '../pages/legal/TermsOfServicePage'
@@ -80,6 +81,15 @@ export function AppRouter() {
         element={
           <ProtectedRoute allowedRoles={ROUTE_ROLES['/inventario/consolidado']}>
             <ConsolidatedInventoryPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/inventario/movimientos"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/inventario/movimientos']}>
+            <MovementsPage />
           </ProtectedRoute>
         }
       />
