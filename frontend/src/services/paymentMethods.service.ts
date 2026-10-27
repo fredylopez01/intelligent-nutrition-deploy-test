@@ -3,6 +3,7 @@ import type {
   PaymentMethod,
   PaymentMethodsListParams,
   PaymentMethodsListResponse,
+  UpdatePaymentMethodPayload,
 } from '../types/paymentMethod'
 
 import { http } from './http'
@@ -33,4 +34,12 @@ export const paymentMethodsService = {
 
   create: (payload: CreatePaymentMethodPayload, token: string | null) =>
     http.post<PaymentMethod>(PAYMENT_METHODS_PATH, payload, { token }),
+
+  update: (paymentMethodId: string, payload: UpdatePaymentMethodPayload, token: string | null) =>
+    http.patch<PaymentMethod>(`${PAYMENT_METHODS_PATH}/${paymentMethodId}`, payload, { token }),
+
+  updateStatus: (paymentMethodId: string, payload: { active: boolean }, token: string | null) =>
+    http.patch<{ message: string }>(`${PAYMENT_METHODS_PATH}/${paymentMethodId}/status`, payload, {
+      token,
+    }),
 }
