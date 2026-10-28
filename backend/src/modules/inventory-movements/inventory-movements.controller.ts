@@ -7,9 +7,12 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  UseGuards,
 } from "@nestjs/common";
 import { InventoryMovementsService } from "./inventory-movements.service.js";
+import { BranchScope } from "../../common/decorators/branch-scope.decorator.js";
 import { Roles } from "../../common/decorators/roles.decorator.js";
+import { BranchScopeGuard } from "../../common/guards/branch-scope.guard.js";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CreateTransferDto } from "./dto/create-transfer.dto.js";
@@ -18,6 +21,7 @@ import { ListInventoryMovementsQueryDto } from "./dto/list-inventory-movements-q
 import { CreateMovementDto } from "./dto/create-movement.dto.js";
 
 @Controller("inventory-movements")
+@UseGuards(BranchScopeGuard)
 export class InventoryMovementsController {
   constructor(
     private readonly inventoryMovementsService: InventoryMovementsService,
@@ -34,6 +38,7 @@ export class InventoryMovementsController {
 
   @Post("transfers")
   @Roles("SUPERADMIN", "BRANCH_LEADER")
+  @BranchScope("body.originBranchId")
   createTransfer(
     @Body() dto: CreateTransferDto,
     @CurrentUser() currentUser: AuthenticatedUser,

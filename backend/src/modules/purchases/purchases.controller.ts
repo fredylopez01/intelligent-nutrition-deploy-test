@@ -8,16 +8,19 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  UseGuards,
 } from "@nestjs/common";
 import { PurchasesService } from "./purchases.service.js";
 import { Roles } from "../../common/decorators/roles.decorator.js";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
+import { BranchScopeGuard } from "../../common/guards/branch-scope.guard.js";
 import { CreatePurchaseDto } from "./dto/create-purchase.dto.js";
 import { ListPurchasesQueryDto } from "./dto/list-purchases-query.dto.js";
 import { ReceivePurchaseDto } from "./dto/receive-purchase.dto.js";
 
 @Controller("purchases")
+@UseGuards(BranchScopeGuard)
 export class PurchasesController {
   constructor(private readonly purchasesService: PurchasesService) {}
 

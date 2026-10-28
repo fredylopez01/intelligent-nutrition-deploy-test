@@ -8,9 +8,11 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  UseGuards,
 } from "@nestjs/common";
 import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import { Roles } from "../../common/decorators/roles.decorator.js";
+import { BranchScopeGuard } from "../../common/guards/branch-scope.guard.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { CreateSaleDto } from "./dto/create-sale.dto.js";
 import { ListSalesQueryDto } from "./dto/list-sales-query.dto.js";
@@ -18,6 +20,7 @@ import { SalesService } from "./sales.service.js";
 import { ReverseSaleDto } from "./dto/reverse-sale.dto.js";
 
 @Controller("sales")
+@UseGuards(BranchScopeGuard)
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
