@@ -67,6 +67,15 @@ describe("NightlyJobsService", () => {
       });
     });
 
+    it("does nothing when there are no pending closures", async () => {
+      const locked = await service.lockPendingClosures(now);
+
+      expect(locked).toBe(0);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(tx.inventoryClosure.updateMany).not.toHaveBeenCalled();
+      expect(writer.createForUsers).not.toHaveBeenCalled();
+    });
+
     it("locks each closure as NOT_CONFIRMED and notifies the branch managers", async () => {
       prisma.inventoryClosure.findMany.mockResolvedValue([
         closure("c-1", centroId, "Centro", [10, null, 4]),
@@ -97,6 +106,22 @@ describe("NightlyJobsService", () => {
             "El cierre del 2026-10-26 en Centro no se confirmó y quedó bloqueado (2 de 3 conteos registrados).",
           branchId: centroId,
         },
+      );
+      expect(tx.inventoryClosure.updateMany).toHaveBeenNthCalledWith(1, {
+        where: { id: "c-1", status: "PENDING" },
+        data: {
+          status: "NOT_CONFIRMED",
+          confirmed: false,
+          locked: true,
+          closedAt: now,
+        },
+      });
+      expect(writer.createForUsers).toHaveBeenCalledWith(
+        tx,
+        ["leader-id", "admin-id"],
+        expect.objectContaining({
+          message: expect.stringContaining("no se confirmó y quedó bloqueado"),
+        }),
       );
     });
 
