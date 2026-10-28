@@ -25,7 +25,7 @@ export class GeneralStockController {
   }
 
   @Post(":productId/restock")
-  @HttpCode(200)
+  @HttpCode(201)
   @Roles("SUPERADMIN")
   restock(
     @Param("productId", new ParseUUIDPipe()) productId: string,
