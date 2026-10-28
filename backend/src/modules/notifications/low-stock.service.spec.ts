@@ -92,7 +92,21 @@ describe("LowStockService", () => {
     );
   });
 
-  it("does not repeat the alert while the product stays under the minimum", async () => {
+  it("does not notify when stock remains above the minimum", async () => {
+    tx.branchInventory.groupBy.mockResolvedValue(grouped([[wheyId, 8, 5]]));
+    const before = new Map([[wheyId, { total: 6, minimum: 5 }]]);
+
+    await expect(
+      service.notifyCrossings(tx as never, branchId, before),
+    ).resolves.toBe(0);
+
+    expect(writer.branchManagerIds).not.toHaveBeenCalled();
+    expect(tx.branch.findUnique).not.toHaveBeenCalled();
+    expect(tx.product.findMany).not.toHaveBeenCalled();
+    expect(writer.createForUsers).not.toHaveBeenCalled();
+  });
+
+  it("does not duplicate an existing low-stock alert while stock stays below the minimum", async () => {
     tx.branchInventory.groupBy.mockResolvedValue(grouped([[wheyId, 2, 5]]));
     const before = new Map([[wheyId, { total: 3, minimum: 5 }]]);
 
