@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -75,5 +75,44 @@ describe('ClosureStart', () => {
       'La sede está inactiva: no se puede iniciar el cierre.',
     )
     expect(onStarted).not.toHaveBeenCalled()
+  })
+
+  it('shows the loading state of the button while the closure starts', async () => {
+    let resolveStart!: (value: ReturnType<typeof buildClosure>) => void
+    start.mockReturnValue(new Promise((resolve) => (resolveStart = resolve)))
+    const { user, onStarted } = renderStart()
+
+    const button = screen.getByRole('button', { name: 'Iniciar cierre del día' })
+    expect(button).toBeEnabled()
+
+    await user.click(button)
+
+    const loadingButton = screen.getByRole('button', { name: 'Iniciando...' })
+    expect(loadingButton).toBeDisabled()
+    expect(onStarted).not.toHaveBeenCalled()
+
+    resolveStart(buildClosure())
+    await waitFor(() =>
+      expect(onStarted).toHaveBeenCalledWith(expect.objectContaining({ id: 'closure-1' })),
+    )
+  })
+
+  it('renders the title, the blind count steps and the start action', () => {
+    renderStart()
+
+    expect(
+      screen.getByRole('heading', { name: 'Cierre de inventario de Centro' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('lunes, 26 de octubre')).toBeInTheDocument()
+
+    const steps = screen.getByRole('list')
+    expect(within(steps).getAllByRole('listitem')).toHaveLength(3)
+    expect(within(steps).getByText(/Cuenta cada lote en el estante/)).toBeInTheDocument()
+    expect(within(steps).getByText(/Guarda el conteo cuantas veces necesites/)).toBeInTheDocument()
+    expect(
+      within(steps).getByText(/Confirma cuando todos los lotes estén contados/),
+    ).toBeInTheDocument()
+
+    expect(screen.getByRole('button', { name: 'Iniciar cierre del día' })).toBeEnabled()
   })
 })
