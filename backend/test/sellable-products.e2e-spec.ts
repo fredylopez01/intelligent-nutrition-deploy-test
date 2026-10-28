@@ -53,6 +53,7 @@ describe("GET /api/v1/branches/:id/sellable-products (e2e)", () => {
   let branchId: string;
   let superadminToken: string;
   let assistantToken: string;
+  let unitAbbreviation: string;
   const actorIds: string[] = [];
   const productIds: string[] = [];
   const productIdByName = new Map<string, string>();
@@ -148,7 +149,7 @@ describe("GET /api/v1/branches/:id/sellable-products (e2e)", () => {
         data: { name: `Categoria ajena ${runId}`.slice(0, 100) },
       })
     ).id;
-    const unitAbbreviation = `U-${runId}`.slice(0, 10);
+    unitAbbreviation = `U-${runId}`.slice(0, 10);
     unitOfMeasureId = (
       await prisma.unitMeasure.create({
         data: {
