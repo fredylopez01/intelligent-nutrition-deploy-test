@@ -52,6 +52,7 @@ interface FinalProductStub {
   price: MockDecimal;
   active: boolean;
   updatedAt: Date;
+  images: Array<{ url: string }>;
 }
 
 interface CategoryStub {
@@ -164,6 +165,7 @@ function buildFinalProduct(
     price: new MockDecimal("10.50"),
     active: true,
     updatedAt,
+    images: [],
     ...overrides,
   };
 }
@@ -584,7 +586,7 @@ describe("ProductsService > update", () => {
     );
   });
 
-  it("returns the final product state without primaryImageUrl or createdAt", async () => {
+  it("returns the final product state with primaryImageUrl and without createdAt", async () => {
     prismaMock.product.findUniqueOrThrow.mockResolvedValue(buildFinalProduct());
 
     const result: unknown = await service.update(
@@ -602,10 +604,26 @@ describe("ProductsService > update", () => {
       unitOfMeasureId: unitId,
       price: "10.50",
       active: true,
+      primaryImageUrl: null,
       updatedAt,
     });
-    expect((result as Record<string, unknown>).primaryImageUrl).toBeUndefined();
     expect((result as Record<string, unknown>).createdAt).toBeUndefined();
+  });
+
+  it("returns primaryImageUrl from the primary product image", async () => {
+    prismaMock.product.findUniqueOrThrow.mockResolvedValue(
+      buildFinalProduct({ images: [{ url: "https://cdn.test/primary.webp" }] }),
+    );
+
+    const result: unknown = await service.update(
+      productId,
+      { name: "Proteína Whey" },
+      currentUser,
+    );
+
+    expect((result as { primaryImageUrl: string | null }).primaryImageUrl).toBe(
+      "https://cdn.test/primary.webp",
+    );
   });
 
   it("returns 404 when the new category does not exist", async () => {

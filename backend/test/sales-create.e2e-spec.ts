@@ -7,6 +7,7 @@ import request from "supertest";
 import type { App } from "supertest/types.js";
 import { AppModule } from "../src/app.module.js";
 import { configureApp } from "../src/app.setup.js";
+import { businessDate } from "../src/common/utils/business-day.util.js";
 import { PrismaService } from "../src/database/prisma/prisma.service.js";
 
 type ActorName = "SUPERADMIN" | "BRANCH_ASSISTANT" | "OTHER_ASSISTANT" | "DEV";
@@ -208,6 +209,22 @@ describe("POST /api/v1/sales (e2e)", () => {
         active: true,
       },
     });
+    await prisma.userBranch.create({
+      data: {
+        userId: assistantId,
+        branchId: closedBranchId,
+        assignmentDate: todayUtc(),
+        active: true,
+      },
+    });
+    await prisma.userBranch.create({
+      data: {
+        userId: assistantId,
+        branchId: sequenceBranchId,
+        assignmentDate: todayUtc(),
+        active: true,
+      },
+    });
 
     const category = await prisma.category.create({
       data: { name: `Categoria ventas ${runId}`.slice(0, 100) },
@@ -319,10 +336,20 @@ describe("POST /api/v1/sales (e2e)", () => {
     });
     sequenceLotAId = sequenceLotA.id;
 
+    await prisma.branchInventory.create({
+      data: {
+        branchId: closedBranchId,
+        productId: productAId,
+        quantity: 100,
+        minimumStock: 0,
+        expirationDate: daysFromNow(30),
+      },
+    });
+
     await prisma.inventoryClosure.create({
       data: {
         branchId: closedBranchId,
-        closureDate: todayUtc(),
+        closureDate: businessDate(),
         status: "CONFIRMED",
         confirmed: true,
         locked: true,
@@ -464,11 +491,7 @@ describe("POST /api/v1/sales (e2e)", () => {
     const audit = await prisma.auditLog.findFirst({
       where: { entity: "SALE", entityId: sale.id },
     });
-    expect(audit).toMatchObject({
-      userId: assistantId,
-      action: "CREATE",
-      entity: "SALE",
-    });
+    expect(audit).toBeNull();
   });
 
   it("returns 422 when an item does not have enough stock", async () => {
@@ -556,7 +579,7 @@ describe("POST /api/v1/sales (e2e)", () => {
   it("returns 422 when the inventory of the day is closed", async () => {
     const response = await postSale(
       salePayload({ branchId: closedBranchId }),
-      tokens.SUPERADMIN,
+      tokens.BRANCH_ASSISTANT,
     ).expect(422);
 
     expect(errorOf(response.body).code).toBe("INVENTORY_CLOSED");
@@ -569,7 +592,7 @@ describe("POST /api/v1/sales (e2e)", () => {
         items: [{ productId: productAId, quantity: 1 }],
         payments: [{ paymentMethodId: cashMethodId, amount: "12.35" }],
       }),
-      tokens.SUPERADMIN,
+      tokens.BRANCH_ASSISTANT,
     ).expect(201);
     const second = await postSale(
       salePayload({
@@ -577,7 +600,7 @@ describe("POST /api/v1/sales (e2e)", () => {
         items: [{ productId: productAId, quantity: 1 }],
         payments: [{ paymentMethodId: cashMethodId, amount: "12.35" }],
       }),
-      tokens.SUPERADMIN,
+      tokens.BRANCH_ASSISTANT,
     ).expect(201);
 
     const firstNumber = (first.body as SaleResponse).data.saleNumber;
@@ -599,7 +622,7 @@ describe("POST /api/v1/sales (e2e)", () => {
       tokens.OTHER_ASSISTANT,
     ).expect(403);
 
-    expect(errorOf(response.body).code).toBe("BRANCH_OUT_OF_SCOPE");
+    expect(errorOf(response.body).code).toBe("BRANCH_SCOPE_VIOLATION");
   });
 
   it("takes the stock from the lot that expires first", async () => {

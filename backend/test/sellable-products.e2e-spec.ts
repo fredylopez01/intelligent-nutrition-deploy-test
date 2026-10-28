@@ -16,6 +16,7 @@ interface SellableProduct {
   primaryImageUrl: string | null;
   price: string;
   availableQuantity: number;
+  unit: string;
   category: { id: string; name: string } | null;
 }
 
@@ -52,6 +53,7 @@ describe("GET /api/v1/branches/:id/sellable-products (e2e)", () => {
   let branchId: string;
   let superadminToken: string;
   let assistantToken: string;
+  let unitAbbreviation: string;
   const actorIds: string[] = [];
   const productIds: string[] = [];
   const productIdByName = new Map<string, string>();
@@ -147,11 +149,12 @@ describe("GET /api/v1/branches/:id/sellable-products (e2e)", () => {
         data: { name: `Categoria ajena ${runId}`.slice(0, 100) },
       })
     ).id;
+    unitAbbreviation = `U-${runId}`.slice(0, 10);
     unitOfMeasureId = (
       await prisma.unitMeasure.create({
         data: {
           name: `Unidad ${runId}`.slice(0, 50),
-          abreviation: `U-${runId}`.slice(0, 10),
+          abreviation: unitAbbreviation,
         },
       })
     ).id;
@@ -319,6 +322,7 @@ describe("GET /api/v1/branches/:id/sellable-products (e2e)", () => {
       primaryImageUrl: null,
       price: "10.00",
       availableQuantity: 15,
+      unit: unitAbbreviation,
       category: { id: categoryId, name: `Categoria principal ${runId}` },
     });
 
@@ -383,6 +387,7 @@ describe("GET /api/v1/branches/:id/sellable-products (e2e)", () => {
       primaryImageUrl: null,
       price: "8.00",
       availableQuantity: 8,
+      unit: unitAbbreviation,
       category: { id: categoryId, name: `Categoria principal ${runId}` },
     });
 
@@ -411,6 +416,7 @@ describe("GET /api/v1/branches/:id/sellable-products (e2e)", () => {
       primaryImageUrl: null,
       price: "7.00",
       availableQuantity: 12,
+      unit: unitAbbreviation,
       category: { id: otherCategoryId, name: `Categoria ajena ${runId}` },
     });
 
