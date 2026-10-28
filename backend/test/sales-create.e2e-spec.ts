@@ -7,6 +7,7 @@ import request from "supertest";
 import type { App } from "supertest/types.js";
 import { AppModule } from "../src/app.module.js";
 import { configureApp } from "../src/app.setup.js";
+import { businessDate } from "../src/common/utils/business-day.util.js";
 import { PrismaService } from "../src/database/prisma/prisma.service.js";
 
 type ActorName = "SUPERADMIN" | "BRANCH_ASSISTANT" | "OTHER_ASSISTANT" | "DEV";
@@ -348,7 +349,7 @@ describe("POST /api/v1/sales (e2e)", () => {
     await prisma.inventoryClosure.create({
       data: {
         branchId: closedBranchId,
-        closureDate: todayUtc(),
+        closureDate: businessDate(),
         status: "CONFIRMED",
         confirmed: true,
         locked: true,
