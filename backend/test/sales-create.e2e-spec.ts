@@ -335,6 +335,16 @@ describe("POST /api/v1/sales (e2e)", () => {
     });
     sequenceLotAId = sequenceLotA.id;
 
+    await prisma.branchInventory.create({
+      data: {
+        branchId: closedBranchId,
+        productId: productAId,
+        quantity: 100,
+        minimumStock: 0,
+        expirationDate: daysFromNow(30),
+      },
+    });
+
     await prisma.inventoryClosure.create({
       data: {
         branchId: closedBranchId,
