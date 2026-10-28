@@ -169,4 +169,47 @@ describe('AdjustmentForm', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('La sede está inactiva')
   })
+
+  it('renders the adjustment form with its main controls', () => {
+    renderForm()
+
+    expect(screen.getByRole('radiogroup', { name: 'Tipo de ajuste' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Ajuste de salida/ })).toBeChecked()
+    expect(screen.getByLabelText('Sede')).toHaveValue(CENTRO.id)
+    expect(screen.getByLabelText('Cantidad')).toBeInTheDocument()
+    expect(screen.getByLabelText('Razón del ajuste')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Registrar ajuste' })).toBeInTheDocument()
+  })
+
+  it('stops an exit adjustment above the lot and does not call the service', async () => {
+    const { user } = renderForm()
+    await pickWhey(user)
+
+    await user.type(screen.getByLabelText('Cantidad'), '9')
+    await user.type(screen.getByLabelText('Razón del ajuste'), reason)
+    await user.click(screen.getByRole('button', { name: 'Registrar ajuste' }))
+
+    expect(await screen.findByText('El lote solo tiene 8 und en la sede.')).toBeInTheDocument()
+    expect(adjust).not.toHaveBeenCalled()
+  })
+
+  it('shows the api message when the server reports insufficient stock', async () => {
+    adjust.mockRejectedValue(
+      new ApiError(
+        'The branch does not have enough units of this lot.',
+        422,
+        { available: 5, requested: 8, expirationDate: '31 ene 2027' },
+        'INSUFFICIENT_STOCK',
+      ),
+    )
+    const { user } = renderForm()
+    await pickWhey(user)
+
+    await user.type(screen.getByLabelText('Cantidad'), '2')
+    await user.type(screen.getByLabelText('Razón del ajuste'), reason)
+    await user.click(screen.getByRole('button', { name: 'Registrar ajuste' }))
+
+    expect(await screen.findByText('El lote solo tiene 5 und en la sede.')).toBeInTheDocument()
+    expect(adjust).toHaveBeenCalledTimes(1)
+  })
 })
