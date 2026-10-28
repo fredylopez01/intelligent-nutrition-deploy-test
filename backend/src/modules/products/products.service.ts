@@ -488,7 +488,7 @@ export class ProductsService {
         unitOfMeasureId: finalProduct.unitOfMeasureId,
         price: finalProduct.price.toFixed(2),
         active: finalProduct.active,
-        primaryImageUrl: finalProduct.images[0]?.url ?? null,
+        primaryImageUrl: (finalProduct.images?.[0]?.url) ?? null,
         updatedAt: finalProduct.updatedAt,
       };
     });
