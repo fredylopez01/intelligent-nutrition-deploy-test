@@ -9,6 +9,7 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from "@nestjs/common";
 import { InventoryClosuresService } from "./inventory-closures.service.js";
 import { Roles } from "../../common/decorators/roles.decorator.js";
@@ -16,8 +17,10 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { UpdateCountsDto } from "./dto/update-counts.dto.js";
 import { ListClosuresQueryDto } from "./dto/list-closures-query.dto.js";
+import { BranchScopeGuard } from "../../common/guards/branch-scope.guard.js";
 
 @Controller("inventory-closures")
+@UseGuards(BranchScopeGuard)
 export class InventoryClosuresGlobalController {
   constructor(
     private readonly inventoryClosuresService: InventoryClosuresService,
