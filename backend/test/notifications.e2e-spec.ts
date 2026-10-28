@@ -145,6 +145,44 @@ describe("Notifications (e2e)", () => {
     expect(body.meta.total).toBe(3);
   });
 
+  it("paginates my notifications and reports pagination metadata", async () => {
+    const firstPage = await http()
+      .get("/api/v1/notifications")
+      .query({ page: 1, limit: 2 })
+      .set("Authorization", `Bearer ${leaderToken}`)
+      .expect(200);
+    const firstPageBody = firstPage.body as {
+      data: NotificationItem[];
+      meta: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+      };
+    };
+
+    expect(firstPageBody.data.map(({ id }) => id)).toEqual(
+      leaderNotifications.slice(0, 2),
+    );
+    expect(firstPageBody.meta).toEqual({
+      page: 1,
+      limit: 2,
+      total: 3,
+      totalPages: 2,
+    });
+
+    const secondPage = await http()
+      .get("/api/v1/notifications")
+      .query({ page: 2, limit: 2 })
+      .set("Authorization", `Bearer ${leaderToken}`)
+      .expect(200);
+    expect(
+      (secondPage.body as { data: NotificationItem[] }).data.map(
+        ({ id }) => id,
+      ),
+    ).toEqual(leaderNotifications.slice(2));
+  });
+
   it("filters by read state and type", async () => {
     const unread = await http()
       .get("/api/v1/notifications")
@@ -155,6 +193,28 @@ describe("Notifications (e2e)", () => {
     expect(
       (unread.body as { data: NotificationItem[] }).data.map((item) => item.id),
     ).toEqual([leaderNotifications[0]]);
+  });
+
+  it("filters read notifications separately from unread notifications", async () => {
+    const [unread, read] = await Promise.all([
+      http()
+        .get("/api/v1/notifications")
+        .query({ read: "false" })
+        .set("Authorization", `Bearer ${leaderToken}`)
+        .expect(200),
+      http()
+        .get("/api/v1/notifications")
+        .query({ read: "true" })
+        .set("Authorization", `Bearer ${leaderToken}`)
+        .expect(200),
+    ]);
+
+    expect(
+      (unread.body as { data: NotificationItem[] }).data.map(({ id }) => id),
+    ).toEqual(leaderNotifications.slice(0, 2));
+    expect(
+      (read.body as { data: NotificationItem[] }).data.map(({ id }) => id),
+    ).toEqual([leaderNotifications[2]]);
   });
 
   it("rejects an unknown type", async () => {
@@ -215,5 +275,11 @@ describe("Notifications (e2e)", () => {
 
   it("requires authentication", async () => {
     await http().get("/api/v1/notifications").expect(401);
+  });
+
+  it("requires authentication to mark a notification as read", async () => {
+    await http()
+      .patch(`/api/v1/notifications/${leaderNotifications[0]}/read`)
+      .expect(401);
   });
 });
