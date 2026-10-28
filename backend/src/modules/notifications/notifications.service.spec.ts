@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { NotFoundException } from "@nestjs/common";
 import { NotificationsService } from "./notifications.service.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
@@ -68,6 +67,41 @@ describe("NotificationsService", () => {
     expect(result.meta.totalPages).toBe(0);
   });
 
+  it.each([true, false])(
+    "filters only the current user's notifications with read=%s",
+    async (read) => {
+      prisma.notification.count.mockResolvedValue(1);
+      prisma.notification.findMany.mockResolvedValue([
+        {
+          id: "n-1",
+          userId: "user-1",
+          read,
+          title: "Stock notification",
+        },
+      ]);
+
+      const result = await service.findMine("user-1", {
+        page: 1,
+        limit: 10,
+        read,
+      });
+
+      const where = { userId: "user-1", read };
+      expect(prisma.notification.count).toHaveBeenCalledWith({ where });
+      expect(prisma.notification.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where, skip: 0, take: 10 }),
+      );
+      expect(result.data).toEqual([
+        {
+          id: "n-1",
+          userId: "user-1",
+          read,
+          title: "Stock notification",
+        },
+      ]);
+    },
+  );
+
   it("counts only the unread notifications of the user", async () => {
     prisma.notification.count.mockResolvedValue(4);
 
@@ -89,6 +123,12 @@ describe("NotificationsService", () => {
       where: { id: "n-1", userId: "user-1" },
       select: { id: true, read: true },
     });
+    expect(prisma.notification.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "n-1" },
+        data: { read: true },
+      }),
+    );
   });
 
   it("does not write again when the notification was already read", async () => {
@@ -106,9 +146,11 @@ describe("NotificationsService", () => {
   it("answers 404 when the notification belongs to someone else", async () => {
     prisma.notification.findFirst.mockResolvedValue(null);
 
-    await expect(service.markRead("user-1", "n-9")).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(service.markRead("user-1", "n-9")).rejects.toMatchObject({
+      status: 404,
+      response: { code: "NOTIFICATION_NOT_FOUND" },
+    });
+    expect(prisma.notification.update).not.toHaveBeenCalled();
   });
 
   it("marks every unread notification of the user", async () => {
