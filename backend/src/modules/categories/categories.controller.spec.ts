@@ -551,10 +551,7 @@ describe("CategoriesController (HTTP)", () => {
         .expect(403);
     });
 
-    // Known defect (Contract API Sprint 4, §3 and §17, HS-069): only the
-    // SUPERADMIN may activate or deactivate categories, but the endpoint also
-    // allows the BRANCH_LEADER role.
-    it.failing("returns 403 for the branch leader", async () => {
+    it("returns 403 for the branch leader", async () => {
       asRole("BRANCH_LEADER");
 
       await http()
