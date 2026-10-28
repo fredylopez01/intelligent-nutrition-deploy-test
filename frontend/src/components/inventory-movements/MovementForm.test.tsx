@@ -277,4 +277,22 @@ describe('MovementForm branch and errors', () => {
 
     expect(onCancel).toHaveBeenCalled()
   })
+
+  it('renders the manual movement form with its main controls', async () => {
+    renderForm()
+
+    expect(screen.getByRole('radiogroup', { name: 'Tipo de movimiento' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Salida/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /Entrada/ })).not.toBeChecked()
+
+    expect(screen.getByText('Sede: Centro')).toBeInTheDocument()
+
+    expect(await screen.findByRole('button', { name: /Whey Protein 2 lb/ })).toBeInTheDocument()
+
+    expect(screen.getByLabelText('Cantidad')).toBeInTheDocument()
+    expect(screen.getByLabelText('Motivo de la salida')).toBeInTheDocument()
+
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Registrar salida' })).toBeInTheDocument()
+  })
 })
