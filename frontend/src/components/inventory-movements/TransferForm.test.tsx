@@ -83,6 +83,29 @@ afterEach(() => {
 })
 
 describe('TransferForm', () => {
+  it('renders the form, the origin branch and the actions', () => {
+    renderForm()
+
+    expect(screen.getByRole('heading', { name: '1. Origen y producto' })).toBeInTheDocument()
+    expect(screen.getByText('Sede origen: Centro')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '2. Lote, destino y cantidad' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Lote de la sede origen')).toBeInTheDocument()
+    expect(screen.getByLabelText('Sede destino')).toBeInTheDocument()
+    expect(screen.getByLabelText('Cantidad')).toBeInTheDocument()
+    expect(screen.getByLabelText('Observación (opcional)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Registrar traslado' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument()
+  })
+
+  it('asks for a product before submitting', async () => {
+    const { user } = renderForm()
+
+    await user.click(screen.getByRole('button', { name: 'Registrar traslado' }))
+
+    expect(await screen.findByText('Elige el producto que vas a trasladar.')).toBeInTheDocument()
+    expect(transfer).not.toHaveBeenCalled()
+  })
+
   it('moves the earliest current lot to the chosen destination', async () => {
     const { user, onRegistered } = renderForm()
     await pickWhey(user)
@@ -170,6 +193,22 @@ describe('TransferForm', () => {
     expect(await screen.findByText('El lote solo tiene 8 und en Centro.')).toBeInTheDocument()
   })
 
+  it('rejects quantities that are not positive integers', async () => {
+    const { user } = renderForm()
+    await pickWhey(user)
+
+    await user.selectOptions(screen.getByLabelText('Sede destino'), NORTE.id)
+    await user.type(screen.getByLabelText('Cantidad'), '1.5')
+    await user.click(screen.getByRole('button', { name: 'Registrar traslado' }))
+
+    expect(
+      await screen.findByText(
+        'La cantidad debe ser un número entero mayor que 0, sin puntos ni comas.',
+      ),
+    ).toBeInTheDocument()
+    expect(transfer).not.toHaveBeenCalled()
+  })
+
   it('explains that the destination does not have the product assigned', async () => {
     transfer.mockRejectedValue(new ApiError('No', 404, {}, 'PRODUCT_NOT_ASSIGNED_IN_DESTINATION'))
     const { user } = renderForm()
@@ -182,6 +221,21 @@ describe('TransferForm', () => {
     expect(
       await screen.findByText(/El producto no está asignado en la sede destino/),
     ).toBeInTheDocument()
+  })
+
+  it('shows a generic message when the transfer request fails', async () => {
+    transfer.mockRejectedValue(new Error('Network down'))
+    const { user, onRegistered } = renderForm()
+    await pickWhey(user)
+
+    await user.selectOptions(screen.getByLabelText('Sede destino'), NORTE.id)
+    await user.type(screen.getByLabelText('Cantidad'), '2')
+    await user.click(screen.getByRole('button', { name: 'Registrar traslado' }))
+
+    expect(
+      await screen.findByText('No fue posible registrar el traslado. Intenta de nuevo.'),
+    ).toBeInTheDocument()
+    expect(onRegistered).not.toHaveBeenCalled()
   })
 
   it('warns when the origin only has expired or empty lots', async () => {

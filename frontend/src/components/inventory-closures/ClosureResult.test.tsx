@@ -41,6 +41,14 @@ describe('ClosureResult', () => {
 
     expect(screen.getByText('Cierre del lunes, 26 de octubre confirmado')).toBeInTheDocument()
     expect(screen.getByText(/Se confirmó el 26 oct 2026, 8:30 p/)).toBeInTheDocument()
+    const table = screen.getByRole('table', {
+      name: 'Diferencias entre el sistema y el conteo físico',
+    })
+    expect(within(table).getByRole('columnheader', { name: 'Producto y lote' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Sistema' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Contado' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Diferencia' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Observación' })).toBeInTheDocument()
     const withDifference = screen.getByText('Con diferencia').parentElement as HTMLElement
     expect(within(withDifference).getByText('2')).toBeInTheDocument()
     const extra = screen.getByText('Unidades sobrantes').parentElement as HTMLElement

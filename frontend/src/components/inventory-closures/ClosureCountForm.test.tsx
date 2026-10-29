@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -156,6 +156,48 @@ describe('ClosureCountForm', () => {
       'test-token',
     )
     expect(confirm).toHaveBeenCalledWith('closure-1', 'test-token')
+  })
+
+  it('cancels the confirmation without saving or confirming', async () => {
+    const { user } = renderForm()
+
+    await user.type(quantity('30 sept 2026'), '1')
+    await user.type(quantity('30 jun 2027'), '8')
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }))
+    const dialog = within(screen.getByRole('dialog', { name: '¿Confirmar el cierre del día?' }))
+    await user.click(dialog.getByRole('button', { name: 'Seguir contando' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(saveCounts).not.toHaveBeenCalled()
+    expect(confirm).not.toHaveBeenCalled()
+  })
+
+  it('shows a processing state while the closure is being confirmed', async () => {
+    let finishConfirm: (closure: InventoryClosure) => void = () => undefined
+    confirm.mockImplementation(
+      () =>
+        new Promise<InventoryClosure>((resolve) => {
+          finishConfirm = resolve
+        }),
+    )
+    const { user, onConfirmed } = renderForm()
+
+    await user.type(quantity('30 sept 2026'), '1')
+    await user.type(quantity('30 jun 2027'), '8')
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }))
+    await user.click(screen.getByRole('button', { name: 'Sí, confirmar cierre' }))
+
+    expect(await screen.findByRole('button', { name: 'Confirmando...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Seguir contando' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Guardar conteo' })).toBeDisabled()
+    expect(onConfirmed).not.toHaveBeenCalled()
+
+    await act(async () => {
+      finishConfirm(buildClosure({ status: 'CONFIRMED', confirmed: true, locked: true }))
+    })
+
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalled())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('lists the lots the api reports as missing', async () => {

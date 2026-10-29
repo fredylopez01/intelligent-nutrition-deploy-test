@@ -143,6 +143,46 @@ describe('ClosurePage today', () => {
     expect(screen.getAllByText('−1 und').length).toBeGreaterThan(0)
   })
 
+  it('confirms the closure of today and shows the success report with differences', async () => {
+    mockClosures(buildSummary({ id: 'closure-1', closureDate: '2026-10-26', status: 'PENDING' }))
+    get.mockResolvedValue(buildClosure())
+    vi.mocked(inventoryClosuresService.saveCounts).mockResolvedValue(
+      buildClosure({ countedItems: 1 }),
+    )
+    vi.mocked(inventoryClosuresService.confirm).mockResolvedValue(
+      buildClosure({
+        status: 'CONFIRMED',
+        confirmed: true,
+        locked: true,
+        closedAt: '2026-10-26T20:30:00.000Z',
+        totalDifferences: 1,
+        items: [buildItem({ systemQuantity: 8, physicalQuantity: 7, difference: -1 })],
+      }),
+    )
+    const { user } = renderPage()
+
+    await screen.findByText('Conteo ciego de Centro')
+    await user.type(
+      screen.getByLabelText('Cantidad contada de Whey Protein 2 lb, vence 30 sept 2026'),
+      '7',
+    )
+    await user.type(
+      screen.getByLabelText('Cantidad contada de Whey Protein 2 lb, vence 30 jun 2027'),
+      '8',
+    )
+    await user.click(screen.getByRole('button', { name: 'Confirmar cierre' }))
+    const dialog = within(
+      await screen.findByRole('dialog', { name: '¿Confirmar el cierre del día?' }),
+    )
+    await user.click(dialog.getByRole('button', { name: 'Sí, confirmar cierre' }))
+
+    expect(
+      await screen.findByText('Cierre del lunes, 26 de octubre confirmado'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('−1 und')).toBeInTheDocument()
+    expect(inventoryClosuresService.confirm).toHaveBeenCalledWith('closure-1', 'test-token')
+  })
+
   it('shows the error of today and retries', async () => {
     list.mockRejectedValueOnce(new ApiError('Boom', 500, {}, 'INTERNAL'))
     const { user } = renderPage()
