@@ -105,6 +105,13 @@ describe('PurchasesPage', () => {
   it('lists the purchases with supplier, total and status', async () => {
     renderPage()
 
+    const table = await screen.findByRole('table', {
+      name: 'Órdenes de compra, de la más reciente a la más antigua',
+    })
+    for (const header of ['Compra', 'Proveedor', 'Total', 'Estado']) {
+      expect(within(table).getByRole('columnheader', { name: header })).toBeInTheDocument()
+    }
+
     const row = (await screen.findByText('C-20261025-0001')).closest('tr') as HTMLElement
     expect(within(row).getByText('Laboratorios del Valle SAS')).toBeInTheDocument()
     expect(within(row).getByText('Recibida')).toBeInTheDocument()
@@ -134,6 +141,32 @@ describe('PurchasesPage', () => {
         from: '2026-10-01',
       }),
     )
+  })
+
+  it('moves to the next page when paginating', async () => {
+    list.mockResolvedValue({
+      data: [pending, received],
+      meta: { page: 1, limit: 20, total: 45, totalPages: 3 },
+    })
+    const { user } = renderPage()
+
+    await screen.findByText('C-20261026-0001')
+    expect(lastParams().page).toBe(1)
+
+    await user.click(screen.getByRole('button', { name: 'Página siguiente' }))
+
+    await waitFor(() => expect(lastParams().page).toBe(2))
+  })
+
+  it('explains when no purchase matches the filters', async () => {
+    list.mockResolvedValue(page([]))
+    const { user } = renderPage()
+
+    expect(await screen.findByText('Todavía no hay órdenes de compra')).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Filtrar por estado'), 'FULLY_RECEIVED')
+
+    expect(await screen.findByText('Ninguna compra coincide con los filtros')).toBeInTheDocument()
   })
 
   it('opens the detail with the receipt progress', async () => {
