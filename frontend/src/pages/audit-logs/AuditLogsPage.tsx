@@ -25,7 +25,8 @@ const EXPORT_PAGE_SIZE = 100
 const EXPORT_MAX_PAGES = 20
 
 export function AuditLogsPage() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
+  const canSeeDetails = user?.role.name === 'DEV'
   const [page, setPage] = useState(1)
   const [userId, setUserId] = useState('')
   const [entity, setEntity] = useState('')
@@ -37,7 +38,7 @@ export function AuditLogsPage() {
 
   const filters = {
     userId: userId || undefined,
-    entity: entity || undefined,
+    entity: canSeeDetails && entity ? entity : undefined,
     action: action || undefined,
     from: fromDate || undefined,
     to: toDate || undefined,
@@ -67,7 +68,9 @@ export function AuditLogsPage() {
         rows.push(...response.data)
         if (current >= response.meta.totalPages) break
       }
-      const blob = new Blob([buildAuditCsv(rows)], { type: 'text/csv;charset=utf-8' })
+      const blob = new Blob([buildAuditCsv(rows, canSeeDetails)], {
+        type: 'text/csv;charset=utf-8',
+      })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
@@ -110,14 +113,14 @@ export function AuditLogsPage() {
           }
           description={
             hasFilters
-              ? 'Ajusta el usuario, la entidad, la acción o el rango de fechas.'
+              ? `Ajusta el usuario${canSeeDetails ? ', la entidad' : ''}, la acción o el rango de fechas.`
               : (emptyMessage ?? 'Los cambios sobre usuarios y sedes quedarán registrados aquí.')
           }
         />
       )
     }
 
-    return <AuditLogsTable logs={logs} />
+    return <AuditLogsTable logs={logs} showDetails={canSeeDetails} />
   }
 
   return (
@@ -140,6 +143,7 @@ export function AuditLogsPage() {
       )}
 
       <AuditLogsFilters
+        showEntity={canSeeDetails}
         users={users}
         userId={userId}
         entity={entity}

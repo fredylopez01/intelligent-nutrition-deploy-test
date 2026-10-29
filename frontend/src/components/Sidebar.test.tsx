@@ -165,4 +165,11 @@ describe('Sidebar inventory submenu', () => {
       expect(inventorySubs()).toContain('Existencias')
     },
   )
+
+  it('keeps only the brand and the navigation, without the data scope', () => {
+    renderSidebar()
+
+    expect(screen.queryByText('Alcance de datos')).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Intelligent Nutrition' })).toBeInTheDocument()
+  })
 })

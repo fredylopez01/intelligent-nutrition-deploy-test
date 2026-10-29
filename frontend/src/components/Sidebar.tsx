@@ -3,11 +3,6 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useBrandAssets } from '../hooks/useBrandAssets'
 import { canAccess } from '../routes/access'
-import { getRoleLabel } from '../utils/format'
-
-import { ThemeMenu } from './ThemeMenu'
-import { Avatar } from './ui/Avatar'
-import { UserMenu } from './UserMenu'
 
 import './Sidebar.css'
 
@@ -86,17 +81,7 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar__brand">
         <img className="sidebar__logo" src={logo} alt="Intelligent Nutrition" />
-        <ThemeMenu />
       </div>
-      {user && (
-        <UserMenu triggerClassName="sidebar__user">
-          <Avatar name={user.fullName} size="md" highlighted />
-          <div className="sidebar__user-info">
-            <p className="sidebar__user-name">{user.fullName}</p>
-            <p className="sidebar__user-role">{getRoleLabel(roleName)}</p>
-          </div>
-        </UserMenu>
-      )}
       <nav className="sidebar__nav" aria-label="Navegación principal">
         {NAV_ITEMS.filter((item) => canAccess(item.to, roleName)).map((item) => {
           const isSectionActive = pathname === item.to || pathname.startsWith(`${item.to}/`)
@@ -131,13 +116,6 @@ export function Sidebar() {
           )
         })}
       </nav>
-      <div className="sidebar__scope">
-        <p className="sidebar__scope-label">Alcance de datos</p>
-        <div className="sidebar__scope-value">
-          <span>Todas las sedes</span>
-          <span aria-hidden="true">▾</span>
-        </div>
-      </div>
     </aside>
   )
 }

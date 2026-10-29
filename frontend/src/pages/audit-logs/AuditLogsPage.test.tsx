@@ -18,8 +18,10 @@ vi.mock('../../services/users.service', () => ({
   usersService: { list: vi.fn() },
 }))
 
+const auth = vi.hoisted(() => ({ role: 'DEV' }))
+
 vi.mock('../../hooks/useAuth', () => ({
-  useAuth: () => ({ token: 'test-token' }),
+  useAuth: () => ({ token: 'test-token', user: { id: 'me', role: { name: auth.role } } }),
 }))
 
 vi.mock('../../layouts/AppLayout', () => ({
@@ -115,6 +117,7 @@ function renderPage() {
 }
 
 beforeEach(() => {
+  auth.role = 'DEV'
   vi.resetAllMocks()
   listUsers.mockResolvedValue(usersResponse())
   listLogs.mockResolvedValue(pageOf([makeLog()]))
@@ -298,5 +301,16 @@ describe('AuditLogsPage entity filter and detail', () => {
     )
     expect(createObjectURL).toHaveBeenCalled()
     click.mockRestore()
+  })
+
+  it('hides the entity and the changes from the superadmin', async () => {
+    auth.role = 'SUPERADMIN'
+    renderPage()
+    await screen.findByRole('cell', { name: /Admin Sistema/ })
+
+    expect(screen.queryByRole('columnheader', { name: 'Entidad' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Entidad' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ver cambios' })).not.toBeInTheDocument()
+    expect(lastListParams().entity).toBeUndefined()
   })
 })

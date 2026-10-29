@@ -5,6 +5,7 @@ import { SelectField } from '../ui/SelectField'
 import './AuditLogsFilters.css'
 
 interface AuditLogsFiltersProps {
+  showEntity: boolean
   users: User[]
   userId: string
   entity: string
@@ -19,6 +20,7 @@ interface AuditLogsFiltersProps {
 }
 
 export function AuditLogsFilters({
+  showEntity,
   users,
   userId,
   entity,
@@ -39,7 +41,7 @@ export function AuditLogsFilters({
   })
 
   return (
-    <div className="audit-logs-filters">
+    <div className={`audit-logs-filters${showEntity ? '' : ' audit-logs-filters--compact'}`}>
       <SelectField
         id="audit-logs-filter-user"
         label="Ejecutado por"
@@ -47,13 +49,15 @@ export function AuditLogsFilters({
         value={userId}
         onChange={(event) => onUserIdChange(event.target.value)}
       />
-      <SelectField
-        id="audit-logs-filter-entity"
-        label="Entidad"
-        options={[{ value: '', label: 'Todas las entidades' }, ...AUDIT_ENTITY_OPTIONS]}
-        value={entity}
-        onChange={(event) => onEntityChange(event.target.value)}
-      />
+      {showEntity && (
+        <SelectField
+          id="audit-logs-filter-entity"
+          label="Entidad"
+          options={[{ value: '', label: 'Todas las entidades' }, ...AUDIT_ENTITY_OPTIONS]}
+          value={entity}
+          onChange={(event) => onEntityChange(event.target.value)}
+        />
+      )}
       <SelectField
         id="audit-logs-filter-action"
         label="Acción"
