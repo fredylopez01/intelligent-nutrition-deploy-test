@@ -1,4 +1,12 @@
-import { jest, describe, beforeAll, afterAll, it, expect } from "@jest/globals";
+import {
+  jest,
+  describe,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  it,
+  expect,
+} from "@jest/globals";
 import { INestApplication } from "@nestjs/common";
 import type { NextFunction, Request, Response } from "express";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
@@ -43,11 +51,16 @@ describe("AuditController access", () => {
     await app.init();
   });
 
+  beforeEach(() => {
+    roleName = "SUPERADMIN";
+    auditServiceMock.findAll.mockClear();
+  });
+
   afterAll(async () => {
     await app.close();
   });
 
-  it("allows SUPERADMIN to query audit logs", async () => {
+  it("allows the SUPERADMIN role to query audit logs", async () => {
     await request(app.getHttpServer()).get("/audit-logs").expect(200);
     expect(auditServiceMock.findAll).toHaveBeenCalled();
   });
@@ -57,8 +70,9 @@ describe("AuditController access", () => {
     await request(app.getHttpServer()).get("/audit-logs").expect(200);
   });
 
-  it("denies operational roles", async () => {
+  it("denies operational roles through the role guard", async () => {
     roleName = "BRANCH_LEADER";
     await request(app.getHttpServer()).get("/audit-logs").expect(403);
+    expect(auditServiceMock.findAll).not.toHaveBeenCalled();
   });
 });

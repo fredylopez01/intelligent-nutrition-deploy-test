@@ -62,7 +62,7 @@ describe("AuditService", () => {
     service = module.get(AuditService);
   });
 
-  it("filters by executor, action, entity, entity id and date range", async () => {
+  it("lists logs with executor, action, entity, entity id and date filters", async () => {
     const result = await service.findAll({
       page: 2,
       limit: 5,
@@ -86,8 +86,69 @@ describe("AuditService", () => {
         },
       },
     });
+    expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId: "actor-id",
+          action: "UPDATE",
+          entity: { equals: "product", mode: "insensitive" },
+          entityId: "target-id",
+          createdAt: {
+            gte: new Date("2026-09-01"),
+            lte: new Date("2026-09-28T23:59:59.999Z"),
+          },
+        },
+        skip: 5,
+        take: 5,
+      }),
+    );
     expect(result.data[0].id).toBe("15");
     expect(result.meta).toEqual({ page: 2, limit: 5, total: 1, totalPages: 1 });
+  });
+
+  it("filters logs by user", async () => {
+    await service.findAll({ page: 1, limit: 10, userId: "actor-id" });
+
+    expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: "actor-id" } }),
+    );
+    expect(prismaMock.auditLog.count).toHaveBeenCalledWith({
+      where: { userId: "actor-id" },
+    });
+  });
+
+  it("filters logs by action", async () => {
+    await service.findAll({ page: 1, limit: 10, action: "DELETE" });
+
+    expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { action: "DELETE" } }),
+    );
+    expect(prismaMock.auditLog.count).toHaveBeenCalledWith({
+      where: { action: "DELETE" },
+    });
+  });
+
+  it("filters logs by an inclusive date range", async () => {
+    const dateRange = {
+      createdAt: {
+        gte: new Date("2026-09-01"),
+        lte: new Date("2026-09-28T23:59:59.999Z"),
+      },
+    };
+
+    await service.findAll({
+      page: 1,
+      limit: 10,
+      from: "2026-09-01",
+      to: "2026-09-28",
+    });
+
+    expect(prismaMock.auditLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: dateRange }),
+    );
+    expect(prismaMock.auditLog.count).toHaveBeenCalledWith({
+      where: dateRange,
+    });
   });
 
   it("keeps fromDate and toDate as aliases of from and to", async () => {
