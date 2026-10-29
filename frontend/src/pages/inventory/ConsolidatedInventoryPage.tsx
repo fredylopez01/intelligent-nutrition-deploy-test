@@ -1,7 +1,11 @@
+import { useState } from 'react'
+
 import { ConsolidatedTable } from '../../components/inventory/ConsolidatedTable'
+import { RestockForm } from '../../components/inventory/RestockForm'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { Modal } from '../../components/ui/Modal'
 import { Pagination } from '../../components/ui/Pagination'
 import { ReloadButton } from '../../components/ui/ReloadButton'
 import { SearchBar } from '../../components/ui/SearchBar'
@@ -10,6 +14,9 @@ import { useCatalogOptions } from '../../hooks/useCatalogOptions'
 import { useConsolidatedInventory } from '../../hooks/useConsolidatedInventory'
 import { usePagination } from '../../hooks/usePagination'
 import { AppLayout } from '../../layouts/AppLayout'
+import type { GeneralStockDetail } from '../../types/inventory'
+import type { RestockValues } from '../../utils/generalStock'
+import { formatQuantity } from '../../utils/inventory'
 
 import './InventoryPage.css'
 
@@ -34,6 +41,18 @@ export function ConsolidatedInventoryPage() {
     ...params,
     categoryId: filters.categoria === 'todos' ? undefined : filters.categoria,
   })
+
+  const [restocking, setRestocking] = useState(false)
+  const [feedback, setFeedback] = useState<string | null>(null)
+
+  const handleRestocked = (stock: GeneralStockDetail, values: RestockValues) => {
+    setRestocking(false)
+    const unit = stock.product.unitOfMeasure.abbreviation
+    const verb = values.movementType === 'ADJUSTMENT_ENTRY' ? 'Se agregaron' : 'Se retiraron'
+    setFeedback(
+      `${verb} ${formatQuantity(Number(values.quantity), unit)} al stock general de ${stock.product.name}. Ahora tiene ${formatQuantity(stock.totalQuantity, unit)}.`,
+    )
+  }
 
   const handleSearch = (term: string) => {
     if (term === search) refetch()
@@ -77,7 +96,20 @@ export function ConsolidatedInventoryPage() {
   }
 
   return (
-    <AppLayout title="Inventario consolidado">
+    <AppLayout
+      title="Inventario consolidado"
+      actions={
+        <Button
+          variant="outline"
+          onClick={() => {
+            setFeedback(null)
+            setRestocking(true)
+          }}
+        >
+          Ajustar stock general
+        </Button>
+      }
+    >
       <div className="inventory-page__toolbar">
         <SearchBar
           id="consolidated-search"
@@ -105,6 +137,12 @@ export function ConsolidatedInventoryPage() {
         <ReloadButton onReload={refetch} loading={status === 'loading'} />
       </div>
 
+      {feedback && (
+        <div className="inventory-page__feedback">
+          <Alert tone="success">{feedback}</Alert>
+        </div>
+      )}
+
       <div className="inventory-page__card">{renderList()}</div>
 
       <div className="inventory-page__footer">
@@ -125,6 +163,17 @@ export function ConsolidatedInventoryPage() {
           desglose por sede con el stock mínimo de cada una.
         </p>
       </div>
+
+      <Modal
+        open={restocking}
+        title="Ajustar stock general"
+        description="Agrega o retira unidades del stock general de un producto. El ajuste queda como movimiento y en la auditoría."
+        onClose={() => setRestocking(false)}
+      >
+        {restocking && (
+          <RestockForm onRestocked={handleRestocked} onCancel={() => setRestocking(false)} />
+        )}
+      </Modal>
     </AppLayout>
   )
 }

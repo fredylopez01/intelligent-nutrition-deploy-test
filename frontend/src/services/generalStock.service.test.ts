@@ -20,4 +20,19 @@ describe('generalStockService', () => {
 
     expect(http.get).toHaveBeenCalledWith('/general-stock/product-whey', { token: 'token' })
   })
+
+  it('adjusts the general stock of a product with its reason', async () => {
+    vi.mocked(http.post).mockResolvedValue({ lots: [] })
+    const payload = {
+      quantity: 10,
+      movementType: 'ADJUSTMENT_ENTRY' as const,
+      reason: 'Conteo físico del almacén central',
+    }
+
+    await generalStockService.restock('product-whey', payload, 'token')
+
+    expect(http.post).toHaveBeenCalledWith('/general-stock/product-whey/restock', payload, {
+      token: 'token',
+    })
+  })
 })
