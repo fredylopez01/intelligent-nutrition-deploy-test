@@ -29,6 +29,9 @@ blob-report/
 .vscode/
 .idea/
 
+# AI tooling
+.commandcode/
+
 # OS
 .DS_Store
 Thumbs.db
