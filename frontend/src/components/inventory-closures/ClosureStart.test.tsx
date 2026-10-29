@@ -44,7 +44,7 @@ describe('ClosureStart', () => {
     const { user, onStarted } = renderStart()
 
     expect(screen.getByText('lunes, 26 de octubre')).toBeInTheDocument()
-    expect(screen.getByText(/El conteo es ciego/)).toBeInTheDocument()
+    expect(screen.getByText(/cantidad esperada según el sistema/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Iniciar cierre del día' }))
 
     await waitFor(() => expect(onStarted).toHaveBeenCalledWith(closure))

@@ -111,7 +111,7 @@ describe('ClosurePage today', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Iniciar cierre del día' }))
 
-    expect(await screen.findByText('Conteo ciego de Centro')).toBeInTheDocument()
+    expect(await screen.findByText('Conteo de Centro')).toBeInTheDocument()
     expect(screen.getByRole('table', { name: 'Lotes a contar' })).toBeInTheDocument()
   })
 
@@ -120,7 +120,7 @@ describe('ClosurePage today', () => {
     get.mockResolvedValue(buildClosure())
     renderPage()
 
-    expect(await screen.findByText('Conteo ciego de Centro')).toBeInTheDocument()
+    expect(await screen.findByText('Conteo de Centro')).toBeInTheDocument()
     expect(get).toHaveBeenCalledWith('closure-1', 'test-token')
   })
 
@@ -161,7 +161,7 @@ describe('ClosurePage today', () => {
     )
     const { user } = renderPage()
 
-    await screen.findByText('Conteo ciego de Centro')
+    await screen.findByText('Conteo de Centro')
     await user.type(
       screen.getByLabelText('Cantidad contada de Whey Protein 2 lb, vence 30 sept 2026'),
       '7',
@@ -198,19 +198,26 @@ describe('ClosurePage today', () => {
     ).toBeInTheDocument()
   })
 
-  it('does not offer the count to the superadmin', async () => {
+  it('lets the superadmin count the closure of the branch it chooses', async () => {
     auth.role = 'SUPERADMIN'
     auth.branches = []
     vi.mocked(branchesService.list).mockResolvedValue({
       data: [{ id: 'branch-centro', name: 'Centro', active: true, address: 'Calle 1', phone: '3' }],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     } as never)
-    renderPage()
+    const { user } = renderPage()
 
     expect(await screen.findByText('25 oct 2026')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Iniciar cierre del día' })).not.toBeInTheDocument()
     expect(historyCalls()[0].branchId).toBeUndefined()
     expect(screen.getByRole('columnheader', { name: 'Sede' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Elige una sede para hacer o revisar su cierre de hoy.'),
+    ).toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Sede'), 'branch-centro')
+
+    expect(
+      await screen.findByRole('button', { name: 'Iniciar cierre del día' }),
+    ).toBeInTheDocument()
   })
 })
 

@@ -399,6 +399,7 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
         referenceCode: `IC-${runId}-B`,
         unit: UNIT_ABREVIATION,
         expirationDate: "2027-03-01",
+        systemQuantity: 5,
         physicalQuantity: null,
         observation: null,
       });
@@ -408,7 +409,7 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
       expect(await closureCount(mainBranchId)).toBe(1);
     });
 
-    it("snapshots the system quantity of each lot without revealing it", async () => {
+    it("snapshots the system quantity of each lot", async () => {
       const closure = await closureOfBranch(mainBranchId);
       const details = await prisma.inventoryClosureDetail.findMany({
         where: { closureId: closure.id },
@@ -518,8 +519,8 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
       expect(await closureCount(noAccessBranchId)).toBe(0);
     });
 
-    it.each<TokenKey>(["SUPERADMIN", "DEV", NO_ACCESS_ROLE])(
-      "rejects the %s role, since only the branch roles count the stock",
+    it.each<TokenKey>(["DEV", NO_ACCESS_ROLE])(
+      "rejects the %s role, since it does not count the stock",
       async (tokenKey) => {
         const response = await postClosure(
           noAccessBranchId,
@@ -530,6 +531,19 @@ describe("POST /api/v1/branches/:branchId/inventory-closures (e2e)", () => {
         expect(await closureCount(noAccessBranchId)).toBe(0);
       },
     );
+
+    it("lets the superadmin create the closure of any branch", async () => {
+      const response = await postClosure(
+        noAccessBranchId,
+        tokens.SUPERADMIN,
+      ).expect(201);
+
+      expect(closureOf(response.body)).toMatchObject({
+        branchId: noAccessBranchId,
+        status: "PENDING",
+      });
+      expect(await closureCount(noAccessBranchId)).toBe(1);
+    });
 
     it("rejects a branch leader out of its assigned branch", async () => {
       const response = await postClosure(

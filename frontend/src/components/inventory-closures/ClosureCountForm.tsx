@@ -4,7 +4,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { ApiError } from '../../services/http'
 import { inventoryClosuresService } from '../../services/inventoryClosures.service'
 import type { ClosureCount, InventoryClosure } from '../../types/inventoryClosure'
-import { expirationState, formatExpirationDate } from '../../utils/inventory'
+import { expirationState, formatExpirationDate, formatQuantity } from '../../utils/inventory'
 import {
   CLOSURE_OBSERVATION_MAX_LENGTH,
   countError,
@@ -216,6 +216,7 @@ export function ClosureCountForm({ closure, onSaved, onConfirmed }: ClosureCount
       <div className="closure-count__list" role="table" aria-label="Lotes a contar">
         <div className="closure-count__head" role="row">
           <span role="columnheader">Producto y lote</span>
+          <span role="columnheader">Cantidad esperada</span>
           <span role="columnheader">Cantidad contada</span>
           <span role="columnheader">Observación</span>
         </div>
@@ -239,6 +240,14 @@ export function ClosureCountForm({ closure, onSaved, onConfirmed }: ClosureCount
                 <span className="closure-count__meta">
                   {item.referenceCode} · {lotText}
                   {expired && <span className="closure-count__expired">Vencido</span>}
+                </span>
+              </div>
+              <div className="closure-count__expected" role="cell">
+                <span className="closure-count__expected-label">Esperado</span>
+                <span className="closure-count__expected-value">
+                  {item.systemQuantity === undefined
+                    ? '—'
+                    : formatQuantity(item.systemQuantity, item.unit)}
                 </span>
               </div>
               <div className="closure-count__field" role="cell">

@@ -21,7 +21,7 @@ export class InventoryClosuresController {
 
   @Post()
   @HttpCode(201)
-  @Roles("BRANCH_LEADER", "BRANCH_ASSISTANT")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   create(
     @Param("branchId", new ParseUUIDPipe()) branchId: string,
     @CurrentUser() currentUser: AuthenticatedUser,

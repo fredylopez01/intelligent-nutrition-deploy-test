@@ -190,7 +190,7 @@ describe("InventoryClosuresService", () => {
       });
     });
 
-    it("returns the lots to count without the system quantity", async () => {
+    it("returns the lots to count with their expected quantity", async () => {
       const result = await service.create(branchId, leader);
 
       expect(result).toMatchObject({
@@ -206,7 +206,8 @@ describe("InventoryClosuresService", () => {
         "2026-09-30",
         "2027-06-30",
       ]);
-      expect(result.items[0]).not.toHaveProperty("systemQuantity");
+      expect(result.items[0]).toHaveProperty("systemQuantity");
+      expect(result.items[0]).not.toHaveProperty("difference");
       expect(result).not.toHaveProperty("totalDifferences");
     });
 
@@ -252,16 +253,16 @@ describe("InventoryClosuresService", () => {
     });
   });
 
-  describe("findOne and the blind count", () => {
-    it("never reveals the system quantity while the closure is pending, not even to the superadmin", async () => {
+  describe("findOne with the expected quantity", () => {
+    it("shows the expected quantity but not the difference while the closure is pending", async () => {
       prisma.inventoryClosure.findUnique.mockResolvedValue(
         closureRow("PENDING"),
       );
 
-      const result = await service.findOne(closureId, superadmin);
+      const result = await service.findOne(closureId, assistant);
 
       for (const item of result.items) {
-        expect(item).not.toHaveProperty("systemQuantity");
+        expect(item).toHaveProperty("systemQuantity");
         expect(item).not.toHaveProperty("difference");
       }
       expect(result).toMatchObject({ countedItems: 2, totalItems: 2 });
@@ -304,7 +305,7 @@ describe("InventoryClosuresService", () => {
 
       const result = await service.findOne(closureId, assistant);
 
-      expect(result.items[0]).not.toHaveProperty("systemQuantity");
+      expect(result.items[0]).not.toHaveProperty("difference");
       expect(result).not.toHaveProperty("totalDifferences");
     });
 

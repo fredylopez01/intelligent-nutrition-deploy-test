@@ -144,6 +144,9 @@ export function ClosureResult({ closure, showDifferences }: ClosureResultProps) 
                 <tr>
                   <th scope="col">Producto y lote</th>
                   <th scope="col" className="closure-result__number">
+                    Esperado
+                  </th>
+                  <th scope="col" className="closure-result__number">
                     Contado
                   </th>
                   <th scope="col" className="closure-result__note">
@@ -161,6 +164,11 @@ export function ClosureResult({ closure, showDifferences }: ClosureResultProps) 
                           ? `Vence ${formatExpirationDate(item.expirationDate)}`
                           : 'Sin lote'}
                       </span>
+                    </td>
+                    <td className="closure-result__number">
+                      {item.systemQuantity === undefined
+                        ? '—'
+                        : formatQuantity(item.systemQuantity, item.unit)}
                     </td>
                     <td className="closure-result__number">
                       {item.physicalQuantity === null

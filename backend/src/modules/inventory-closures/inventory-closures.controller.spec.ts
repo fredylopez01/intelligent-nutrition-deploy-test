@@ -46,7 +46,7 @@ describe("InventoryClosuresController", () => {
     await expect(controller.create(branchId, currentUser)).rejects.toBe(error);
   });
 
-  it("is restricted to the branch roles that count the stock", () => {
+  it("is open to the superadmin and the branch roles that count the stock", () => {
     const descriptor = Object.getOwnPropertyDescriptor(
       InventoryClosuresController.prototype,
       "create",
@@ -55,6 +55,6 @@ describe("InventoryClosuresController", () => {
       ? (Reflect.getMetadata(ROLES_KEY, descriptor.value as object) as unknown)
       : undefined;
 
-    expect(roles).toEqual(["BRANCH_LEADER", "BRANCH_ASSISTANT"]);
+    expect(roles).toEqual(["SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT"]);
   });
 });

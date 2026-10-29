@@ -99,7 +99,14 @@ export function ClosurePage() {
   }
 
   const renderToday = () => {
-    if (!canCount || !branch) return null
+    if (!canCount) return null
+    if (!branch) {
+      return (
+        <div className="closure-page__today">
+          <Alert tone="info">Elige una sede para hacer o revisar su cierre de hoy.</Alert>
+        </div>
+      )
+    }
     if (today.status === 'loading' || today.status === 'idle') {
       return (
         <div className="closure-page__today closure-page__loading" role="status">
@@ -136,7 +143,7 @@ export function ClosurePage() {
             <div>
               <p className="closure-card__eyebrow">{formatClosureDay(today.closure.closureDate)}</p>
               <h2 id="closure-count-title" className="closure-card__title">
-                Conteo ciego de {branch.name}
+                Conteo de {branch.name}
               </h2>
             </div>
           </div>

@@ -99,14 +99,10 @@ function toClosureResponse(
       expirationDate: detail.expirationDate
         ? formatExpirationDate(detail.expirationDate)
         : null,
+      systemQuantity: detail.systemQuantity,
       physicalQuantity: detail.physicalQuantity,
       observation: detail.observation,
-      ...(reveal
-        ? {
-            systemQuantity: detail.systemQuantity,
-            difference: detail.difference,
-          }
-        : {}),
+      ...(reveal ? { difference: detail.difference } : {}),
     }));
 
   return {
