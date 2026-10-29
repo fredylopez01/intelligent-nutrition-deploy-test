@@ -4,7 +4,7 @@ import { ApiError } from '../services/http'
 import type { RoleName } from '../types/auth'
 import type { SaleStatus } from '../types/sale'
 
-export const SALE_REGISTER_ROLES: RoleName[] = ['BRANCH_LEADER', 'BRANCH_ASSISTANT']
+export const SALE_REGISTER_ROLES: RoleName[] = ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT']
 export const SALE_REVERSE_ROLES: RoleName[] = ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT']
 export const REVERSAL_REASON_MIN_LENGTH = 10
 export const REVERSAL_REASON_MAX_LENGTH = 500
@@ -32,9 +32,49 @@ export const reverseSaleSchema = z.object({
 
 export type ReverseSaleValues = z.infer<typeof reverseSaleSchema>
 
+export function toCents(value: string | number): number {
+  return Math.round(Number(value) * 100)
+}
+
+export function centsToAmount(cents: number): string {
+  return (cents / 100).toFixed(2)
+}
+
+export function selectionTotalCents(
+  lines: { product: { price: string }; quantity: number }[],
+): number {
+  return lines.reduce((sum, line) => sum + toCents(line.product.price) * line.quantity, 0)
+}
+
+export interface StockShortage {
+  productName: string
+  requested: number
+  available: number
+}
+
+export function stockShortages(error: unknown): StockShortage[] {
+  if (!(error instanceof ApiError) || error.code !== 'INSUFFICIENT_STOCK') return []
+  const details = error.details as { items?: StockShortage[] } | undefined
+  return details?.items ?? []
+}
+
 export function resolveSaleError(error: unknown, fallback: string): string {
   if (!(error instanceof ApiError)) return fallback
   switch (error.code) {
+    case 'INSUFFICIENT_STOCK':
+      return 'Ya no hay unidades suficientes de algunos productos. Ajusta las cantidades de la venta.'
+    case 'PAYMENT_TOTAL_MISMATCH':
+      return 'El total cambió porque se actualizó un precio. Recarga los productos y vuelve a intentar.'
+    case 'INVENTORY_CLOSED':
+      return 'El inventario de la sede ya se cerró hoy: no se pueden registrar más ventas hasta mañana.'
+    case 'PAYMENT_METHOD_INACTIVE':
+    case 'PAYMENT_METHOD_NOT_FOUND':
+      return 'El método de pago ya no está disponible. Elige otro.'
+    case 'PRODUCT_INACTIVE':
+    case 'PRODUCT_NOT_FOUND':
+      return 'Uno de los productos ya no se puede vender. Quítalo de la venta y vuelve a intentar.'
+    case 'BRANCH_INACTIVE':
+      return 'La sede está inactiva: no puede registrar ventas.'
     case 'SALE_ALREADY_REVERSED':
       return 'Esta venta ya fue reversada. Recarga el listado para ver su estado.'
     case 'SALE_DAY_CLOSED':

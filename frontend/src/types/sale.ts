@@ -80,3 +80,10 @@ export interface SalesListResponse {
   data: SaleSummary[]
   meta: PaginationMeta
 }
+
+export interface CreateSalePayload {
+  branchId: string
+  customerId?: string | null
+  items: { productId: string; quantity: number }[]
+  payments: { paymentMethodId: string; amount: string; reference?: string | null }[]
+}

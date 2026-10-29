@@ -14,8 +14,12 @@ function rolesOf(method: keyof SalesController): unknown {
 }
 
 describe("SalesController roles", () => {
-  it("lets only the branch roles register sales", () => {
-    expect(rolesOf("create")).toEqual(["BRANCH_LEADER", "BRANCH_ASSISTANT"]);
+  it("lets the superadmin and the branch roles register sales", () => {
+    expect(rolesOf("create")).toEqual([
+      "SUPERADMIN",
+      "BRANCH_LEADER",
+      "BRANCH_ASSISTANT",
+    ]);
   });
 
   it("lets the superadmin and the branch roles reverse a sale", () => {

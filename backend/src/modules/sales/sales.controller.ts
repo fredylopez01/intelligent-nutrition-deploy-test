@@ -43,7 +43,7 @@ export class SalesController {
   }
 
   @Post()
-  @Roles("BRANCH_LEADER", "BRANCH_ASSISTANT")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   create(
     @Body() createSaleDto: CreateSaleDto,
     @CurrentUser() currentUser: AuthenticatedUser,

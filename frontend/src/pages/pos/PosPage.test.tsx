@@ -6,9 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { categoriesService } from '../../services/categories.service'
 import { ApiError } from '../../services/http'
+import { paymentMethodsService } from '../../services/paymentMethods.service'
 import { salesService } from '../../services/sales.service'
 import { unitsService } from '../../services/units.service'
-import { buildSellable } from '../../test-utils/sales'
+import { CASH, NEQUI, paymentMethodsPage } from '../../test-utils/paymentMethods'
+import { buildSale, buildSellable } from '../../test-utils/sales'
 import type { SellableProduct } from '../../types/sale'
 
 import { PosPage } from './PosPage'
@@ -19,7 +21,11 @@ const auth = vi.hoisted(() => ({
 }))
 
 vi.mock('../../services/sales.service', () => ({
-  salesService: { sellableProducts: vi.fn() },
+  salesService: { sellableProducts: vi.fn(), create: vi.fn() },
+}))
+
+vi.mock('../../services/paymentMethods.service', () => ({
+  paymentMethodsService: { list: vi.fn() },
 }))
 
 vi.mock('../../services/categories.service', () => ({
@@ -51,6 +57,8 @@ vi.mock('../../layouts/AppLayout', () => ({
 }))
 
 const sellable = vi.mocked(salesService.sellableProducts)
+const createSale = vi.mocked(salesService.create)
+const listMethods = vi.mocked(paymentMethodsService.list)
 const whey = buildSellable()
 const creatine = buildSellable({
   productId: 'product-creatine',
@@ -86,6 +94,8 @@ beforeEach(() => {
   auth.role = 'BRANCH_ASSISTANT'
   auth.branches = [{ id: 'branch-centro', name: 'Centro' }]
   sellable.mockResolvedValue(page([whey, creatine]))
+  listMethods.mockResolvedValue(paymentMethodsPage([CASH, NEQUI]))
+  createSale.mockResolvedValue(buildSale())
   const empty = { data: [], meta: { page: 1, limit: 100, total: 0, totalPages: 0 } }
   vi.mocked(categoriesService.list).mockResolvedValue({
     data: [{ id: 'cat-protein', name: 'Proteínas', description: null, active: true }],
@@ -181,19 +191,112 @@ describe('PosPage', () => {
     expect(await screen.findByText('Whey Protein 2 lb')).toBeInTheDocument()
   })
 
-  it('lets the superadmin only consult the products', async () => {
+  it('lets the superadmin sell in any active branch', async () => {
     auth.role = 'SUPERADMIN'
     auth.branches = []
     const { branchesService } = await import('../../services/branches.service')
     vi.mocked(branchesService.list).mockResolvedValue({
-      data: [{ id: 'branch-norte', name: 'Norte', active: true, address: 'Calle 2', phone: '3' }],
-      meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
+      data: [
+        { id: 'branch-norte', name: 'Norte', active: true, address: 'Calle 2', phone: '3' },
+        { id: 'branch-sur', name: 'Sur', active: true, address: 'Calle 3', phone: '4' },
+      ],
+      meta: { page: 1, limit: 100, total: 2, totalPages: 1 },
     } as never)
-    renderPage()
+    const { user } = renderPage()
 
-    expect(await screen.findByText('Whey Protein 2 lb')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Agregar/ })).not.toBeInTheDocument()
-    expect(screen.getByText(/Las ventas las registran el líder y el ayudante/)).toBeInTheDocument()
+    await user.selectOptions(await screen.findByLabelText('Sede'), 'branch-sur')
+    await user.click(
+      await screen.findByRole('button', { name: 'Agregar Whey Protein 2 lb a la venta' }),
+    )
+    await waitFor(() => expect(screen.getByLabelText('Método de pago')).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Finalizar venta' }))
+    await user.click(screen.getByRole('button', { name: /Cobrar/ }))
+
+    await waitFor(() =>
+      expect(createSale).toHaveBeenCalledWith(
+        expect.objectContaining({ branchId: 'branch-sur' }),
+        'test-token',
+      ),
+    )
+  })
+
+  it('types the quantity of a product within its stock', async () => {
+    const { user } = renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'Agregar Whey Protein 2 lb a la venta' }),
+    )
+
+    const quantity = screen.getByLabelText('Unidades de Whey Protein 2 lb')
+    await user.clear(quantity)
+    await user.type(quantity, '9')
+
+    expect(quantity).toHaveValue('3')
+    expect(screen.getByText('$ 435.000')).toBeInTheDocument()
+  })
+
+  it('charges the sale with the chosen method and shows the ticket', async () => {
+    const { user } = renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'Agregar Whey Protein 2 lb a la venta' }),
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Agregar una unidad de Whey Protein 2 lb' }),
+    )
+    await waitFor(() => expect(screen.getByLabelText('Método de pago')).toBeEnabled())
+    await user.selectOptions(screen.getByLabelText('Método de pago'), 'pm-nequi')
+    await user.type(screen.getByLabelText('Referencia del pago (opcional)'), ' NQ-123 ')
+    await user.click(screen.getByRole('button', { name: 'Finalizar venta' }))
+
+    const dialog = within(screen.getByRole('dialog', { name: 'Confirmar venta' }))
+    expect(dialog.getByText('Nequi · Ref. NQ-123')).toBeInTheDocument()
+    await user.click(dialog.getByRole('button', { name: /Cobrar\s\$\s290\.000/ }))
+
+    expect(createSale).toHaveBeenCalledWith(
+      {
+        branchId: 'branch-centro',
+        items: [{ productId: 'product-whey', quantity: 2 }],
+        payments: [{ paymentMethodId: 'pm-nequi', amount: '290000.00', reference: 'NQ-123' }],
+      },
+      'test-token',
+    )
+    const ticket = within(await screen.findByRole('dialog', { name: 'Venta registrada' }))
+    expect(ticket.getByText('V-20261026-0001')).toBeInTheDocument()
+    await user.click(ticket.getByRole('button', { name: 'Nueva venta' }))
+
+    expect(screen.getByText(/Agrega productos desde el panel/)).toBeInTheDocument()
+    expect(sellable).toHaveBeenCalledTimes(2)
+  })
+
+  it('lists the products without enough stock and keeps the sale', async () => {
+    createSale.mockRejectedValueOnce(
+      new ApiError(
+        'Short',
+        422,
+        { items: [{ productName: 'Whey Protein 2 lb', requested: 1, available: 0 }] },
+        'INSUFFICIENT_STOCK',
+      ),
+    )
+    const { user } = renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'Agregar Whey Protein 2 lb a la venta' }),
+    )
+    await waitFor(() => expect(screen.getByLabelText('Método de pago')).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Finalizar venta' }))
+    await user.click(screen.getByRole('button', { name: /Cobrar\s\$\s145\.000/ }))
+
+    expect(await screen.findByText('Whey Protein 2 lb: pediste 1, quedan 0.')).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Confirmar venta' })).toBeInTheDocument()
+  })
+
+  it('asks for an active payment method before charging', async () => {
+    listMethods.mockResolvedValue(paymentMethodsPage([]))
+    const { user } = renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'Agregar Whey Protein 2 lb a la venta' }),
+    )
+
+    expect(await screen.findByText(/No hay métodos de pago activos/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Finalizar venta' })).toBeDisabled()
   })
 
   it('shows the loading state while the products arrive', async () => {

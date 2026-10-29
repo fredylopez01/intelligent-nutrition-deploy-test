@@ -1,4 +1,5 @@
 import type {
+  CreateSalePayload,
   Sale,
   SalesListParams,
   SalesListResponse,
@@ -26,6 +27,9 @@ export const salesService = {
 
   list: (params: SalesListParams, token: string | null) =>
     http.get<SalesListResponse>(`/sales${buildQuery(params)}`, { token }),
+
+  create: (payload: CreateSalePayload, token: string | null) =>
+    http.post<Sale>('/sales', payload, { token }),
 
   get: (saleId: string, token: string | null) => http.get<Sale>(`/sales/${saleId}`, { token }),
 
