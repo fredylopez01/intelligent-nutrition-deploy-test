@@ -1,26 +1,30 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import type { FocusEvent, ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import type { FocusEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+
+import { useAuth } from '../hooks/useAuth'
+import { getRoleLabel } from '../utils/format'
+
+import { Avatar } from './ui/Avatar'
 
 import './UserMenu.css'
 
-const PANEL_WIDTH = 220
+const PANEL_WIDTH = 264
 const PANEL_GAP = 8
+const VIEWPORT_MARGIN = 8
 
 interface PanelPosition {
   top: number
   left: number
-  width: number
 }
 
-// Fixed positioning escapes the sidebar's overflow clipping; falls back below the trigger when the right side has no room.
 function getPanelPosition(trigger: HTMLElement): PanelPosition {
   const rect = trigger.getBoundingClientRect()
-  const fitsRight = rect.right + PANEL_GAP + PANEL_WIDTH <= window.innerWidth
-  if (fitsRight) {
-    return { top: rect.top, left: rect.right + PANEL_GAP, width: PANEL_WIDTH }
-  }
-  return { top: rect.bottom + PANEL_GAP, left: rect.left, width: rect.width }
+  const left = Math.min(
+    Math.max(rect.right - PANEL_WIDTH, VIEWPORT_MARGIN),
+    window.innerWidth - PANEL_WIDTH - VIEWPORT_MARGIN,
+  )
+  return { top: rect.bottom + PANEL_GAP, left }
 }
 
 function ProfileIcon() {
@@ -59,12 +63,28 @@ function SettingsIcon() {
   )
 }
 
-interface UserMenuProps {
-  triggerClassName: string
-  children: ReactNode
+function LogoutIcon() {
+  return (
+    <svg
+      className="user-menu__icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="m16 17 5-5-5-5" />
+      <path d="M21 12H9" />
+    </svg>
+  )
 }
 
-export function UserMenu({ triggerClassName, children }: UserMenuProps) {
+export function UserMenu() {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [position, setPosition] = useState<PanelPosition | null>(null)
   const panelId = useId()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -95,6 +115,8 @@ export function UserMenu({ triggerClassName, children }: UserMenuProps) {
     }
   }, [open])
 
+  if (!user) return null
+
   const close = () => setPosition(null)
   const toggle = () => {
     const trigger = triggerRef.current
@@ -104,36 +126,56 @@ export function UserMenu({ triggerClassName, children }: UserMenuProps) {
   const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
     if (!event.currentTarget.contains(event.relatedTarget)) close()
   }
+  const handleLogout = () => {
+    close()
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   return (
-    <div ref={containerRef} onBlur={handleBlur}>
+    <div ref={containerRef} className="user-menu" onBlur={handleBlur}>
       <button
         ref={triggerRef}
         type="button"
-        className={`user-menu__trigger ${triggerClassName}`}
+        className="user-menu__trigger"
+        aria-label={`Menú de usuario de ${user.fullName}`}
+        aria-haspopup="true"
         aria-expanded={open}
-        aria-controls={panelId}
+        aria-controls={open ? panelId : undefined}
         onClick={toggle}
       >
-        {children}
+        <Avatar name={user.fullName} size="md" highlighted />
       </button>
 
       {position && (
-        <nav
+        <div
           id={panelId}
           className="user-menu__panel"
-          style={{ top: position.top, left: position.left, width: position.width }}
-          aria-label="Menú de usuario"
+          style={{ top: position.top, left: position.left, width: PANEL_WIDTH }}
         >
-          <Link to="/perfil" className="user-menu__item" onClick={close}>
-            <ProfileIcon />
-            Mi perfil
-          </Link>
-          <Link to="/configuracion" className="user-menu__item" onClick={close}>
-            <SettingsIcon />
-            Configuración
-          </Link>
-        </nav>
+          <div className="user-menu__header">
+            <Avatar name={user.fullName} size="md" highlighted />
+            <div className="user-menu__identity">
+              <p className="user-menu__name">{user.fullName}</p>
+              <p className="user-menu__email">{user.email}</p>
+              <p className="user-menu__role">{getRoleLabel(user.role.name)}</p>
+            </div>
+          </div>
+          <nav className="user-menu__items" aria-label="Menú de usuario">
+            <Link to="/perfil" className="user-menu__item" onClick={close}>
+              <ProfileIcon />
+              Mi perfil
+            </Link>
+            <Link to="/configuracion" className="user-menu__item" onClick={close}>
+              <SettingsIcon />
+              Configuración
+            </Link>
+          </nav>
+          <button type="button" className="user-menu__logout" onClick={handleLogout}>
+            <LogoutIcon />
+            Cerrar sesión
+          </button>
+        </div>
       )}
     </div>
   )

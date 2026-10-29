@@ -47,21 +47,33 @@ export const AUDIT_CSV_HEADERS = [
   'Después',
 ]
 
-export function buildAuditCsv(logs: AuditLog[]): string {
+export const AUDIT_CSV_SUMMARY_HEADERS = ['Fecha', 'Ejecutado por', 'Acción', 'Motivo', 'IP']
+
+export function buildAuditCsv(logs: AuditLog[], includeDetails = true): string {
   const rows = logs.map((log) =>
-    [
-      formatDateTime(log.createdAt),
-      auditExecutor(log),
-      getActionLabel(log.action),
-      getEntityLabel(log.entity),
-      log.entityId,
-      log.reason,
-      log.ipAddress,
-      log.oldData,
-      log.newData,
-    ]
+    (includeDetails
+      ? [
+          formatDateTime(log.createdAt),
+          auditExecutor(log),
+          getActionLabel(log.action),
+          getEntityLabel(log.entity),
+          log.entityId,
+          log.reason,
+          log.ipAddress,
+          log.oldData,
+          log.newData,
+        ]
+      : [
+          formatDateTime(log.createdAt),
+          auditExecutor(log),
+          getActionLabel(log.action),
+          log.reason,
+          log.ipAddress,
+        ]
+    )
       .map(csvCell)
       .join(','),
   )
-  return `${BOM}${[AUDIT_CSV_HEADERS.join(','), ...rows].join('\n')}`
+  const headers = includeDetails ? AUDIT_CSV_HEADERS : AUDIT_CSV_SUMMARY_HEADERS
+  return `${BOM}${[headers.join(','), ...rows].join('\n')}`
 }

@@ -10,9 +10,10 @@ import './AuditLogsTable.css'
 
 interface AuditLogsTableProps {
   logs: AuditLog[]
+  showDetails: boolean
 }
 
-export function AuditLogsTable({ logs }: AuditLogsTableProps) {
+export function AuditLogsTable({ logs, showDetails }: AuditLogsTableProps) {
   const [expanded, setExpanded] = useState<string | null>(null)
 
   return (
@@ -22,12 +23,14 @@ export function AuditLogsTable({ logs }: AuditLogsTableProps) {
         <tr>
           <th scope="col">Ejecutado por</th>
           <th scope="col">Acción</th>
-          <th scope="col">Entidad</th>
+          {showDetails && <th scope="col">Entidad</th>}
           <th scope="col">Motivo</th>
           <th scope="col">Fecha</th>
-          <th scope="col" className="audit-logs-table__col-detail">
-            <span className="sr-only">Detalle</span>
-          </th>
+          {showDetails && (
+            <th scope="col" className="audit-logs-table__col-detail">
+              <span className="sr-only">Detalle</span>
+            </th>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -48,22 +51,26 @@ export function AuditLogsTable({ logs }: AuditLogsTableProps) {
                   )}
                 </td>
                 <td className="audit-logs-table__cell-muted">{getActionLabel(log.action)}</td>
-                <td className="audit-logs-table__cell-muted">{getEntityLabel(log.entity)}</td>
+                {showDetails && (
+                  <td className="audit-logs-table__cell-muted">{getEntityLabel(log.entity)}</td>
+                )}
                 <td className="audit-logs-table__reason">{log.reason || '—'}</td>
                 <td className="audit-logs-table__cell-muted">{formatDateTime(log.createdAt)}</td>
-                <td className="audit-logs-table__col-detail">
-                  <button
-                    type="button"
-                    className="audit-logs-table__toggle"
-                    aria-expanded={isOpen}
-                    aria-controls={detailId}
-                    onClick={() => setExpanded(isOpen ? null : log.id)}
-                  >
-                    {isOpen ? 'Ocultar' : 'Ver cambios'}
-                  </button>
-                </td>
+                {showDetails && (
+                  <td className="audit-logs-table__col-detail">
+                    <button
+                      type="button"
+                      className="audit-logs-table__toggle"
+                      aria-expanded={isOpen}
+                      aria-controls={detailId}
+                      onClick={() => setExpanded(isOpen ? null : log.id)}
+                    >
+                      {isOpen ? 'Ocultar' : 'Ver cambios'}
+                    </button>
+                  </td>
+                )}
               </tr>
-              {isOpen && (
+              {showDetails && isOpen && (
                 <tr id={detailId} className="audit-logs-table__detail-row">
                   <td colSpan={6}>
                     <AuditLogChanges log={log} />

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import type { AuditLog } from '../types/auditLog'
 
-import { AUDIT_CSV_HEADERS, auditExecutor, buildAuditCsv } from './auditLogs'
+import {
+  AUDIT_CSV_HEADERS,
+  AUDIT_CSV_SUMMARY_HEADERS,
+  auditExecutor,
+  buildAuditCsv,
+} from './auditLogs'
 
 const log: AuditLog = {
   id: '1',
@@ -34,5 +39,13 @@ describe('audit helpers', () => {
     expect(row).toContain('Laura Pérez,Recepción,Compra,purchase-1')
     expect(row).toContain('"Recepción ""completa"", sin novedades"')
     expect(row).toContain('"{""status"":""FULLY_RECEIVED""}"')
+  })
+
+  it('leaves the entity and the changes out of the summary CSV', () => {
+    const [header, row] = buildAuditCsv([log], false).slice(1).split('\n')
+
+    expect(header).toBe(AUDIT_CSV_SUMMARY_HEADERS.join(','))
+    expect(row).not.toContain('Compra')
+    expect(row).not.toContain('FULLY_RECEIVED')
   })
 })
