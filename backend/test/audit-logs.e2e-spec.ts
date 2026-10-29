@@ -208,16 +208,34 @@ describe("GET /api/v1/audit-logs (e2e)", () => {
 
   describe("successful query", () => {
     it("returns the log list with pagination meta for a Superadmin", async () => {
-      const response = await listLogs("", tokens.SUPERADMIN).expect(200);
+      const response = await listLogs(
+        `?userId=${personIds.SUPERADMIN}&page=1&limit=2`,
+        tokens.SUPERADMIN,
+      ).expect(200);
 
       const body = response.body as ListResponse;
       expect(body.data.meta).toEqual({
         page: 1,
-        limit: 10,
-        total: 4,
-        totalPages: 1,
+        limit: 2,
+        total: 3,
+        totalPages: 2,
       });
-      expect(items(body)).toHaveLength(4);
+      expect(items(body)).toHaveLength(2);
+      expect(
+        items(body).every((log) => log.userId === personIds.SUPERADMIN),
+      ).toBe(true);
+
+      const secondPage = await listLogs(
+        `?userId=${personIds.SUPERADMIN}&page=2&limit=2`,
+        tokens.SUPERADMIN,
+      ).expect(200);
+      expect(items(secondPage.body as ListResponse)).toHaveLength(1);
+      expect((secondPage.body as ListResponse).data.meta).toEqual({
+        page: 2,
+        limit: 2,
+        total: 3,
+        totalPages: 2,
+      });
     });
 
     it("includes the executor person data for each log", async () => {
@@ -322,6 +340,28 @@ describe("GET /api/v1/audit-logs (e2e)", () => {
         action: "DELETE",
         userId: personIds.DEV,
         user: { id: personIds.DEV, fullName: "DEV E2E" },
+      });
+    });
+
+    it("combines the executor and action filters", async () => {
+      const response = await listLogs(
+        `?userId=${personIds.DEV}&action=DELETE`,
+        tokens.SUPERADMIN,
+      ).expect(200);
+
+      const body = response.body as ListResponse;
+      expect(items(body)).toHaveLength(1);
+      expect(items(body)[0]).toMatchObject({
+        action: "DELETE",
+        entity: "USER",
+        entityId: affectedUserB,
+        userId: personIds.DEV,
+      });
+      expect(body.data.meta).toEqual({
+        page: 1,
+        limit: 10,
+        total: 1,
+        totalPages: 1,
       });
     });
 
@@ -467,7 +507,7 @@ describe("GET /api/v1/audit-logs (e2e)", () => {
 
   describe("access", () => {
     it.each<RoleName>(["BRANCH_LEADER", "BRANCH_ASSISTANT"])(
-      "denies the audit history to the %s role",
+      "returns 403 for the non-privileged %s role",
       async (roleName) => {
         const response = await listLogs("", tokens[roleName]).expect(403);
 
