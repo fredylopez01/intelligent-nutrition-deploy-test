@@ -46,11 +46,23 @@ beforeEach(() => {
 })
 
 describe('ClosureCountForm', () => {
-  it('never shows the system quantity while counting', () => {
-    renderForm()
+  it('shows the expected quantity of each lot next to the count', () => {
+    renderForm(
+      buildClosure({
+        items: [
+          buildItem({ expirationDate: '2026-09-30', systemQuantity: 4 }),
+          buildItem({ expirationDate: '2027-06-30', systemQuantity: 12 }),
+        ],
+      }),
+    )
 
-    expect(screen.getByRole('table', { name: 'Lotes a contar' })).toBeInTheDocument()
-    expect(screen.queryByText(/Sistema/)).not.toBeInTheDocument()
+    const table = screen.getByRole('table', { name: 'Lotes a contar' })
+    expect(
+      within(table).getByRole('columnheader', { name: 'Cantidad esperada' }),
+    ).toBeInTheDocument()
+    const rows = within(table).getAllByRole('row').slice(1)
+    expect(within(rows[0]).getByText('4 und')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('12 und')).toBeInTheDocument()
     expect(screen.getByText('Vencido')).toBeInTheDocument()
   })
 

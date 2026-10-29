@@ -59,10 +59,11 @@ describe('ClosureResult', () => {
     expect(screen.getByText('Vencidos')).toBeInTheDocument()
   })
 
-  it('hides the system and the differences from the assistant', () => {
+  it('shows the assistant the expected quantity but not the differences', () => {
     render(<ClosureResult closure={confirmed} showDifferences={false} />)
 
-    expect(screen.queryByText('Sistema')).not.toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Esperado' })).toBeInTheDocument()
+    expect(screen.getByText('8 und')).toBeInTheDocument()
     expect(screen.queryByText('−2 und')).not.toBeInTheDocument()
     expect(
       screen.getByText('El líder de la sede revisa las diferencias contra el sistema.'),

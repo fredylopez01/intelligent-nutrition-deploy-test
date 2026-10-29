@@ -212,7 +212,7 @@ describe("Inventory closure flow (e2e)", () => {
     ]);
   });
 
-  it("saves a partial count and keeps every answer blind while pending", async () => {
+  it("saves a partial count and shows the expected quantity without differences while pending", async () => {
     const response = await putCounts(tokens.BRANCH_ASSISTANT, [
       { productId, expirationDate: "2027-06-30", physicalQuantity: 7 },
     ]).expect(200);
@@ -221,9 +221,16 @@ describe("Inventory closure flow (e2e)", () => {
       countedItems: 1,
       totalItems: 2,
     });
-    for (const token of [tokens.SUPERADMIN, tokens.BRANCH_LEADER]) {
+    for (const token of [
+      tokens.SUPERADMIN,
+      tokens.BRANCH_LEADER,
+      tokens.BRANCH_ASSISTANT,
+    ]) {
       const detail = closureOf((await getClosure(token).expect(200)).body);
-      expect(JSON.stringify(detail)).not.toContain("systemQuantity");
+      expect(
+        detail.items.every((item) => item.systemQuantity !== undefined),
+      ).toBe(true);
+      expect(JSON.stringify(detail)).not.toContain("difference");
       expect(detail).not.toHaveProperty("totalDifferences");
     }
   });
@@ -267,11 +274,15 @@ describe("Inventory closure flow (e2e)", () => {
     ]);
   });
 
-  it("the superadmin cannot count or confirm", async () => {
-    await putCounts(tokens.SUPERADMIN, [
+  it("lets the superadmin register counts", async () => {
+    const response = await putCounts(tokens.SUPERADMIN, [
       { productId, expirationDate: "2027-06-30", physicalQuantity: 8 },
-    ]).expect(403);
-    await confirm(tokens.SUPERADMIN).expect(403);
+    ]).expect(200);
+
+    expect(closureOf(response.body)).toMatchObject({
+      countedItems: 2,
+      totalItems: 2,
+    });
   });
 
   it("the assistant confirms without seeing the differences", async () => {
@@ -279,7 +290,7 @@ describe("Inventory closure flow (e2e)", () => {
 
     const closure = closureOf(response.body);
     expect(closure.status).toBe("CONFIRMED");
-    expect(JSON.stringify(closure)).not.toContain("systemQuantity");
+    expect(JSON.stringify(closure)).not.toContain("difference");
   });
 
   it("the leader sees the differences report after the confirmation", async () => {

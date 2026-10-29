@@ -71,12 +71,17 @@ describe("InventoryClosuresGlobalController.confirm", () => {
     ).rejects.toBe(error);
   });
 
-  it("lets the branch roles confirm, as the contract says", () => {
-    expect(rolesOf("confirm")).toEqual(["BRANCH_LEADER", "BRANCH_ASSISTANT"]);
+  it("lets the superadmin and the branch roles confirm", () => {
+    expect(rolesOf("confirm")).toEqual([
+      "SUPERADMIN",
+      "BRANCH_LEADER",
+      "BRANCH_ASSISTANT",
+    ]);
   });
 
-  it("lets only the branch roles register counts", () => {
+  it("lets the superadmin and the branch roles register counts", () => {
     expect(rolesOf("updateCounts")).toEqual([
+      "SUPERADMIN",
       "BRANCH_LEADER",
       "BRANCH_ASSISTANT",
     ]);

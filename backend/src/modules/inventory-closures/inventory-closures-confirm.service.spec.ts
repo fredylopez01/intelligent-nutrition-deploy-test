@@ -189,10 +189,11 @@ describe("InventoryClosuresService.confirm", () => {
     ]);
   });
 
-  it("keeps the report blind for the assistant who confirms", async () => {
+  it("keeps the differences out of the report for the assistant who confirms", async () => {
     const result = await service.confirm(closureId, assistant);
 
-    expect(result.items[0]).not.toHaveProperty("systemQuantity");
+    expect(result.items[0]).toHaveProperty("systemQuantity");
+    expect(result.items[0]).not.toHaveProperty("difference");
     expect(result).not.toHaveProperty("totalDifferences");
   });
 

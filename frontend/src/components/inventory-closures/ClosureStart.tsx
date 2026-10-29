@@ -54,8 +54,8 @@ export function ClosureStart({ branchId, branchName, today, onStarted }: Closure
         Cierre de inventario de {branchName}
       </h2>
       <p className="closure-card__text">
-        Al iniciar, el sistema toma una foto de las existencias de cada lote y te pide contarlas. El
-        conteo es ciego: no verás lo que dice el sistema hasta que el cierre se confirme.
+        Al iniciar, el sistema toma una foto de las existencias de cada lote y te pide contarlas.
+        Junto a cada lote verás la cantidad esperada según el sistema.
       </p>
       <ol className="closure-start__steps">
         <li>Cuenta cada lote en el estante y escribe la cantidad.</li>

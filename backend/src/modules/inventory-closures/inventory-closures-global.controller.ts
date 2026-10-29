@@ -45,7 +45,7 @@ export class InventoryClosuresGlobalController {
   }
 
   @Put(":closureId/counts")
-  @Roles("BRANCH_LEADER", "BRANCH_ASSISTANT")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   updateCounts(
     @Param("closureId", new ParseUUIDPipe()) closureId: string,
     @Body() dto: UpdateCountsDto,
@@ -60,7 +60,7 @@ export class InventoryClosuresGlobalController {
 
   @Post(":closureId/confirm")
   @HttpCode(200)
-  @Roles("BRANCH_LEADER", "BRANCH_ASSISTANT")
+  @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   confirm(
     @Param("closureId", new ParseUUIDPipe()) closureId: string,
     @CurrentUser() currentUser: AuthenticatedUser,

@@ -400,7 +400,7 @@ describe("PUT /api/v1/inventory-closures/:id/counts (e2e)", () => {
         physicalQuantity: 3,
         observation: null,
       });
-      expect(itemA1).not.toHaveProperty("systemQuantity");
+      expect(itemA1).toHaveProperty("systemQuantity");
       expect(itemA1).not.toHaveProperty("difference");
     });
 
@@ -527,7 +527,7 @@ describe("PUT /api/v1/inventory-closures/:id/counts (e2e)", () => {
       expect(detail?.difference).toBe(0 - SYS_QTY_A1);
     });
 
-    it("does not reveal systemQuantity or difference while the closure is PENDING", async () => {
+    it("shows the expected systemQuantity but no difference while the closure is PENDING", async () => {
       const { closureId } = await createClosure();
 
       const response = await putCounts(
@@ -542,7 +542,8 @@ describe("PUT /api/v1/inventory-closures/:id/counts (e2e)", () => {
 
       expect(response.status).toBe(200);
       const body = closureOf(response.body);
-      expect(JSON.stringify(body)).not.toContain("systemQuantity");
+      expect(JSON.stringify(body)).toContain("systemQuantity");
+      expect(JSON.stringify(body)).not.toContain("difference");
       expect(body).not.toHaveProperty("totalDifferences");
     });
 
@@ -779,7 +780,21 @@ describe("PUT /api/v1/inventory-closures/:id/counts (e2e)", () => {
       expect(response.status).toBe(401);
     });
 
-    it.each<RoleName>(["SUPERADMIN", "DEV"])(
+    it("allows SUPERADMIN to submit counts → 200", async () => {
+      const { closureId } = await createClosure();
+      const response = await putCounts(
+        closureId,
+        {
+          items: [
+            { productId: productAId, expirationDate: EXP_A1, physicalQuantity: 1 },
+          ],
+        },
+        tokens.SUPERADMIN,
+      );
+      expect(response.status).toBe(200);
+    });
+
+    it.each<RoleName>(["DEV"])(
       "returns 403 for %s role",
       async (roleName) => {
         const { closureId } = await createClosure();

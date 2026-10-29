@@ -108,7 +108,7 @@
 .closure-count__head,
 .closure-count__row {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.7fr) minmax(0, 0.8fr) minmax(0, 1.2fr);
   gap: 0.875rem;
   align-items: center;
   padding: 0.75rem 1rem;
@@ -130,6 +130,27 @@
 
 .closure-count__row:last-child {
   border-bottom: none;
+}
+
+.closure-count__expected {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.closure-count__expected-label {
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.closure-count__expected-value {
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  color: var(--color-text-secondary);
 }
 
 .closure-count__product {
@@ -374,7 +395,7 @@
   .closure-count__row {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-areas:
-      'product product'
+      'product expected'
       'quantity note';
   }
 
@@ -382,11 +403,20 @@
     grid-area: product;
   }
 
-  .closure-count__row > .closure-count__field:nth-child(2) {
-    grid-area: quantity;
+  .closure-count__expected {
+    grid-area: expected;
+    align-items: flex-end;
+  }
+
+  .closure-count__expected-label {
+    display: block;
   }
 
   .closure-count__row > .closure-count__field:nth-child(3) {
+    grid-area: quantity;
+  }
+
+  .closure-count__row > .closure-count__field:nth-child(4) {
     grid-area: note;
   }
 

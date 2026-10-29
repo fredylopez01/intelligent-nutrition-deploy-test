@@ -398,7 +398,7 @@ describe("POST /api/v1/inventory-closures/:id/confirm (e2e)", () => {
       });
     });
 
-    it("BRANCH_ASSISTANT does not see systemQuantity, difference or totalDifferences", async () => {
+    it("BRANCH_ASSISTANT sees the expected systemQuantity but not difference or totalDifferences", async () => {
       const { closureId } = await createClosure({ allCounted: true });
 
       const response = await confirm(closureId, tokens.BRANCH_ASSISTANT);
@@ -406,7 +406,7 @@ describe("POST /api/v1/inventory-closures/:id/confirm (e2e)", () => {
       expect(response.status).toBe(200);
       const body = closureOf(response.body);
       expect(body).not.toHaveProperty("totalDifferences");
-      expect(JSON.stringify(body)).not.toContain("systemQuantity");
+      expect(JSON.stringify(body)).toContain("systemQuantity");
       expect(JSON.stringify(body)).not.toContain("difference");
     });
 
@@ -546,7 +546,14 @@ describe("POST /api/v1/inventory-closures/:id/confirm (e2e)", () => {
       expect(response.status).toBe(401);
     });
 
-    it.each<RoleName>(["SUPERADMIN", "DEV"])(
+    it("allows SUPERADMIN to confirm → 200", async () => {
+      const { closureId } = await createClosure({ allCounted: true });
+      const response = await confirm(closureId, tokens.SUPERADMIN);
+      expect(response.status).toBe(200);
+      expect(closureOf(response.body).status).toBe("CONFIRMED");
+    });
+
+    it.each<RoleName>(["DEV"])(
       "returns 403 for %s role",
       async (roleName) => {
         const { closureId } = await createClosure({ allCounted: true });

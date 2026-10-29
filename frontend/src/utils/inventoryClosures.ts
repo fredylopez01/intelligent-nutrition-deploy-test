@@ -2,7 +2,7 @@ import { ApiError } from '../services/http'
 import type { RoleName } from '../types/auth'
 import type { ClosureItem, ClosureStatus } from '../types/inventoryClosure'
 
-export const CLOSURE_COUNT_ROLES: RoleName[] = ['BRANCH_LEADER', 'BRANCH_ASSISTANT']
+export const CLOSURE_COUNT_ROLES: RoleName[] = ['SUPERADMIN', 'BRANCH_LEADER', 'BRANCH_ASSISTANT']
 export const CLOSURE_REVIEW_ROLES: RoleName[] = ['SUPERADMIN', 'BRANCH_LEADER']
 export const CLOSURE_OBSERVATION_MAX_LENGTH = 500
 

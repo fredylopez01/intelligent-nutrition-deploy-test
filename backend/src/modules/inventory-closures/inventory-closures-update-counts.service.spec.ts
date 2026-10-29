@@ -148,7 +148,7 @@ describe("InventoryClosuresService.updateCounts", () => {
     });
   });
 
-  it("keeps the answer blind while the closure is pending", async () => {
+  it("answers with the expected quantity but no difference while pending", async () => {
     const result = await service.updateCounts(
       closureId,
       { items: [count("2027-06-30", 7)] },
@@ -161,7 +161,7 @@ describe("InventoryClosuresService.updateCounts", () => {
       totalItems: 2,
     });
     for (const item of result.items) {
-      expect(item).not.toHaveProperty("systemQuantity");
+      expect(item).toHaveProperty("systemQuantity");
       expect(item).not.toHaveProperty("difference");
     }
   });
