@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
@@ -122,5 +122,34 @@ describe('PaymentMethodsPage edit and state', () => {
     expect(
       screen.getByRole('dialog', { name: '¿Desactivar este método de pago?' }),
     ).toBeInTheDocument()
+  })
+
+  it('closes the deactivation dialog without changing the state', async () => {
+    const { user } = renderPage()
+    await screen.findByText('Efectivo')
+
+    await user.click(screen.getByRole('button', { name: 'Acciones para Efectivo' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Desactivar' }))
+    const dialog = screen.getByRole('dialog', { name: '¿Desactivar este método de pago?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: '¿Desactivar este método de pago?' }),
+      ).not.toBeInTheDocument(),
+    )
+    expect(updateStatus).not.toHaveBeenCalled()
+  })
+
+  it('asks for confirmation with the reactivation copy for an inactive method', async () => {
+    const { user } = renderPage()
+    await screen.findByText('Otro')
+
+    await user.click(screen.getByRole('button', { name: 'Acciones para Otro' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Activar' }))
+
+    const dialog = screen.getByRole('dialog', { name: '¿Activar este método de pago?' })
+    expect(dialog).toHaveTextContent('Otro volverá a aparecer en el punto de venta para cobrar.')
+    expect(updateStatus).not.toHaveBeenCalled()
   })
 })
