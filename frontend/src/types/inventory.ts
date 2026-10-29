@@ -132,3 +132,11 @@ export interface GeneralStockDetail {
   totalQuantity: number
   lots: GeneralStockLot[]
 }
+
+export type RestockMovementType = 'ADJUSTMENT_ENTRY' | 'ADJUSTMENT_EXIT'
+
+export interface RestockPayload {
+  quantity: number
+  movementType: RestockMovementType
+  reason: string
+}
