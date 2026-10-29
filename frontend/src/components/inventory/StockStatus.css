@@ -16,6 +16,47 @@
   background: currentColor;
 }
 
+.stock-status__warning {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: help;
+}
+
+.stock-status__warning:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.stock-status__tooltip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 9px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 6px;
+  background: var(--color-surface-elevated);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 12%);
+  color: var(--color-text);
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+
 .stock-status--ok {
   color: var(--color-success);
   background: var(--color-success-soft);
