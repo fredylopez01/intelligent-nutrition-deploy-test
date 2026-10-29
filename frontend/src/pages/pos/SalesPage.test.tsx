@@ -133,7 +133,69 @@ describe('SalesPage', () => {
         'La venta V-20261026-0001 quedó reversada y sus unidades volvieron al inventario de Centro.',
       ),
     ).toBeInTheDocument()
+    expect(reverse).toHaveBeenCalledWith('sale-1', 'Sabor equivocado', 'test-token')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows the reversal amount in the open detail', async () => {
+    const { user } = renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Ver la venta V-20261026-0001' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Venta V-20261026-0001' })
+    const action = await within(dialog).findByRole('button', { name: /Reversar por/ })
+
+    expect(action).toHaveTextContent(/290\.000/)
+    await user.click(action)
+    expect(
+      within(dialog).getByText(/quedará como reversada y las 2 unidades vuelven a los lotes/),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the detail open when the reversal fails', async () => {
+    reverse.mockRejectedValue(new ApiError('Reversed', 409, {}, 'SALE_ALREADY_REVERSED'))
+    const { user } = renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Ver la venta V-20261026-0001' }))
+    await user.click(await screen.findByRole('button', { name: /Reversar por/ }))
+    await user.type(screen.getByLabelText('Motivo de la reversión'), 'Sabor equivocado')
+    await user.click(screen.getByRole('button', { name: 'Reversar venta' }))
+
+    expect(
+      await screen.findByText(
+        'Esta venta ya fue reversada. Recarga el listado para ver su estado.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Venta V-20261026-0001' })).toBeInTheDocument()
+    expect(screen.queryByText(/quedó reversada y sus unidades/)).not.toBeInTheDocument()
+  })
+
+  it('returns to the detail when the reversal is cancelled', async () => {
+    const { user } = renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Ver la venta V-20261026-0001' }))
+    await user.click(await screen.findByRole('button', { name: /Reversar por/ }))
+
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Venta V-20261026-0001' })
+    expect(await within(dialog).findByRole('button', { name: /Reversar por/ })).toHaveTextContent(
+      /290\.000/,
+    )
+    expect(within(dialog).getByRole('button', { name: 'Cerrar' })).toBeInTheDocument()
+    expect(reverse).not.toHaveBeenCalled()
+  })
+
+  it('asks for the reason before confirming', async () => {
+    const { user } = renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Ver la venta V-20261026-0001' }))
+    await user.click(await screen.findByRole('button', { name: /Reversar por/ }))
+
+    await user.click(screen.getByRole('button', { name: 'Reversar venta' }))
+
+    expect(
+      await screen.findByText('Explica el motivo con al menos 10 caracteres.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Venta V-20261026-0001' })).toBeInTheDocument()
+    expect(reverse).not.toHaveBeenCalled()
   })
 
   it('does not offer to reverse a reversed sale', async () => {
