@@ -61,4 +61,17 @@ describe('salesService', () => {
       { token: 'token' },
     )
   })
+
+  it('registers a sale with its items and payments', async () => {
+    vi.mocked(http.post).mockResolvedValue({})
+    const payload = {
+      branchId: 'branch-centro',
+      items: [{ productId: 'product-whey', quantity: 2 }],
+      payments: [{ paymentMethodId: 'pm-cash', amount: '290000.00', reference: null }],
+    }
+
+    await salesService.create(payload, 'token')
+
+    expect(http.post).toHaveBeenCalledWith('/sales', payload, { token: 'token' })
+  })
 })

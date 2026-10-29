@@ -311,3 +311,133 @@
   font-size: 0.84rem;
   color: var(--color-text-faint);
 }
+
+.pos-selection__quantity {
+  width: 2.5rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.pos-selection__quantity:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.pos-selection__payment {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+.pos-checkout,
+.pos-ticket {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pos-checkout__shortages {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.pos-checkout__lines {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 10px;
+  list-style: none;
+}
+
+.pos-checkout__line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pos-checkout__line:last-child {
+  border-bottom: none;
+}
+
+.pos-checkout__name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.pos-checkout__meta {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--color-text-faint);
+}
+
+.pos-checkout__amount {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+}
+
+.pos-checkout__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0;
+}
+
+.pos-checkout__summary div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.pos-checkout__summary dd {
+  margin: 0;
+  text-align: right;
+  color: var(--color-text);
+}
+
+.pos-checkout__total {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.pos-checkout__total dd {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.pos-checkout__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.625rem;
+}
+
+@media (max-width: 479px) {
+  .pos-checkout__actions {
+    flex-direction: column-reverse;
+  }
+
+  .pos-checkout__actions .ui-button {
+    width: 100%;
+  }
+}

@@ -1,5 +1,10 @@
+import type { PaymentMethod } from '../../types/paymentMethod'
 import type { SellableProduct } from '../../types/sale'
 import { formatPrice } from '../../utils/products'
+import { selectionTotalCents } from '../../utils/sales'
+import { Button } from '../ui/Button'
+import { SelectField } from '../ui/SelectField'
+import { TextField } from '../ui/TextField'
 
 import './PointOfSale.css'
 
@@ -13,11 +18,35 @@ interface PosSelectionProps {
   onChangeQuantity: (productId: string, quantity: number) => void
   onRemove: (productId: string) => void
   onClear: () => void
+  paymentMethods: PaymentMethod[]
+  paymentStatus: 'loading' | 'success' | 'error'
+  paymentMethodId: string
+  onPaymentMethodChange: (paymentMethodId: string) => void
+  reference: string
+  onReferenceChange: (reference: string) => void
+  onRetryPaymentMethods: () => void
+  onCheckout: () => void
 }
 
-export function PosSelection({ lines, onChangeQuantity, onRemove, onClear }: PosSelectionProps) {
+const PAYMENT_REFERENCE_MAX_LENGTH = 100
+
+export function PosSelection({
+  lines,
+  onChangeQuantity,
+  onRemove,
+  onClear,
+  paymentMethods,
+  paymentStatus,
+  paymentMethodId,
+  onPaymentMethodChange,
+  reference,
+  onReferenceChange,
+  onRetryPaymentMethods,
+  onCheckout,
+}: PosSelectionProps) {
   const units = lines.reduce((sum, line) => sum + line.quantity, 0)
-  const total = lines.reduce((sum, line) => sum + Number(line.product.price) * line.quantity, 0)
+  const total = selectionTotalCents(lines) / 100
+  const noMethods = paymentStatus === 'success' && paymentMethods.length === 0
 
   return (
     <aside className="pos-selection" aria-labelledby="pos-selection-title">
@@ -63,7 +92,18 @@ export function PosSelection({ lines, onChangeQuantity, onRemove, onClear }: Pos
                 >
                   −
                 </button>
-                <span aria-live="polite">{quantity}</span>
+                <input
+                  className="pos-selection__quantity"
+                  aria-label={`Unidades de ${product.name}`}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={quantity}
+                  onChange={(event) => {
+                    const next = Number(event.target.value.replace(/\D/g, ''))
+                    if (next > 0) onChangeQuantity(product.productId, next)
+                  }}
+                  onFocus={(event) => event.target.select()}
+                />
                 <button
                   type="button"
                   aria-label={`Agregar una unidad de ${product.name}`}
@@ -92,12 +132,51 @@ export function PosSelection({ lines, onChangeQuantity, onRemove, onClear }: Pos
           <dd>{units}</dd>
         </div>
         <div className="pos-selection__total">
-          <dt>Total de lista</dt>
+          <dt>Total</dt>
           <dd>{formatPrice(total)}</dd>
         </div>
       </dl>
+
+      <div className="pos-selection__payment">
+        <SelectField
+          id="pos-payment-method"
+          label="Método de pago"
+          placeholder={paymentStatus === 'loading' ? 'Cargando métodos...' : 'Elige el método'}
+          options={paymentMethods.map((method) => ({ value: method.id, label: method.name }))}
+          value={paymentMethodId}
+          onChange={(event) => onPaymentMethodChange(event.target.value)}
+          disabled={paymentStatus !== 'success' || noMethods}
+        />
+        {paymentStatus === 'error' && (
+          <p className="pos-selection__note" role="alert">
+            No fue posible cargar los métodos de pago.{' '}
+            <button type="button" className="pos-selection__clear" onClick={onRetryPaymentMethods}>
+              Reintentar
+            </button>
+          </p>
+        )}
+        {noMethods && (
+          <p className="pos-selection__note" role="alert">
+            No hay métodos de pago activos. Pide al superadmin que active uno.
+          </p>
+        )}
+        <TextField
+          id="pos-payment-reference"
+          label="Referencia del pago (opcional)"
+          placeholder="Ej. número de la transferencia"
+          autoComplete="off"
+          maxLength={PAYMENT_REFERENCE_MAX_LENGTH}
+          value={reference}
+          onChange={(event) => onReferenceChange(event.target.value)}
+        />
+      </div>
+
+      <Button onClick={onCheckout} disabled={lines.length === 0 || !paymentMethodId}>
+        Finalizar venta
+      </Button>
       <p className="pos-selection__note">
-        Precio de lista. Los descuentos, impuestos y el cobro se registran al finalizar la venta.
+        Precios vigentes de la sede. El sistema confirma el total y descuenta el stock al registrar
+        la venta.
       </p>
     </aside>
   )

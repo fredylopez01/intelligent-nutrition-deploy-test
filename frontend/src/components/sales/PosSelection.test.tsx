@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
+import { CASH } from '../../test-utils/paymentMethods'
 import { buildSellable } from '../../test-utils/sales'
 
 import { PosSelection, type SelectionLine } from './PosSelection'
@@ -26,6 +27,14 @@ function renderSelection(lines: SelectionLine[] = []) {
       onChangeQuantity={onChangeQuantity}
       onRemove={onRemove}
       onClear={onClear}
+      paymentMethods={[CASH]}
+      paymentStatus="success"
+      paymentMethodId={CASH.id}
+      onPaymentMethodChange={vi.fn()}
+      reference=""
+      onReferenceChange={vi.fn()}
+      onRetryPaymentMethods={vi.fn()}
+      onCheckout={vi.fn()}
     />,
   )
   return { user, onChangeQuantity, onRemove, onClear, container }
@@ -46,7 +55,7 @@ describe('PosSelection', () => {
     expect(screen.getByText('$ 145.000 c/u · $ 290.000')).toBeInTheDocument()
   })
 
-  it('adds up the units and the list total', () => {
+  it('adds up the units and the total', () => {
     const { container } = renderSelection([
       { product: whey, quantity: 2 },
       { product: creatine, quantity: 1 },
@@ -55,7 +64,7 @@ describe('PosSelection', () => {
 
     expect(totals.getByText('Unidades')).toBeInTheDocument()
     expect(totals.getByText('3')).toBeInTheDocument()
-    expect(totals.getByText('Total de lista')).toBeInTheDocument()
+    expect(totals.getByText('Total')).toBeInTheDocument()
     expect(totals.getByText('$ 389.900')).toBeInTheDocument()
   })
 
@@ -111,11 +120,11 @@ describe('PosSelection', () => {
     expect(onClear).toHaveBeenCalled()
   })
 
-  it('reminds that prices are list prices', () => {
+  it('reminds that the system confirms the total when the sale is registered', () => {
     renderSelection([{ product: whey, quantity: 1 }])
 
     expect(
-      screen.getByText(/Precio de lista\. Los descuentos, impuestos y el cobro/),
+      screen.getByText(/El sistema confirma el total y descuenta el stock/),
     ).toBeInTheDocument()
   })
 })

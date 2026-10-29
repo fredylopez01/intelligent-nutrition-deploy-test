@@ -1,21 +1,25 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import { CheckoutDialog } from '../../components/sales/CheckoutDialog'
 import { PosSelection, type SelectionLine } from '../../components/sales/PosSelection'
+import { SaleDetail } from '../../components/sales/SaleDetail'
 import { SellableProductCard } from '../../components/sales/SellableProductCard'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { Modal } from '../../components/ui/Modal'
 import { Pagination } from '../../components/ui/Pagination'
 import { ReloadButton } from '../../components/ui/ReloadButton'
 import { SearchBar } from '../../components/ui/SearchBar'
+import { useActivePaymentMethods } from '../../hooks/useActivePaymentMethods'
 import { useAuth } from '../../hooks/useAuth'
 import { useCatalogOptions } from '../../hooks/useCatalogOptions'
 import { useInventoryBranches } from '../../hooks/useInventoryBranches'
 import { usePagination } from '../../hooks/usePagination'
 import { useSellableProducts } from '../../hooks/useSellableProducts'
 import { AppLayout } from '../../layouts/AppLayout'
-import type { SellableProduct } from '../../types/sale'
+import type { Sale, SellableProduct } from '../../types/sale'
 import { hasRole } from '../../utils/categories'
 import { SALE_REGISTER_ROLES } from '../../utils/sales'
 
@@ -51,6 +55,15 @@ export function PosPage() {
     lines: [],
   })
   const lines = selection.branchId === branch?.id ? selection.lines : []
+  const payments = useActivePaymentMethods(canSell)
+  const [chosenMethodId, setChosenMethodId] = useState('')
+  const [reference, setReference] = useState('')
+  const [checkingOut, setCheckingOut] = useState(false)
+  const [completedSale, setCompletedSale] = useState<Sale | null>(null)
+  const paymentMethod =
+    payments.paymentMethods.find((method) => method.id === chosenMethodId) ??
+    payments.paymentMethods[0] ??
+    null
 
   const { status, products, meta, error, refetch } = useSellableProducts(branch?.id ?? null, {
     ...params,
@@ -84,6 +97,14 @@ export function PosPage() {
 
   const removeProduct = (productId: string) =>
     updateLines((current) => current.filter((line) => line.product.productId !== productId))
+
+  const handleCompleted = (sale: Sale) => {
+    setCheckingOut(false)
+    setSelection({ branchId: branch?.id ?? '', lines: [] })
+    setReference('')
+    setCompletedSale(sale)
+    refetch()
+  }
 
   const handleSearch = (term: string) => {
     if (term === search) refetch()
@@ -270,9 +291,53 @@ export function PosPage() {
             onChangeQuantity={changeQuantity}
             onRemove={removeProduct}
             onClear={() => updateLines(() => [])}
+            paymentMethods={payments.paymentMethods}
+            paymentStatus={payments.status}
+            paymentMethodId={paymentMethod?.id ?? ''}
+            onPaymentMethodChange={setChosenMethodId}
+            reference={reference}
+            onReferenceChange={setReference}
+            onRetryPaymentMethods={payments.reload}
+            onCheckout={() => setCheckingOut(true)}
           />
         )}
       </div>
+
+      <Modal
+        open={checkingOut}
+        title="Confirmar venta"
+        description="Revisa los productos y el cobro antes de registrar la venta."
+        onClose={() => setCheckingOut(false)}
+      >
+        {checkingOut && branch && paymentMethod && (
+          <CheckoutDialog
+            branch={branch}
+            lines={lines}
+            paymentMethod={paymentMethod}
+            reference={reference}
+            onCompleted={handleCompleted}
+            onStockChanged={refetch}
+            onCancel={() => setCheckingOut(false)}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={completedSale !== null}
+        title="Venta registrada"
+        description="Este es el comprobante de la venta. También queda en el historial de Ventas."
+        size="wide"
+        onClose={() => setCompletedSale(null)}
+      >
+        {completedSale && (
+          <div className="pos-ticket">
+            <SaleDetail sale={completedSale} />
+            <div className="pos-checkout__actions">
+              <Button onClick={() => setCompletedSale(null)}>Nueva venta</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </AppLayout>
   )
 }

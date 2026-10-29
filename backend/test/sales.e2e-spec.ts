@@ -287,8 +287,16 @@ describe("Sales (e2e)", () => {
     });
   });
 
-  it("does not let the superadmin register sales", async () => {
-    await postSale(tokens.SUPERADMIN, saleBody(1, "100000.00")).expect(403);
+  it("lets the superadmin register a sale without a branch assignment", async () => {
+    const response = await postSale(
+      tokens.SUPERADMIN,
+      saleBody(1, "100000.00"),
+    ).expect(201);
+
+    expect(saleOf(response.body)).toMatchObject({
+      status: "COMPLETED",
+      total: "100000.00",
+    });
   });
 
   it("rejects a branch outside the assignment", async () => {
