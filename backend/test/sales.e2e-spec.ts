@@ -161,7 +161,7 @@ describe("Sales (e2e)", () => {
     await prisma.inventoryMovement.deleteMany({ where: { productId } });
     await prisma.notification.deleteMany({ where: { productId } });
     const sales = await prisma.sale.findMany({
-      where: { branchId },
+      where: { branchId: { in: [branchId, otherBranchId] } },
       select: { id: true },
     });
     const saleIds = sales.map(({ id }) => id);
@@ -188,6 +188,13 @@ describe("Sales (e2e)", () => {
         },
         {
           branchId,
+          productId,
+          quantity: 6,
+          minimumStock: 1,
+          expirationDate: at("2027-06-30"),
+        },
+        {
+          branchId: otherBranchId,
           productId,
           quantity: 6,
           minimumStock: 1,
@@ -299,11 +306,27 @@ describe("Sales (e2e)", () => {
     });
   });
 
+  it("lets the superadmin register a sale in a branch without an assignment", async () => {
+    const response = await postSale(tokens.SUPERADMIN, {
+      ...saleBody(1, "100000.00"),
+      branchId: otherBranchId,
+    }).expect(201);
+
+    const sale = saleOf(response.body);
+    const persistedSale = await prisma.sale.findUniqueOrThrow({
+      where: { id: sale.id },
+      select: { branchId: true },
+    });
+    expect(persistedSale.branchId).toBe(otherBranchId);
+  });
+
   it("rejects a branch outside the assignment", async () => {
-    await postSale(tokens.BRANCH_LEADER, {
+    const response = await postSale(tokens.BRANCH_LEADER, {
       ...saleBody(1, "100000.00"),
       branchId: otherBranchId,
     }).expect(403);
+
+    expect(errorOf(response.body).code).toBe("BRANCH_SCOPE_VIOLATION");
   });
 
   it("lists by branch and requires the branch for branch roles", async () => {
