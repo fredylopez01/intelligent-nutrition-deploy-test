@@ -277,6 +277,50 @@ describe('ClosurePage history', () => {
     expect(get).toHaveBeenCalledWith('closure-yesterday', 'test-token')
   })
 
+  it('flags the blocked closure of the previous day and opens its reason', async () => {
+    mockClosures(null, [
+      {
+        ...yesterday,
+        status: 'NOT_CONFIRMED',
+        confirmed: false,
+        locked: true,
+        countedItems: 0,
+        totalItems: 2,
+        totalDifferences: null,
+      },
+    ])
+    get.mockResolvedValue(
+      buildClosure({
+        id: 'closure-yesterday',
+        closureDate: '2026-10-25',
+        status: 'NOT_CONFIRMED',
+        locked: true,
+        items: [buildItem({ systemQuantity: 4, physicalQuantity: null, difference: null })],
+      }),
+    )
+    const { user } = renderPage()
+
+    const row = (await screen.findByText('25 oct 2026')).closest('tr') as HTMLElement
+    expect(within(row).getByText('Sin confirmar')).toBeInTheDocument()
+    expect(within(row).getByText('0 de 2 lotes')).toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', { name: 'Ver el cierre del 25 oct 2026 de Centro' }),
+    )
+
+    const dialog = within(await screen.findByRole('dialog'))
+    expect(
+      await dialog.findByText('Cierre del domingo, 25 de octubre sin confirmar'),
+    ).toBeInTheDocument()
+    expect(
+      dialog.getByText(
+        'Nadie lo confirmó antes de la medianoche y el sistema lo bloqueó. Las diferencias se calcularon solo con los lotes que alcanzaron a contarse.',
+      ),
+    ).toBeInTheDocument()
+    expect(dialog.getByText('Sin contar')).toBeInTheDocument()
+    expect(get).toHaveBeenCalledWith('closure-yesterday', 'test-token')
+  })
+
   it('explains an empty history', async () => {
     mockClosures(null, [])
     renderPage()
