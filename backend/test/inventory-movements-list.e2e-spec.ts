@@ -671,6 +671,14 @@ describe("GET /api/v1/inventory-movements (e2e)", () => {
       it("SUPERADMIN sees all movements → 200", async () => {
         const body = listOf((await getList(tokens.SUPERADMIN).expect(200)).body);
         expect(body.meta.total).toBeGreaterThanOrEqual(6);
+
+        const otherBranchBody = listOf(
+          (await getList(tokens.SUPERADMIN, { branchId: branchBId }).expect(200))
+            .body,
+        );
+        expect(otherBranchBody.data.map((movement) => movement.id)).toEqual(
+          expect.arrayContaining([movEntryBId, movTransferAtoBId]),
+        );
       });
 
       it("denies DEV, which is not part of the movements roles → 403", async () => {

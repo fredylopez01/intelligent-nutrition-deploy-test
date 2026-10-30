@@ -319,6 +319,15 @@ describe("POST /api/v1/inventory-movements (e2e)", () => {
         expirationDate: new Date(`${EXP_DATE}T00:00:00.000Z`),
       },
     });
+    await prisma.branchInventory.create({
+      data: {
+        branchId: otherBranchId,
+        productId,
+        quantity: STOCK_INITIAL,
+        minimumStock: 5,
+        expirationDate: new Date(`${EXP_DATE}T00:00:00.000Z`),
+      },
+    });
 
     await prisma.generalStock.create({
       data: {
@@ -396,6 +405,17 @@ describe("POST /api/v1/inventory-movements (e2e)", () => {
       );
       expect(response.status).toBe(403);
       expect(errorOf(response.body).code).toBe("BRANCH_SCOPE_VIOLATION");
+    });
+
+    it("allows SUPERADMIN to create a movement in a branch without an assignment", async () => {
+      const response = await postMovement(
+        validEntryPayload({ branchId: otherBranchId }),
+        tokens.SUPERADMIN,
+      ).expect(201);
+
+      expect(movementOf(response.body).branch).toMatchObject({
+        id: otherBranchId,
+      });
     });
 
     it("returns 201 when BRANCH_ASSISTANT creates a movement for their own branch", async () => {
