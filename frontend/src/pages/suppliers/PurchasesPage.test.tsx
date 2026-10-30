@@ -196,6 +196,27 @@ describe('PurchasesPage', () => {
     ).toBeInTheDocument()
   })
 
+  it('explains the partial receipt and refreshes the list', async () => {
+    vi.mocked(purchasesService.receive).mockResolvedValue(
+      buildPurchase({ status: 'PARTIALLY_RECEIVED' }),
+    )
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Ver la compra C-20261026-0001' }))
+    await user.click(await screen.findByRole('button', { name: 'Registrar recepción' }))
+    await user.type(screen.getByLabelText('Vencimiento de Whey Protein 2 lb, lote 1'), '2027-06-30')
+    await user.type(screen.getByLabelText('Vencimiento de Creatina 300 g, lote 1'), '2027-06-30')
+    await user.click(screen.getByRole('button', { name: 'Confirmar recepción' }))
+
+    expect(
+      await screen.findByText(
+        'Recepción registrada: la compra C-20261026-0001 sigue pendiente de las unidades que faltan.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps the receipt with the superadmin', async () => {
     auth.role = 'BRANCH_LEADER'
     const { user } = renderPage()
