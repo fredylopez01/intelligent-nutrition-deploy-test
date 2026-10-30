@@ -553,6 +553,21 @@ describe("POST /api/v1/inventory-closures/:id/confirm (e2e)", () => {
       expect(closureOf(response.body).status).toBe("CONFIRMED");
     });
 
+    it("allows SUPERADMIN to confirm a closure in a branch without an assignment", async () => {
+      const { closureId, branchId } = await createClosure({
+        allCounted: true,
+        unassigned: true,
+      });
+
+      const response = await confirm(closureId, tokens.SUPERADMIN).expect(200);
+
+      expect(closureOf(response.body)).toMatchObject({
+        id: closureId,
+        branchId,
+        status: "CONFIRMED",
+      });
+    });
+
     it.each<RoleName>(["DEV"])(
       "returns 403 for %s role",
       async (roleName) => {
