@@ -299,6 +299,24 @@ describe('PosPage', () => {
     expect(screen.getByRole('button', { name: 'Finalizar venta' })).toBeDisabled()
   })
 
+  it('keeps the sale when the checkout is cancelled', async () => {
+    const { user } = renderPage()
+    await user.click(
+      await screen.findByRole('button', { name: 'Agregar Whey Protein 2 lb a la venta' }),
+    )
+    await waitFor(() => expect(screen.getByLabelText('Método de pago')).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Finalizar venta' }))
+
+    const dialog = within(await screen.findByRole('dialog', { name: 'Confirmar venta' }))
+    await user.click(dialog.getByRole('button', { name: 'Seguir vendiendo' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Confirmar venta' })).not.toBeInTheDocument(),
+    )
+    expect(screen.getByLabelText('1 en la venta')).toBeInTheDocument()
+    expect(createSale).not.toHaveBeenCalled()
+  })
+
   it('shows the loading state while the products arrive', async () => {
     sellable.mockReturnValue(new Promise(() => {}))
     renderPage()
