@@ -83,7 +83,13 @@ describe('ClosureResult', () => {
     )
 
     expect(screen.getByText('Cierre del lunes, 26 de octubre sin confirmar')).toBeInTheDocument()
-    expect(screen.getByText(/el sistema lo bloqueó/)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Nadie lo confirmó antes de la medianoche y el sistema lo bloqueó. Las diferencias se calcularon solo con los lotes que alcanzaron a contarse.',
+      ),
+    ).toBeInTheDocument()
+    const counted = screen.getByText('Lotes contados').parentElement as HTMLElement
+    expect(within(counted).getByText('0 de 1')).toBeInTheDocument()
     expect(screen.getByText('Sin contar')).toBeInTheDocument()
   })
 })
