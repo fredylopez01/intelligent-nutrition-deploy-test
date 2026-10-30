@@ -1,0 +1,23 @@
+info:
+  name: sellable-products
+  type: http
+  seq: 6
+
+http:
+  method: GET
+  url: http://localhost:3000/api/v1/branches/47a5b98e-531e-43af-8de9-fffe102fcba4/sellable-products
+  params:
+    - name: search
+      value: ""
+      type: query
+      disabled: true
+  auth:
+    type: bearer
+    token: "{{json_web_token_15kq}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

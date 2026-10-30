@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { inventoryService } from '../../services/inventory.service'
 import type {
-  BranchInventoryItem,
+  AvailabilityBranch,
+  InventoryProduct,
   ProductAvailability as Availability,
 } from '../../types/inventory'
 import { formatQuantity, resolveInventoryError } from '../../utils/inventory'
@@ -14,7 +15,9 @@ import './ProductAvailability.css'
 
 interface ProductAvailabilityProps {
   branchId: string
-  item: BranchInventoryItem
+  product: InventoryProduct
+  transferOriginIds?: string[]
+  onRequestTransfer?: (origin: AvailabilityBranch) => void
   onClose: () => void
 }
 
@@ -24,17 +27,23 @@ interface AvailabilityResult {
   error: string | null
 }
 
-export function ProductAvailability({ branchId, item, onClose }: ProductAvailabilityProps) {
+export function ProductAvailability({
+  branchId,
+  product,
+  transferOriginIds = [],
+  onRequestTransfer,
+  onClose,
+}: ProductAvailabilityProps) {
   const { token } = useAuth()
   const [result, setResult] = useState<AvailabilityResult | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
-  const requestKey = `${item.product.id}|${reloadToken}`
-  const abbreviation = item.product.unitOfMeasure.abbreviation
+  const requestKey = `${product.id}|${reloadToken}`
+  const abbreviation = product.unitOfMeasure.abbreviation
 
   useEffect(() => {
     let cancelled = false
     inventoryService
-      .availability(item.product.id, token)
+      .availability(product.id, token)
       .then((availability) => {
         if (!cancelled) setResult({ key: requestKey, availability, error: null })
       })
@@ -52,7 +61,7 @@ export function ProductAvailability({ branchId, item, onClose }: ProductAvailabi
     return () => {
       cancelled = true
     }
-  }, [requestKey, item.product.id, token])
+  }, [requestKey, product.id, token])
 
   const isCurrent = result?.key === requestKey
   const availability = isCurrent ? result.availability : null
@@ -65,9 +74,15 @@ export function ProductAvailability({ branchId, item, onClose }: ProductAvailabi
           a.branchName.localeCompare(b.branchName),
       )
     : []
-  const withStock = branches.filter(
-    (branch) => branch.branchId !== branchId && branch.quantity > 0,
-  ).length
+  const others = branches.filter((branch) => branch.branchId !== branchId && branch.quantity > 0)
+  const canTransferFrom = (branch: AvailabilityBranch) =>
+    onRequestTransfer !== undefined &&
+    branch.branchId !== branchId &&
+    branch.quantity > 0 &&
+    transferOriginIds.includes(branch.branchId)
+  const showActions = branches.some(canTransferFrom)
+  const needsRequest =
+    onRequestTransfer !== undefined && others.some((branch) => !canTransferFrom(branch))
 
   return (
     <div className="availability">
@@ -89,39 +104,86 @@ export function ProductAvailability({ branchId, item, onClose }: ProductAvailabi
       {availability && (
         <>
           <p className="availability__summary" role="status">
-            {withStock === 0
+            {others.length === 0
               ? 'Ninguna otra sede activa tiene existencias de este producto.'
-              : withStock === 1
+              : others.length === 1
                 ? '1 sede más tiene existencias de este producto.'
-                : `${withStock} sedes más tienen existencias de este producto.`}
+                : `${others.length} sedes más tienen existencias de este producto.`}
           </p>
-          <ul className="availability__list" aria-label="Existencias por sede">
-            {branches.map((branch) => {
-              const isCurrentBranch = branch.branchId === branchId
-              return (
-                <li
-                  key={branch.branchId}
-                  className={`availability__item${isCurrentBranch ? ' availability__item--current' : ''}${branch.quantity === 0 ? ' availability__item--empty' : ''}`}
-                >
-                  <span className="availability__branch">
-                    {branch.branchName}
-                    {isCurrentBranch && <span className="availability__tag">Esta sede</span>}
-                  </span>
-                  <span className="availability__quantity">
-                    {branch.quantity === 0
-                      ? 'Sin existencias'
-                      : formatQuantity(branch.quantity, abbreviation)}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
+          {branches.length === 0 ? (
+            <p className="availability__empty-state">
+              No hay sedes activas para consultar. Cuando se active una sede, aquí verás sus
+              existencias.
+            </p>
+          ) : (
+            <table className="availability__table">
+              <caption className="sr-only">Existencias por sede</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Sede</th>
+                  <th scope="col" className="availability__numeric">
+                    Existencias vigentes
+                  </th>
+                  {showActions && (
+                    <th scope="col">
+                      <span className="sr-only">Acciones</span>
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {branches.map((branch) => {
+                  const isCurrentBranch = branch.branchId === branchId
+                  return (
+                    <tr
+                      key={branch.branchId}
+                      className={isCurrentBranch ? 'availability__row--current' : undefined}
+                    >
+                      <th scope="row" className="availability__branch">
+                        {branch.branchName}
+                        {isCurrentBranch && <span className="availability__tag">Esta sede</span>}
+                      </th>
+                      <td className="availability__numeric">
+                        {branch.quantity === 0 ? (
+                          <span className="availability__out">Sin existencias</span>
+                        ) : (
+                          <span className="availability__quantity">
+                            {formatQuantity(branch.quantity, abbreviation)}
+                          </span>
+                        )}
+                      </td>
+                      {showActions && (
+                        <td className="availability__action">
+                          {canTransferFrom(branch) && (
+                            <button
+                              type="button"
+                              className="availability__transfer"
+                              aria-label={`Solicitar traslado desde ${branch.branchName}`}
+                              onClick={() => onRequestTransfer?.(branch)}
+                            >
+                              Solicitar traslado
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
         </>
       )}
 
+      {needsRequest && (
+        <Alert tone="info">
+          Los traslados los registra el superadmin o el líder de la sede de origen. Pídeles las
+          unidades que necesitas.
+        </Alert>
+      )}
+
       <p className="availability__note">
-        Solo se muestran sedes activas y la cantidad total de sus lotes; no incluye stock mínimo ni
-        precios.
+        Solo se cuentan sedes activas y lotes vigentes; no incluye stock mínimo ni precios.
       </p>
 
       <div className="availability__actions">

@@ -13,15 +13,21 @@ import { CustomerDetailPage } from '../pages/customers/CustomerDetailPage'
 import { CustomersPage } from '../pages/customers/CustomersPage'
 import { ForbiddenPage } from '../pages/ForbiddenPage'
 import { GoogleAuthCallbackPage } from '../pages/GoogleAuthCallbackPage'
+import { ClosurePage } from '../pages/inventory/ClosurePage'
 import { ConsolidatedInventoryPage } from '../pages/inventory/ConsolidatedInventoryPage'
 import { InventoryPage } from '../pages/inventory/InventoryPage'
+import { MovementsPage } from '../pages/inventory/MovementsPage'
 import { LandingPage } from '../pages/LandingPage'
 import { PrivacyPolicyPage } from '../pages/legal/PrivacyPolicyPage'
 import { TermsOfServicePage } from '../pages/legal/TermsOfServicePage'
 import { LoginPage } from '../pages/LoginPage'
 import { ForgotPasswordPage } from '../pages/password-reset/ForgotPasswordPage'
 import { ResetPasswordPage } from '../pages/password-reset/ResetPasswordPage'
+import { PaymentMethodsPage } from '../pages/pos/PaymentMethodsPage'
+import { PosPage } from '../pages/pos/PosPage'
+import { SalesPage } from '../pages/pos/SalesPage'
 import { SettingsPage } from '../pages/settings/SettingsPage'
+import { PurchasesPage } from '../pages/suppliers/PurchasesPage'
 import { SupplierDetailPage } from '../pages/suppliers/SupplierDetailPage'
 import { SuppliersPage } from '../pages/suppliers/SuppliersPage'
 import { UserDetailPage } from '../pages/users/UserDetailPage'
@@ -84,6 +90,24 @@ export function AppRouter() {
       />
 
       <Route
+        path="/inventario/movimientos"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/inventario/movimientos']}>
+            <MovementsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/inventario/cierre"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/inventario/cierre']}>
+            <ClosurePage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/catalogo"
         element={
           <ProtectedRoute allowedRoles={ROUTE_ROLES['/catalogo']}>
@@ -117,10 +141,43 @@ export function AppRouter() {
       />
 
       <Route
+        path="/pos"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/pos']}>
+            <PosPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pos/ventas"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/pos/ventas']}>
+            <SalesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/pos/metodos-pago"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/pos/metodos-pago']}>
+            <PaymentMethodsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/proveedores"
         element={
           <ProtectedRoute allowedRoles={ROUTE_ROLES['/proveedores']}>
             <SuppliersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/proveedores/compras"
+        element={
+          <ProtectedRoute allowedRoles={ROUTE_ROLES['/proveedores/compras']}>
+            <PurchasesPage />
           </ProtectedRoute>
         }
       />

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { buildInventoryItem, withoutThresholds } from '../../test-utils/inventory'
 
 import { InventoryTable } from './InventoryTable'
+import { LOW_STOCK_TOOLTIP } from './StockStatus'
 
 const whey = buildInventoryItem()
 const creatine = buildInventoryItem({
@@ -67,6 +68,26 @@ describe('InventoryTable', () => {
 
     expect(screen.queryByRole('columnheader', { name: 'Stock mínimo' })).not.toBeInTheDocument()
     expect(screen.getByText('Disponible')).toBeInTheDocument()
+  })
+
+  it('shows the low-stock warning in the list only for products under the minimum', async () => {
+    const user = userEvent.setup()
+    render(<InventoryTable items={[whey, creatine]} showThresholds onViewLots={vi.fn()} />)
+
+    const normalRow = rowOf('Whey Protein 2 lb')
+    const lowRow = rowOf('Creatina 300 g')
+
+    expect(within(normalRow).getByText('En nivel')).toBeInTheDocument()
+    expect(within(normalRow).queryByText('Bajo mínimo')).not.toBeInTheDocument()
+    expect(
+      within(normalRow).queryByRole('button', { name: 'Advertencia de stock bajo' }),
+    ).not.toBeInTheDocument()
+
+    const icon = within(lowRow).getByRole('button', { name: 'Advertencia de stock bajo' })
+    expect(within(lowRow).getByText('Bajo mínimo')).toBeInTheDocument()
+
+    await user.hover(icon)
+    expect(within(lowRow).getByRole('tooltip')).toHaveTextContent(LOW_STOCK_TOOLTIP)
   })
 
   it('opens the lots from the row menu', async () => {

@@ -82,15 +82,15 @@ describe('Sidebar menu by role', () => {
     }
   })
 
-  it('shows users and audit but not the branch modules, the inventory nor the catalog to DEV', () => {
+  it('shows users and audit but not the branch modules, the inventory, the catalog nor the POS to DEV', () => {
     auth.role = 'DEV'
     renderSidebar()
 
     const labels = menuLabels()
     expect(labels).toEqual(
-      expect.arrayContaining(['Dashboard', 'POS', 'Reportes', 'Usuarios', 'Auditoría']),
+      expect.arrayContaining(['Dashboard', 'Reportes', 'Usuarios', 'Auditoría']),
     )
-    for (const hidden of ['Sedes', 'Inventario', 'Catálogo', 'Clientes', 'Proveedores']) {
+    for (const hidden of ['Sedes', 'Inventario', 'Catálogo', 'POS', 'Clientes', 'Proveedores']) {
       expect(labels).not.toContain(hidden)
     }
   })
@@ -165,4 +165,11 @@ describe('Sidebar inventory submenu', () => {
       expect(inventorySubs()).toContain('Existencias')
     },
   )
+
+  it('keeps only the brand and the navigation, without the data scope', () => {
+    renderSidebar()
+
+    expect(screen.queryByText('Alcance de datos')).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Intelligent Nutrition' })).toBeInTheDocument()
+  })
 })

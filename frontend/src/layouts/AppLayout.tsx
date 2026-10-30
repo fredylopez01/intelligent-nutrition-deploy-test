@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
+import { NotificationsPanel } from '../components/notifications/NotificationsPanel'
 import { Sidebar } from '../components/Sidebar'
-import { useAuth } from '../hooks/useAuth'
+import { ThemeMenu } from '../components/ThemeMenu'
+import { UserMenu } from '../components/UserMenu'
 
 import './AppLayout.css'
 
@@ -25,13 +27,6 @@ export function AppLayout({
   aside,
   children,
 }: AppLayoutProps) {
-  const { logout } = useAuth()
-  const navigate = useNavigate()
-  const handleLogout = () => {
-    logout()
-    navigate('/login', { replace: true })
-  }
-
   return (
     <div className={`app-layout${aside ? ' app-layout--with-aside' : ''}`}>
       <Sidebar />
@@ -60,11 +55,11 @@ export function AppLayout({
               {subtitle && <p className="app-layout__subtitle">{subtitle}</p>}
             </div>
           </div>
-          <div className="app-layout__header-actions">
-            {actions}
-            <button type="button" className="app-layout__logout" onClick={handleLogout}>
-              Cerrar sesión
-            </button>
+          {actions && <div className="app-layout__header-actions">{actions}</div>}
+          <div className="app-layout__utilities">
+            <ThemeMenu />
+            <NotificationsPanel />
+            <UserMenu />
           </div>
         </header>
 

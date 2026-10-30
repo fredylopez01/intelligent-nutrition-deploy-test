@@ -77,9 +77,15 @@ export interface InventoryProductRef {
   referenceCode: string
 }
 
+export interface AvailabilityBranch {
+  branchId: string
+  branchName: string
+  quantity: number
+}
+
 export interface ProductAvailability {
   product: InventoryProductRef
-  branches: { branchId: string; branchName: string; quantity: number }[]
+  branches: AvailabilityBranch[]
 }
 
 export interface ConsolidatedBranch {
@@ -106,4 +112,31 @@ export interface ConsolidatedParams {
 export interface ConsolidatedResponse {
   data: ConsolidatedItem[]
   meta: PaginationMeta
+}
+
+export interface GeneralStockLot {
+  id: string
+  expirationDate: string
+  quantity: number
+  expired: boolean
+}
+
+export interface GeneralStockDetail {
+  product: {
+    id: string
+    name: string
+    referenceCode: string
+    active: boolean
+    unitOfMeasure: { abbreviation: string }
+  }
+  totalQuantity: number
+  lots: GeneralStockLot[]
+}
+
+export type RestockMovementType = 'ADJUSTMENT_ENTRY' | 'ADJUSTMENT_EXIT'
+
+export interface RestockPayload {
+  quantity: number
+  movementType: RestockMovementType
+  reason: string
 }

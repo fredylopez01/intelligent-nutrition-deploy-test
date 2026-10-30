@@ -29,6 +29,7 @@ interface AuditLogItem {
   reason: string;
   ipAddress: string | null;
   createdAt: string;
+  user: { id: string; fullName: string } | null;
   userAccount: {
     person: {
       id: string;
@@ -207,16 +208,34 @@ describe("GET /api/v1/audit-logs (e2e)", () => {
 
   describe("successful query", () => {
     it("returns the log list with pagination meta for a Superadmin", async () => {
-      const response = await listLogs("", tokens.SUPERADMIN).expect(200);
+      const response = await listLogs(
+        `?userId=${personIds.SUPERADMIN}&page=1&limit=2`,
+        tokens.SUPERADMIN,
+      ).expect(200);
 
       const body = response.body as ListResponse;
       expect(body.data.meta).toEqual({
         page: 1,
-        limit: 10,
-        total: 4,
-        totalPages: 1,
+        limit: 2,
+        total: 3,
+        totalPages: 2,
       });
-      expect(items(body)).toHaveLength(4);
+      expect(items(body)).toHaveLength(2);
+      expect(
+        items(body).every((log) => log.userId === personIds.SUPERADMIN),
+      ).toBe(true);
+
+      const secondPage = await listLogs(
+        `?userId=${personIds.SUPERADMIN}&page=2&limit=2`,
+        tokens.SUPERADMIN,
+      ).expect(200);
+      expect(items(secondPage.body as ListResponse)).toHaveLength(1);
+      expect((secondPage.body as ListResponse).data.meta).toEqual({
+        page: 2,
+        limit: 2,
+        total: 3,
+        totalPages: 2,
+      });
     });
 
     it("includes the executor person data for each log", async () => {
@@ -309,23 +328,94 @@ describe("GET /api/v1/audit-logs (e2e)", () => {
       });
     });
 
-    it("filters by affected user and ignores logs of other entities", async () => {
+    it("filters by the user who executed the action", async () => {
       const response = await listLogs(
-        `?userId=${affectedUserA}`,
+        `?userId=${personIds.DEV}`,
         tokens.SUPERADMIN,
       ).expect(200);
 
       const found = items(response.body as ListResponse);
-      expect(found).toHaveLength(2);
-      expect(found.map((log) => log.action).sort()).toEqual([
-        "CREATE",
-        "UPDATE",
-      ]);
-      expect(found.every((log) => log.entity === "USER")).toBe(true);
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatchObject({
+        action: "DELETE",
+        userId: personIds.DEV,
+        user: { id: personIds.DEV, fullName: "DEV E2E" },
+      });
+    });
+
+    it("combines the executor and action filters", async () => {
+      const response = await listLogs(
+        `?userId=${personIds.DEV}&action=DELETE`,
+        tokens.SUPERADMIN,
+      ).expect(200);
+
+      const body = response.body as ListResponse;
+      expect(items(body)).toHaveLength(1);
+      expect(items(body)[0]).toMatchObject({
+        action: "DELETE",
+        entity: "USER",
+        entityId: affectedUserB,
+        userId: personIds.DEV,
+      });
+      expect(body.data.meta).toEqual({
+        page: 1,
+        limit: 10,
+        total: 1,
+        totalPages: 1,
+      });
+    });
+
+    it("filters by entity and entity id to follow one affected record", async () => {
+      const response = await listLogs(
+        `?entity=USER&entityId=${affectedUserA}`,
+        tokens.SUPERADMIN,
+      ).expect(200);
+
+      const found = items(response.body as ListResponse);
+      expect(found.map((log) => log.action)).toEqual(["CREATE", "UPDATE"]);
       expect(found.every((log) => log.entityId === affectedUserA)).toBe(true);
-      expect(
-        found.some((log) => log.reason === reasonFor("create branch")),
-      ).toBe(false);
+    });
+
+    it("matches the entity without caring about letter case", async () => {
+      const response = await listLogs(
+        "?entity=branch",
+        tokens.SUPERADMIN,
+      ).expect(200);
+
+      const found = items(response.body as ListResponse);
+      expect(found.map((log) => log.reason)).toEqual([
+        reasonFor("create branch"),
+      ]);
+    });
+
+    it("combines executor, entity, action and date filters", async () => {
+      const response = await listLogs(
+        `?userId=${personIds.SUPERADMIN}&entity=USER&action=CREATE&from=2026-02-01&to=2026-02-28`,
+        tokens.SUPERADMIN,
+      ).expect(200);
+
+      const found = items(response.body as ListResponse);
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatchObject({
+        action: "CREATE",
+        entity: "USER",
+        entityId: affectedUserA,
+        createdAt: "2026-02-15T10:00:00.000Z",
+        user: { id: personIds.SUPERADMIN, fullName: "SUPERADMIN E2E" },
+      });
+    });
+
+    it("accepts from and to as the contract date range", async () => {
+      const response = await listLogs(
+        "?from=2026-01-15&to=2026-02-28",
+        tokens.SUPERADMIN,
+      ).expect(200);
+
+      const found = items(response.body as ListResponse);
+      expect(found.map((log) => log.createdAt)).toEqual([
+        "2026-02-15T10:00:00.000Z",
+        "2026-01-20T10:00:00.000Z",
+      ]);
     });
 
     it("filters by the lower bound of the date range", async () => {
@@ -407,13 +497,17 @@ describe("GET /api/v1/audit-logs (e2e)", () => {
     });
 
     it("rejects query parameters that are not part of the contract", async () => {
-      await listLogs("?entity=USER", tokens.SUPERADMIN).expect(400);
+      await listLogs("?sortBy=createdAt", tokens.SUPERADMIN).expect(400);
+    });
+
+    it("rejects an entityId that is not a valid uuid", async () => {
+      await listLogs("?entityId=not-a-uuid", tokens.SUPERADMIN).expect(400);
     });
   });
 
   describe("access", () => {
     it.each<RoleName>(["BRANCH_LEADER", "BRANCH_ASSISTANT"])(
-      "denies the audit history to the %s role",
+      "returns 403 for the non-privileged %s role",
       async (roleName) => {
         const response = await listLogs("", tokens[roleName]).expect(403);
 

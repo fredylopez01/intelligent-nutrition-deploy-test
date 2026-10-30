@@ -18,43 +18,59 @@
   gap: 0.75rem;
 }
 
-.availability__list {
-  display: flex;
-  flex-direction: column;
+.availability__empty-state {
   margin: 0;
-  padding: 0;
-  border: 1px solid var(--color-border-soft);
+  padding: 1.25rem 1rem;
+  border: 1px dashed var(--color-border-soft);
   border-radius: 10px;
-  list-style: none;
-  overflow: hidden;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--color-text-faint);
 }
 
-.availability__item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.6875rem 0.875rem;
+.availability__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.availability__table thead th {
+  padding: 0 0.625rem 0.5rem;
+  border-bottom: 1px solid var(--color-border-soft);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--color-text-faint);
+}
+
+.availability__table tbody th,
+.availability__table tbody td {
+  padding: 0.6875rem 0.625rem;
   border-bottom: 1px solid var(--color-border);
   font-size: 0.845rem;
+  text-align: left;
 }
 
-.availability__item:last-child {
+.availability__table tbody tr:last-child th,
+.availability__table tbody tr:last-child td {
   border-bottom: none;
 }
 
-.availability__item--current {
+.availability__row--current th,
+.availability__row--current td {
   background: var(--color-surface-elevated);
 }
 
-.availability__branch {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
+.availability__table .availability__branch {
+  font-weight: 400;
 }
 
 .availability__tag {
+  display: inline-block;
+  margin-left: 0.5rem;
   padding: 1px 7px;
   border: 1px solid var(--color-border-soft);
   border-radius: 999px;
@@ -62,18 +78,65 @@
   font-size: 0.6rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  vertical-align: 1px;
+  white-space: nowrap;
   color: var(--color-text-faint);
 }
 
+.availability__table .availability__numeric {
+  text-align: right;
+  white-space: nowrap;
+}
+
 .availability__quantity {
-  flex-shrink: 0;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
-.availability__item--empty .availability__quantity {
-  font-weight: 400;
-  color: var(--color-text-faint);
+.availability__out {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: 0.72rem;
+}
+
+.availability__out::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.availability__table .availability__action {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.availability__transfer {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.availability__transfer:hover {
+  color: var(--color-text);
+}
+
+.availability__transfer:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
 }
 
 .availability__note {
@@ -86,4 +149,55 @@
 .availability__actions {
   display: flex;
   justify-content: flex-end;
+}
+
+@media (max-width: 480px) {
+  .availability__table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .availability__table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.375rem 0.75rem;
+    padding: 0.6875rem 0.625rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .availability__table tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .availability__table tbody th,
+  .availability__table tbody td {
+    padding: 0;
+    border-bottom: none;
+    background: none;
+  }
+
+  .availability__table tbody .availability__row--current {
+    background: var(--color-surface-elevated);
+  }
+
+  .availability__table .availability__action {
+    grid-column: 1 / -1;
+    width: auto;
+    text-align: left;
+  }
+
+  .availability__table .availability__action:empty {
+    display: none;
+  }
+
+  .availability__tag {
+    display: block;
+    width: fit-content;
+    margin: 0.3rem 0 0;
+  }
 }

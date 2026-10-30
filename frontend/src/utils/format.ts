@@ -33,7 +33,7 @@ export function formatLongDate(isoDate: string): string {
   )
 }
 
-const ACTION_LABELS: Record<string, string> = {
+export const ACTION_LABELS: Record<string, string> = {
   CREATE: 'Creación',
   UPDATE: 'Actualización',
   ACTIVATE: 'Activación',
@@ -45,15 +45,32 @@ const ACTION_LABELS: Record<string, string> = {
   INVENTORY_ADJUSTMENT: 'Ajuste de inventario',
   INVENTORY_TRANSFER: 'Transferencia de inventario',
   SALE_REVERSAL: 'Reversión de venta',
+  POST_CLOSURE_ADJUSTMENT: 'Ajuste posterior al cierre',
+  CONFIRM: 'Confirmación',
+  REVERSE: 'Reversión',
+  RECEIVE: 'Recepción',
+  DELETE: 'Eliminación',
 }
 
 export function getActionLabel(action: string): string {
   return ACTION_LABELS[action.trim().toUpperCase()] ?? action
 }
 
-const ENTITY_LABELS: Record<string, string> = {
+export const ENTITY_LABELS: Record<string, string> = {
   USER: 'Usuario',
   BRANCH: 'Sede',
+  CATEGORY: 'Categoría',
+  CUSTOMER: 'Cliente',
+  SUPPLIER: 'Proveedor',
+  PRODUCT: 'Producto',
+  PRODUCT_IMAGE: 'Imagen de producto',
+  UNIT_MEASURE: 'Unidad de medida',
+  PAYMENT_METHOD: 'Método de pago',
+  BRANCH_INVENTORY: 'Inventario de sede',
+  INVENTORY_MOVEMENT: 'Movimiento de inventario',
+  INVENTORY_CLOSURE: 'Cierre de inventario',
+  PURCHASE: 'Compra',
+  SALE: 'Venta',
 }
 
 export function getEntityLabel(entity: string): string {

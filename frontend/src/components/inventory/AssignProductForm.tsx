@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { useAuth } from '../../hooks/useAuth'
+import { generalStockService } from '../../services/generalStock.service'
 import { ApiError } from '../../services/http'
 import { inventoryService } from '../../services/inventory.service'
 import { productsService } from '../../services/products.service'
-import type { AssignedLot, BranchInventoryDetail } from '../../types/inventory'
+import type { AssignedLot, BranchInventoryDetail, GeneralStockLot } from '../../types/inventory'
 import type { Product } from '../../types/product'
 import {
   assignFieldError,
@@ -15,13 +16,13 @@ import {
   formatQuantity,
   resolveInventoryError,
   toExpirationDateTime,
-  todayInputValue,
   type AssignProductValues,
 } from '../../utils/inventory'
 import { formatPrice } from '../../utils/products'
 import { Alert } from '../ui/Alert'
 import { Button } from '../ui/Button'
 import { SearchBar } from '../ui/SearchBar'
+import { SelectField } from '../ui/SelectField'
 import { TextField } from '../ui/TextField'
 
 import './AssignProductForm.css'
@@ -40,6 +41,12 @@ type Existing =
   | { status: 'new' }
   | { status: 'assigned'; detail: BranchInventoryDetail }
   | { status: 'error'; message: string }
+
+interface StockLots {
+  productId: string
+  status: 'loading' | 'success' | 'error'
+  lots: GeneralStockLot[]
+}
 
 interface SearchResult {
   key: string
@@ -60,6 +67,7 @@ export function AssignProductForm({
   const [productError, setProductError] = useState<string | null>(null)
   const [existing, setExisting] = useState<{ productId: string; value: Existing } | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [stock, setStock] = useState<StockLots | null>(null)
   const searchKey = `${term}|${token ?? ''}`
 
   const {
@@ -98,6 +106,18 @@ export function AssignProductForm({
     setProductError(null)
     setSubmitError(null)
     setExisting({ productId: product.id, value: { status: 'loading' } })
+    setStock({ productId: product.id, status: 'loading', lots: [] })
+    setValue('expirationDate', '')
+    generalStockService
+      .getByProduct(product.id, token)
+      .then((detail) => {
+        const lots = detail.lots.filter((lot) => !lot.expired && lot.quantity > 0)
+        setStock({ productId: product.id, status: 'success', lots })
+        if (lots.length > 0) setValue('expirationDate', lots[0].expirationDate)
+      })
+      .catch(() => {
+        setStock({ productId: product.id, status: 'error', lots: [] })
+      })
     inventoryService
       .getProductInBranch(branchId, product.id, token)
       .then((detail) => {
@@ -128,6 +148,18 @@ export function AssignProductForm({
   const current = existing && existing.productId === selected?.id ? existing.value : null
   const assignedDetail = current?.status === 'assigned' ? current.detail : null
   const searchCurrent = search?.key === searchKey ? search : null
+  const stockCurrent = stock && stock.productId === selected?.id ? stock : null
+  const abbreviation = selected?.unitOfMeasure.abbreviation ?? ''
+  const lotOptions = (stockCurrent?.lots ?? []).map((lot) => {
+    const inBranch = assignedDetail?.lots.some(
+      (branchLot) => branchLot.expirationDate.slice(0, 10) === lot.expirationDate,
+    )
+    return {
+      value: lot.expirationDate,
+      label: `Vence ${formatExpirationDate(lot.expirationDate)} · ${formatQuantity(lot.quantity, abbreviation)} disponibles${inBranch ? ' · ya está en la sede' : ''}`,
+    }
+  })
+  const noStock = stockCurrent?.status === 'success' && stockCurrent.lots.length === 0
 
   const onSubmit = async (values: AssignProductValues) => {
     if (!selected) {
@@ -136,6 +168,17 @@ export function AssignProductForm({
     }
     setSubmitError(null)
     const expirationDate = toExpirationDateTime(values.expirationDate)
+    const stockLot = stockCurrent?.lots.find((lot) => lot.expirationDate === values.expirationDate)
+    if (stockLot && Number(values.quantity) > stockLot.quantity) {
+      setError(
+        'quantity',
+        {
+          message: `Solo hay ${formatQuantity(stockLot.quantity, abbreviation)} de este lote en el stock general.`,
+        },
+        { shouldFocus: true },
+      )
+      return
+    }
     if (
       assignedDetail?.lots.some((lot) => lot.expirationDate.slice(0, 10) === values.expirationDate)
     ) {
@@ -262,6 +305,17 @@ export function AssignProductForm({
         </p>
       )}
       {current?.status === 'error' && <Alert tone="error">{current.message}</Alert>}
+      {stockCurrent?.status === 'error' && (
+        <Alert tone="error">
+          No fue posible cargar los lotes del stock general. Cambia de producto e intenta de nuevo.
+        </Alert>
+      )}
+      {noStock && (
+        <Alert tone="info">
+          {selected?.name} no tiene unidades vigentes en el stock general. Primero registra la
+          recepción de una compra de este producto.
+        </Alert>
+      )}
       {assignedDetail && (
         <Alert tone="info">
           {selected?.name} ya está en {branchName} con{' '}
@@ -269,8 +323,8 @@ export function AssignProductForm({
           {assignedDetail.lots.length === 1 ? '1 lote' : `${assignedDetail.lots.length} lotes`}{' '}
           (vencimientos:{' '}
           {assignedDetail.lots.map((lot) => formatExpirationDate(lot.expirationDate)).join(', ')}).
-          Vas a registrar un lote nuevo con otra fecha de vencimiento; el stock mínimo se mantiene
-          igual para todos los lotes.
+          Vas a traer un lote con otra fecha de vencimiento; el stock mínimo se mantiene igual para
+          todos los lotes.
         </Alert>
       )}
 
@@ -294,8 +348,8 @@ export function AssignProductForm({
             autoComplete="off"
             hint={
               selected
-                ? `En ${selected.unitOfMeasure.name.toLocaleLowerCase('es')} (${selected.unitOfMeasure.abbreviation}). Puede ser 0.`
-                : 'Puede ser 0.'
+                ? `En ${selected.unitOfMeasure.name.toLocaleLowerCase('es')} (${selected.unitOfMeasure.abbreviation}). Sale del stock general.`
+                : 'Sale del stock general.'
             }
             error={errors.quantity?.message}
             {...register('quantity')}
@@ -315,12 +369,13 @@ export function AssignProductForm({
             {...register('minimumStock')}
           />
         </div>
-        <TextField
+        <SelectField
           id="assign-expiration"
-          label="Fecha de vencimiento"
-          type="date"
-          min={todayInputValue()}
-          hint="Cada lote del producto en la sede tiene una fecha de vencimiento distinta."
+          label="Lote del stock general"
+          placeholder={stockCurrent?.status === 'loading' ? 'Cargando lotes...' : 'Elige un lote'}
+          options={lotOptions}
+          disabled={!selected || stockCurrent?.status !== 'success' || noStock}
+          hint="La cantidad sale del lote elegido. Se propone el que vence primero."
           error={errors.expirationDate?.message}
           {...register('expirationDate')}
         />
@@ -331,7 +386,12 @@ export function AssignProductForm({
           </Button>
           <Button
             type="submit"
-            disabled={isSubmitting || (selected !== null && current?.status === 'loading')}
+            disabled={
+              isSubmitting ||
+              noStock ||
+              (selected !== null &&
+                (current?.status === 'loading' || stockCurrent?.status === 'loading'))
+            }
           >
             {isSubmitting ? 'Asignando...' : 'Asignar a la sede'}
           </Button>

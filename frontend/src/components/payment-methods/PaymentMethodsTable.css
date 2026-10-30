@@ -1,0 +1,24 @@
+.payment-methods-table th:first-child {
+  width: 13rem;
+}
+
+.payment-methods-table__inline-code {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .payment-methods-table th:first-child,
+  .payment-methods-table td:first-child {
+    display: none;
+  }
+
+  .payment-methods-table__inline-code {
+    display: table;
+    margin-top: 0.375rem;
+  }
+
+  .payment-methods-table th.categories-table__col-status,
+  .payment-methods-table td.categories-table__col-status {
+    width: 6.5rem;
+  }
+}

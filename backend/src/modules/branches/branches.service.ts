@@ -1,14 +1,18 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { Prisma } from "../../../generated/prisma/client.js";
 import { PrismaService } from "../../database/prisma/prisma.service.js";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { AuditService } from "../audit/audit.service.js";
 import { CreateBranchDto } from "./dto/create-branch.dto.js";
 import { ListBranchesQueryDto } from "./dto/list-branches-query.dto.js";
+import { ListSellableProductsQueryDto } from "./dto/list-sellable-products-query.dto.js";
+import { startOfTodayUtc } from "../../common/utils/expiration.util.js";
 import { UpdateBranchDto } from "./dto/update-branch.dto.js";
 
 @Injectable()
@@ -17,6 +21,22 @@ export class BranchesService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
   ) {}
+
+  private getPrimaryImageUrl(
+    images: Array<{ url: string; isPrimary: boolean; sortOrder: number }>,
+  ) {
+    if (images.length === 0) {
+      return null;
+    }
+
+    const primaryImage = images.find((image) => image.isPrimary);
+    if (primaryImage) {
+      return primaryImage.url;
+    }
+
+    const [sortedImage] = [...images].sort((a, b) => a.sortOrder - b.sortOrder);
+    return sortedImage?.url ?? null;
+  }
 
   async findAll(query: ListBranchesQueryDto) {
     const { page, limit, search, active } = query;
@@ -146,7 +166,7 @@ export class BranchesService {
         typeof error === "object" &&
         error !== null &&
         "code" in error &&
-        error.code === "P2002"
+        (error as { code?: unknown }).code === "P2002"
       ) {
         throw new ConflictException("Branch name already exists");
       }
@@ -268,12 +288,139 @@ export class BranchesService {
         typeof error === "object" &&
         error !== null &&
         "code" in error &&
-        error.code === "P2002"
+        (error as { code?: unknown }).code === "P2002"
       ) {
         throw new ConflictException("Branch name already exists");
       }
 
       throw error;
     }
+  }
+
+  async findSellableProducts(
+    branchId: string,
+    query: ListSellableProductsQueryDto,
+    currentUser?: AuthenticatedUser,
+  ) {
+    const roleName = currentUser?.role?.name;
+    if (
+      (roleName === "BRANCH_LEADER" || roleName === "BRANCH_ASSISTANT") &&
+      !(currentUser?.branches ?? []).some((branch) => branch.id === branchId)
+    ) {
+      throw new ForbiddenException({
+        code: "BRANCH_SCOPE_VIOLATION",
+        message: "You do not have access to this branch.",
+      });
+    }
+
+    const branch = await this.prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { id: true },
+    });
+
+    if (!branch) {
+      throw new NotFoundException({
+        code: "BRANCH_NOT_FOUND",
+        message: "Branch not found",
+      });
+    }
+
+    const { page, limit, search, categoryId } = query;
+
+    const grouped = await this.prisma.branchInventory.groupBy({
+      by: ["productId"],
+      where: { branchId, expirationDate: { gte: startOfTodayUtc() } },
+      _sum: { quantity: true },
+    });
+
+    if (grouped.length === 0) {
+      return {
+        data: [],
+        meta: { page, limit, total: 0, totalPages: 0 },
+      };
+    }
+
+    const productIdsWithStock = grouped
+      .filter((g) => (g._sum.quantity ?? 0) > 0)
+      .map((g) => g.productId);
+
+    if (productIdsWithStock.length === 0) {
+      return {
+        data: [],
+        meta: { page, limit, total: 0, totalPages: 0 },
+      };
+    }
+
+    const productWhere: Prisma.ProductWhereInput = {
+      id: { in: productIdsWithStock },
+      active: true,
+      ...(categoryId ? { categoryId } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { referenceCode: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+
+    const skip = (page - 1) * limit;
+
+    const [total, products] = await this.prisma.$transaction([
+      this.prisma.product.count({ where: productWhere }),
+      this.prisma.product.findMany({
+        where: productWhere,
+        skip,
+        take: limit,
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          referenceCode: true,
+          price: true,
+          unitOfMeasure: { select: { abreviation: true } },
+          images: {
+            select: {
+              url: true,
+              isPrimary: true,
+              sortOrder: true,
+            },
+            orderBy: { sortOrder: "asc" },
+          },
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const quantityMap = new Map(
+      grouped.map((g) => [g.productId, g._sum.quantity ?? 0]),
+    );
+
+    const data = products.map((product) => ({
+      productId: product.id,
+      name: product.name,
+      referenceCode: product.referenceCode,
+      primaryImageUrl: this.getPrimaryImageUrl(product.images),
+      price: product.price.toFixed(2),
+      availableQuantity: quantityMap.get(product.id) ?? 0,
+      unit: product.unitOfMeasure.abreviation,
+      category: product.category,
+    }));
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
+      },
+    };
   }
 }

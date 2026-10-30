@@ -11,44 +11,18 @@
 .sidebar__brand {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin: 0 0 1.375rem 0.5rem;
+  flex-shrink: 0;
+  height: var(--app-bar-height);
+  margin: -1.375rem -1rem 1.25rem;
+  padding: 0 1.75rem;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .sidebar__logo {
   display: block;
-  height: 22px;
   width: auto;
-}
-
-.sidebar__user {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  margin-bottom: 1.25rem;
-  background: var(--color-surface-field);
-  border: 1px solid var(--color-border-soft);
-  border-radius: 10px;
-}
-
-.sidebar__user-info {
-  min-width: 0;
-}
-
-.sidebar__user-name {
-  font-size: 0.845rem;
-  font-weight: 500;
-  color: var(--color-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sidebar__user-role {
-  font-size: 0.72rem;
-  color: var(--color-text-faint);
+  height: 48px;
+  max-width: 100%;
 }
 
 .sidebar__nav {
@@ -117,42 +91,22 @@
   color: var(--color-text);
 }
 
-.sidebar__scope {
-  margin-top: auto;
-  padding-top: 1rem;
-  border-top: 1px solid var(--color-border);
-}
-
-.sidebar__scope-label {
-  margin: 0 0 0.5rem 0.75rem;
-  font-family: var(--font-mono);
-  font-size: 0.625rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-text-faint);
-}
-
-.sidebar__scope-value {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.6875rem 0.75rem;
-  border: 1px solid var(--color-border-strong);
-  border-radius: 9px;
-  font-size: 0.845rem;
-  color: var(--color-text);
-}
-
-.sidebar__scope-value span:last-child {
-  font-size: 0.7rem;
-  color: var(--color-text-faint);
-}
-
 @media (max-width: 1023px) {
   .sidebar {
     height: auto;
     border-right: none;
     border-bottom: 1px solid var(--color-border);
+  }
+
+  .sidebar__brand {
+    height: auto;
+    margin: 0 0 1.25rem;
+    padding: 0 0.25rem;
+    border-bottom: none;
+  }
+
+  .sidebar__logo {
+    height: 40px;
   }
 
   .sidebar__nav {
@@ -161,10 +115,6 @@
   }
 
   .sidebar__subs {
-    display: none;
-  }
-
-  .sidebar__scope {
     display: none;
   }
 }

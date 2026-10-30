@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { branchesService } from '../../services/branches.service'
 import { categoriesService } from '../../services/categories.service'
+import { generalStockService } from '../../services/generalStock.service'
 import { ApiError } from '../../services/http'
 import { inventoryService } from '../../services/inventory.service'
 import { productsService } from '../../services/products.service'
@@ -49,6 +50,10 @@ vi.mock('../../services/units.service', () => ({
   unitsService: { list: vi.fn() },
 }))
 
+vi.mock('../../services/generalStock.service', () => ({
+  generalStockService: { getByProduct: vi.fn() },
+}))
+
 vi.mock('../../services/products.service', () => ({
   productsService: { list: vi.fn() },
 }))
@@ -61,9 +66,18 @@ vi.mock('../../hooks/useAuth', () => ({
 }))
 
 vi.mock('../../layouts/AppLayout', () => ({
-  AppLayout: ({ title, children }: { title: string; children: ReactNode }) => (
+  AppLayout: ({
+    title,
+    actions,
+    children,
+  }: {
+    title: string
+    actions?: ReactNode
+    children: ReactNode
+  }) => (
     <main>
       <h1>{title}</h1>
+      {actions}
       {children}
     </main>
   ),
@@ -332,6 +346,17 @@ describe('InventoryPage', () => {
   })
 
   it('assigns a product to the branch and reloads the inventory', async () => {
+    vi.mocked(generalStockService.getByProduct).mockResolvedValue({
+      product: {
+        id: 'product-whey',
+        name: 'Whey Protein 2 lb',
+        referenceCode: 'WHEY-2LB-001',
+        active: true,
+        unitOfMeasure: { abbreviation: 'und' },
+      },
+      totalQuantity: 100,
+      lots: [{ id: 'gs-1', expirationDate: '2027-12-31', quantity: 100, expired: false }],
+    })
     listProducts.mockResolvedValue(optionsPage([buildProduct()]))
     getProductInBranch.mockRejectedValue(
       new ApiError('Not assigned', 404, undefined, 'PRODUCT_NOT_ASSIGNED'),
@@ -356,7 +381,9 @@ describe('InventoryPage', () => {
     await user.type(within(dialog).getByLabelText('Cantidad inicial'), '20')
     await user.clear(within(dialog).getByLabelText('Stock mínimo'))
     await user.type(within(dialog).getByLabelText('Stock mínimo'), '5')
-    await user.type(within(dialog).getByLabelText('Fecha de vencimiento'), '2027-12-31')
+    const lot = within(dialog).getByLabelText('Lote del stock general')
+    await waitFor(() => expect(lot).toBeEnabled())
+    await user.selectOptions(lot, '2027-12-31')
     await user.click(within(dialog).getByRole('button', { name: 'Asignar a la sede' }))
 
     expect(
@@ -463,5 +490,78 @@ describe('InventoryPage', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Disponibilidad en otras sedes' })
     expect(await within(dialog).findByText('Norte')).toBeInTheDocument()
     expect(availability).toHaveBeenCalledWith('product-whey', 'test-token')
+  })
+
+  it('looks up a product in every branch and requests the transfer to this one', async () => {
+    listProducts.mockResolvedValue({
+      data: [buildProduct({ id: 'product-whey', name: 'Whey Protein 2 lb' })],
+      meta: { page: 1, limit: 6, total: 1, totalPages: 1 },
+    })
+    availability.mockResolvedValue({
+      product: { id: 'product-whey', name: 'Whey Protein 2 lb', referenceCode: 'WHEY-2LB-001' },
+      branches: [
+        { branchId: 'branch-norte', branchName: 'Norte', quantity: 12 },
+        { branchId: 'branch-centro', branchName: 'Centro', quantity: 0 },
+      ],
+    })
+    getProductInBranch.mockResolvedValue(buildInventoryDetail({ branchId: 'branch-norte' }))
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Consultar disponibilidad' }))
+    const lookup = within(await screen.findByRole('dialog', { name: 'Consultar disponibilidad' }))
+    await user.click(await lookup.findByRole('button', { name: /Whey Protein 2 lb/ }))
+    await user.click(await lookup.findByRole('button', { name: 'Solicitar traslado desde Norte' }))
+
+    const transfer = within(await screen.findByRole('dialog', { name: 'Solicitar traslado' }))
+    expect(transfer.getByText(/12 und en Norte/)).toBeInTheDocument()
+    expect(transfer.getByLabelText('Sede origen')).toHaveValue('branch-norte')
+  })
+
+  it('tells the assistant who registers the transfers', async () => {
+    auth.role = 'BRANCH_ASSISTANT'
+    auth.branches = [{ id: 'branch-centro', name: 'Centro' }]
+    availability.mockResolvedValue({
+      product: { id: 'product-whey', name: 'Whey Protein 2 lb', referenceCode: 'WHEY-2LB-001' },
+      branches: [
+        { branchId: 'branch-norte', branchName: 'Norte', quantity: 12 },
+        { branchId: 'branch-centro', branchName: 'Centro', quantity: 35 },
+      ],
+    })
+    const { user } = renderPage()
+
+    await openRowAction(user, 'Whey Protein 2 lb', 'Ver en otras sedes')
+
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Disponibilidad en otras sedes' }),
+    )
+    expect(await dialog.findByText(/Los traslados los registra el superadmin/)).toBeInTheDocument()
+    expect(dialog.queryByRole('button', { name: /Solicitar traslado/ })).not.toBeInTheDocument()
+  })
+
+  it('renders the availability modal and closes it', async () => {
+    listProducts.mockResolvedValue({
+      data: [buildProduct({ id: 'product-whey', name: 'Whey Protein 2 lb' })],
+      meta: { page: 1, limit: 6, total: 1, totalPages: 1 },
+    })
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Consultar disponibilidad' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Consultar disponibilidad' })
+
+    expect(dialog).toHaveAccessibleDescription(
+      'Busca un producto para ver sus existencias vigentes en cada sede activa y traerlo a Centro.',
+    )
+    expect(
+      within(dialog).getByRole('searchbox', { name: 'Buscar producto por nombre o código' }),
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).getByText('Escribe el nombre o el código, o elige uno de estos productos.'),
+    ).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cerrar diálogo' }))
+
+    expect(
+      screen.queryByRole('dialog', { name: 'Consultar disponibilidad' }),
+    ).not.toBeInTheDocument()
   })
 })

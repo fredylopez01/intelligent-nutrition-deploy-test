@@ -38,10 +38,15 @@ describe('ConsolidatedTable', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     const breakdown = screen.getByRole('table', { name: 'Desglose por sede de Whey Protein 2 lb' })
     const rows = within(breakdown).getAllByRole('row').slice(1)
-    expect(rows.map((row) => row.textContent)).toEqual([
-      'Centro125En nivel',
-      'Norte2025Bajo mínimo',
-    ])
+    expect(rows).toHaveLength(2)
+    expect(within(rows[0]).getByText('Centro')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('12')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('5')).toBeInTheDocument()
+    expect(within(rows[0]).getByText('En nivel')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Norte')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('20')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('25')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Bajo mínimo')).toBeInTheDocument()
 
     await user.click(
       screen.getByRole('button', { name: 'Ocultar el desglose por sede de Whey Protein 2 lb' }),

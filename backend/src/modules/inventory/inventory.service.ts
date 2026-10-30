@@ -17,12 +17,21 @@ import {
 import { Prisma } from "../../../generated/prisma/client.js";
 import { UpdateMinimumStockDto } from "./dto/update-minimunstock.dto.js";
 import { ListConsolidatedQueryDto } from "./dto/list-consolidated-query.dto.js";
+import { GeneralStockService } from "../general-stock/general-stock.service.js";
+import { LowStockService } from "../notifications/low-stock.service.js";
+import {
+  isExpired,
+  startOfTodayUtc,
+  toExpirationDate,
+} from "../../common/utils/expiration.util.js";
 
 @Injectable()
 export class InventoryService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly generalStockService: GeneralStockService,
+    private readonly lowStockService: LowStockService,
   ) {}
 
   async assignProductToBranch(
@@ -78,7 +87,13 @@ export class InventoryService {
 
       await transaction.$queryRaw`SELECT id FROM product WHERE id = ${dto.productId} FOR UPDATE`;
 
-      const expirationDate = new Date(dto.expirationDate);
+      const expirationDate = toExpirationDate(dto.expirationDate);
+      if (isExpired(expirationDate)) {
+        throw new UnprocessableEntityException({
+          code: "LOT_EXPIRED",
+          message: "An expired lot cannot be assigned to a branch",
+        });
+      }
       const existingInventory = await transaction.branchInventory.findUnique({
         where: {
           branchId_productId_expirationDate: {
@@ -117,6 +132,12 @@ export class InventoryService {
       });
 
       if (dto.quantity > 0) {
+        await this.generalStockService.consume(
+          transaction,
+          dto.productId,
+          expirationDate,
+          dto.quantity,
+        );
         await transaction.inventoryMovement.create({
           data: {
             productId: dto.productId,
@@ -125,6 +146,7 @@ export class InventoryService {
             userId: currentUser.id,
             movementType: "TRANSFER",
             quantity: dto.quantity,
+            expirationDate,
             observation:
               dto.observation ?? "Initial assignment from general stock",
           },
@@ -442,6 +464,11 @@ export class InventoryService {
 
       let updatedAt: Date;
       if (hasChanged) {
+        const stockBefore = await this.lowStockService.levels(
+          transaction,
+          branchId,
+          [productId],
+        );
         await transaction.branchInventory.updateMany({
           where: { branchId, productId },
           data: { minimumStock: dto.minimumStock },
@@ -471,6 +498,12 @@ export class InventoryService {
             ipAddress,
           },
           transaction,
+        );
+
+        await this.lowStockService.notifyCrossings(
+          transaction,
+          branchId,
+          stockBefore,
         );
 
         const refreshed = await transaction.branchInventory.findFirstOrThrow({
@@ -564,7 +597,7 @@ export class InventoryService {
     };
   }
 
-  async getAvailability(productId: string) {
+  async getAvailability(productId: string, excludeBranchId?: string) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
       select: { id: true, name: true, referenceCode: true },
@@ -577,12 +610,15 @@ export class InventoryService {
     }
 
     const branches = await this.prisma.branch.findMany({
-      where: { active: true },
+      where: {
+        active: true,
+        ...(excludeBranchId ? { id: { not: excludeBranchId } } : {}),
+      },
       select: {
         id: true,
         name: true,
         branchInventories: {
-          where: { productId },
+          where: { productId, expirationDate: { gte: startOfTodayUtc() } },
           select: { quantity: true },
         },
       },

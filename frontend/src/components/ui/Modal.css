@@ -79,3 +79,7 @@
 .ui-modal__body {
   padding: 1.5rem;
 }
+
+.ui-modal__panel--wide {
+  max-width: 760px;
+}

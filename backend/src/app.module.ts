@@ -7,6 +7,7 @@ import { RolesModule } from "./modules/roles/roles.module.js";
 import { AuthModule } from "./modules/auth/auth.module.js";
 import { HealthModule } from "./health/health.module.js";
 import { ConfigModule } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
 import { DocumentTypesModule } from "./modules/document-types/document-types.module.js";
 import { AuditModule } from "./modules/audit/audit.module.js";
 import { BranchesModule } from "./modules/branches/branches.module.js";
@@ -16,12 +17,21 @@ import { CategoriesModule } from "./modules/categories/categories.module.js";
 import { UnitMeasureModule } from "./modules/unit-measure/unit-measure.module.js";
 import { ProductsModule } from "./modules/products/products.module.js";
 import { InventoryModule } from "./modules/inventory/inventory.module.js";
+import { PaymentMethodsModule } from "./modules/payment-methods/payment-methods.module.js";
+import { PurchasesModule } from "./modules/purchases/purchases.module.js";
+import { InventoryClosuresModule } from "./modules/inventory-closures/inventory-closures.module.js";
+import { InventoryMovementsModule } from "./modules/inventory-movements/inventory-movements.module.js";
+import { SalesModule } from "./modules/sales/sales.module.js";
+import { GeneralStockModule } from "./modules/general-stock/general-stock.module.js";
+import { NotificationsModule } from "./modules/notifications/notifications.module.js";
+import { NightlyJobsModule } from "./modules/nightly-jobs/nightly-jobs.module.js";
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     RolesModule,
@@ -36,6 +46,14 @@ import { InventoryModule } from "./modules/inventory/inventory.module.js";
     UnitMeasureModule,
     ProductsModule,
     InventoryModule,
+    PaymentMethodsModule,
+    PurchasesModule,
+    InventoryClosuresModule,
+    InventoryMovementsModule,
+    SalesModule,
+    GeneralStockModule,
+    NotificationsModule,
+    NightlyJobsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

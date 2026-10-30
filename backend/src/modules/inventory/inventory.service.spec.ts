@@ -11,6 +11,8 @@ import { Test, type TestingModule } from "@nestjs/testing";
 import type { AuthenticatedUser } from "../../common/interfaces/AuthenticatedUser.js";
 import { AssignProductDto } from "./dto/assign-product.dto.js";
 import { UpdateMinimumStockDto } from "./dto/update-minimunstock.dto.js";
+import { LowStockService } from "../notifications/low-stock.service.js";
+import { GeneralStockService } from "../general-stock/general-stock.service.js";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
 type TransactionCallback = (client: typeof transactionMock) => Promise<unknown>;
@@ -130,6 +132,8 @@ describe("InventoryService.updateMinimumStock", () => {
         InventoryService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
+        { provide: LowStockService, useValue: { levels: async () => new Map(), notifyCrossings: async () => 0 } },
+        { provide: GeneralStockService, useValue: { consume: async () => undefined, increase: async () => undefined } },
       ],
     }).compile();
     service = testingModule.get(InventoryService);
@@ -309,6 +313,8 @@ describe("InventoryService.assignProductToBranch", () => {
         InventoryService,
         { provide: PrismaService, useValue: prismaMock },
         { provide: AuditService, useValue: auditMock },
+        { provide: LowStockService, useValue: { levels: async () => new Map(), notifyCrossings: async () => 0 } },
+        { provide: GeneralStockService, useValue: { consume: async () => undefined, increase: async () => undefined } },
       ],
     }).compile();
     service = testingModule.get(InventoryService);

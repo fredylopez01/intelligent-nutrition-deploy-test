@@ -76,3 +76,31 @@
     display: none;
   }
 }
+
+.audit-logs-table__toggle {
+  padding: 0.3rem 0.625rem;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.audit-logs-table__toggle:hover {
+  background: var(--color-surface-hover);
+}
+
+.audit-logs-table__toggle:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
+}
+
+.audit-logs-table__row--open td {
+  border-bottom-color: transparent;
+}
+
+.audit-logs-table__detail-row td {
+  background: var(--color-surface-elevated);
+}

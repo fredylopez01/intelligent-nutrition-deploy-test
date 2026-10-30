@@ -1,7 +1,7 @@
 info:
   name: update-branch-status
   type: http
-  seq: 18
+  seq: 5
 
 http:
   method: PATCH

@@ -34,6 +34,23 @@ export class ListAuditLogsQueryDto {
   action?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  entity?: string;
+
+  @IsOptional()
+  @IsUUID()
+  entityId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
+  @IsOptional()
   @IsDateString()
   fromDate?: string;
 

@@ -11,7 +11,10 @@ export class InventoryGlobalController {
   @Get("availability")
   @Roles("SUPERADMIN", "BRANCH_LEADER", "BRANCH_ASSISTANT")
   getAvailability(@Query() query: AvailabilityQueryDto) {
-    return this.inventoryService.getAvailability(query.productId);
+    return this.inventoryService.getAvailability(
+      query.productId,
+      query.excludeBranchId,
+    );
   }
 
   @Get("consolidated")

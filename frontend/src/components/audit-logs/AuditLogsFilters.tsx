@@ -1,42 +1,34 @@
+import type { User } from '../../types/user'
+import { AUDIT_ACTION_OPTIONS, AUDIT_ENTITY_OPTIONS } from '../../utils/auditLogs'
 import { SelectField } from '../ui/SelectField'
 
 import './AuditLogsFilters.css'
 
-import type { User } from '../../types/user'
-
-const ACTION_OPTIONS = [
-  { value: 'CREATE', label: 'Creación' },
-  { value: 'UPDATE', label: 'Actualización' },
-  { value: 'ACTIVATE', label: 'Activación' },
-  { value: 'DEACTIVATE', label: 'Desactivación' },
-  { value: 'ASSIGN', label: 'Asignación' },
-  { value: 'UNASSIGN', label: 'Desasignación' },
-  { value: 'PASSWORD_RESET', label: 'Restablecimiento de contraseña' },
-  { value: 'ROLE_ASSIGNMENT', label: 'Asignación de rol' },
-  { value: 'INVENTORY_ADJUSTMENT', label: 'Ajuste de inventario' },
-  { value: 'INVENTORY_TRANSFER', label: 'Transferencia de inventario' },
-  { value: 'SALE_REVERSAL', label: 'Reversión de venta' },
-]
-
 interface AuditLogsFiltersProps {
+  showEntity: boolean
   users: User[]
   userId: string
+  entity: string
   action: string
   fromDate: string
   toDate: string
   onUserIdChange: (value: string) => void
+  onEntityChange: (value: string) => void
   onActionChange: (value: string) => void
   onFromDateChange: (value: string) => void
   onToDateChange: (value: string) => void
 }
 
 export function AuditLogsFilters({
+  showEntity,
   users,
   userId,
+  entity,
   action,
   fromDate,
   toDate,
   onUserIdChange,
+  onEntityChange,
   onActionChange,
   onFromDateChange,
   onToDateChange,
@@ -49,21 +41,27 @@ export function AuditLogsFilters({
   })
 
   return (
-    <div className="audit-logs-filters">
+    <div className={`audit-logs-filters${showEntity ? '' : ' audit-logs-filters--compact'}`}>
       <SelectField
         id="audit-logs-filter-user"
-        label="Usuario afectado"
-        placeholder="Todos los usuarios"
-        hint="Filtra por el usuario sobre el que se hizo el cambio, no por quién lo ejecutó."
-        options={userOptions}
+        label="Ejecutado por"
+        options={[{ value: '', label: 'Todos los usuarios' }, ...userOptions]}
         value={userId}
         onChange={(event) => onUserIdChange(event.target.value)}
       />
+      {showEntity && (
+        <SelectField
+          id="audit-logs-filter-entity"
+          label="Entidad"
+          options={[{ value: '', label: 'Todas las entidades' }, ...AUDIT_ENTITY_OPTIONS]}
+          value={entity}
+          onChange={(event) => onEntityChange(event.target.value)}
+        />
+      )}
       <SelectField
         id="audit-logs-filter-action"
         label="Acción"
-        placeholder="Todas las acciones"
-        options={ACTION_OPTIONS}
+        options={[{ value: '', label: 'Todas las acciones' }, ...AUDIT_ACTION_OPTIONS]}
         value={action}
         onChange={(event) => onActionChange(event.target.value)}
       />
