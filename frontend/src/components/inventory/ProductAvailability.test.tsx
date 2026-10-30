@@ -93,7 +93,78 @@ describe('ProductAvailability', () => {
     )
 
     expect(await screen.findByText(/Los traslados los registra el superadmin/)).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Acciones' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Solicitar traslado/ })).not.toBeInTheDocument()
+  })
+
+  it('summarizes when several branches have stock', async () => {
+    availability.mockResolvedValue({
+      product,
+      branches: [
+        { branchId: 'branch-sur', branchName: 'Sur', quantity: 4 },
+        { branchId: 'branch-norte', branchName: 'Norte', quantity: 12 },
+        { branchId: 'branch-centro', branchName: 'Centro', quantity: 5 },
+      ],
+    })
+    render(
+      <ProductAvailability branchId="branch-centro" product={inventoryProduct} onClose={vi.fn()} />,
+    )
+
+    expect(
+      await screen.findByText('2 sedes más tienen existencias de este producto.'),
+    ).toBeInTheDocument()
+  })
+
+  it('marks the current branch even when it has no stock', async () => {
+    availability.mockResolvedValue({
+      product,
+      branches: [
+        { branchId: 'branch-centro', branchName: 'Centro', quantity: 0 },
+        { branchId: 'branch-norte', branchName: 'Norte', quantity: 12 },
+      ],
+    })
+    render(
+      <ProductAvailability branchId="branch-centro" product={inventoryProduct} onClose={vi.fn()} />,
+    )
+
+    await screen.findByRole('table', { name: 'Existencias por sede' })
+    expect(rows()).toEqual(['CentroEsta sedeSin existencias', 'Norte12 und'])
+    expect(screen.getByText('1 sede más tiene existencias de este producto.')).toBeInTheDocument()
+  })
+
+  it('explains that minimum stock and prices are not included', async () => {
+    availability.mockResolvedValue(threeBranches)
+    render(
+      <ProductAvailability branchId="branch-centro" product={inventoryProduct} onClose={vi.fn()} />,
+    )
+
+    expect(
+      await screen.findByText(
+        'Solo se cuentan sedes activas y lotes vigentes; no incluye stock mínimo ni precios.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the loading state while querying the branches', () => {
+    availability.mockReturnValue(new Promise(() => {}))
+    render(
+      <ProductAvailability branchId="branch-centro" product={inventoryProduct} onClose={vi.fn()} />,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent('Consultando las sedes...')
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  it('explains an authorization error', async () => {
+    availability.mockRejectedValue(new ApiError('No', 403))
+    render(
+      <ProductAvailability branchId="branch-centro" product={inventoryProduct} onClose={vi.fn()} />,
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No tienes permiso para realizar esta acción.',
+    )
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
   })
 
   it('says when no other branch has the product', async () => {

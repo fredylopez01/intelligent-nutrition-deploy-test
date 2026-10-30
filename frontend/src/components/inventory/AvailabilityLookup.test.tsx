@@ -48,13 +48,14 @@ beforeEach(() => {
 describe('AvailabilityLookup', () => {
   it('searches active products and shows the availability of the chosen one', async () => {
     const onRequestTransfer = vi.fn()
+    const onClose = vi.fn()
     const user = userEvent.setup()
     render(
       <AvailabilityLookup
         branchId="branch-centro"
         transferOriginIds={['branch-norte']}
         onRequestTransfer={onRequestTransfer}
-        onClose={vi.fn()}
+        onClose={onClose}
       />,
     )
 
@@ -72,12 +73,63 @@ describe('AvailabilityLookup', () => {
     await user.click(await screen.findByRole('button', { name: /Whey Protein 2 lb/ }))
 
     expect(await screen.findByText('Sin existencias')).toBeInTheDocument()
+    expect(screen.getByText(whey.name)).toBeInTheDocument()
+    expect(screen.getByText(`${whey.referenceCode} · ${whey.category.name}`)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Solicitar traslado desde Norte' }))
     expect(onRequestTransfer).toHaveBeenCalledWith(expect.objectContaining({ id: whey.id }), {
       branchId: 'branch-norte',
       branchName: 'Norte',
       quantity: 12,
     })
+
+    await user.click(screen.getByRole('button', { name: 'Cerrar' }))
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('lists active products before typing', async () => {
+    render(<AvailabilityLookup branchId="branch-centro" onClose={vi.fn()} />)
+
+    expect(await screen.findByRole('list', { name: 'Productos encontrados' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Escribe el nombre o el código, o elige uno de estos productos.'),
+    ).toBeInTheDocument()
+    expect(list).toHaveBeenCalledWith(
+      { page: 1, limit: 6, search: undefined, active: true },
+      'test-token',
+    )
+  })
+
+  it('shows the loading state while searching', () => {
+    list.mockReturnValue(new Promise(() => {}))
+    render(<AvailabilityLookup branchId="branch-centro" onClose={vi.fn()} />)
+
+    expect(screen.getByRole('status')).toHaveTextContent('Buscando productos...')
+    expect(screen.queryByRole('list', { name: 'Productos encontrados' })).not.toBeInTheDocument()
+  })
+
+  it('explains that the catalog has no active products', async () => {
+    list.mockResolvedValue(page([]))
+    render(<AvailabilityLookup branchId="branch-centro" onClose={vi.fn()} />)
+
+    expect(await screen.findByText('No hay productos activos')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Cuando el catálogo tenga productos activos, podrás consultar sus existencias aquí.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('closes from the search step without choosing a product', async () => {
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<AvailabilityLookup branchId="branch-centro" onClose={onClose} />)
+    await screen.findByRole('list', { name: 'Productos encontrados' })
+
+    await user.click(screen.getByRole('button', { name: 'Cerrar' }))
+
+    expect(onClose).toHaveBeenCalled()
+    expect(availability).not.toHaveBeenCalled()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 
   it('goes back to the search to pick another product', async () => {
