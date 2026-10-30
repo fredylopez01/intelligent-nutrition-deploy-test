@@ -537,4 +537,31 @@ describe('InventoryPage', () => {
     expect(await dialog.findByText(/Los traslados los registra el superadmin/)).toBeInTheDocument()
     expect(dialog.queryByRole('button', { name: /Solicitar traslado/ })).not.toBeInTheDocument()
   })
+
+  it('renders the availability modal and closes it', async () => {
+    listProducts.mockResolvedValue({
+      data: [buildProduct({ id: 'product-whey', name: 'Whey Protein 2 lb' })],
+      meta: { page: 1, limit: 6, total: 1, totalPages: 1 },
+    })
+    const { user } = renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Consultar disponibilidad' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Consultar disponibilidad' })
+
+    expect(dialog).toHaveAccessibleDescription(
+      'Busca un producto para ver sus existencias vigentes en cada sede activa y traerlo a Centro.',
+    )
+    expect(
+      within(dialog).getByRole('searchbox', { name: 'Buscar producto por nombre o código' }),
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).getByText('Escribe el nombre o el código, o elige uno de estos productos.'),
+    ).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cerrar diálogo' }))
+
+    expect(
+      screen.queryByRole('dialog', { name: 'Consultar disponibilidad' }),
+    ).not.toBeInTheDocument()
+  })
 })
