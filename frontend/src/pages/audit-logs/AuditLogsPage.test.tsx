@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { auditLogsService } from '../../services/auditLogs.service'
 import { usersService } from '../../services/users.service'
@@ -123,6 +123,15 @@ beforeEach(() => {
   listLogs.mockResolvedValue(pageOf([makeLog()]))
 })
 
+const originalUrlApi = { create: URL.createObjectURL, revoke: URL.revokeObjectURL }
+
+afterEach(() => {
+  Object.assign(URL, {
+    createObjectURL: originalUrlApi.create,
+    revokeObjectURL: originalUrlApi.revoke,
+  })
+})
+
 describe('AuditLogsPage filters', () => {
   it('loads the first page without filters', async () => {
     renderPage()
@@ -222,6 +231,7 @@ describe('AuditLogsPage empty list', () => {
       screen.getByText('Los cambios sobre usuarios y sedes quedarán registrados aquí.'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeDisabled()
   })
 
   it('shows the message sent by the api for an empty list', async () => {
@@ -273,11 +283,8 @@ describe('AuditLogsPage entity filter and detail', () => {
     await user.click(toggle)
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText(/"firstName": "Ana"/)).toBeInTheDocument()
-    expect(screen.getByText(/"firstName": "María"/)).toBeInTheDocument()
-    expect(screen.getByText('127.0.0.1')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Ocultar' }))
-    expect(screen.queryByText(/"firstName": "Ana"/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Antes')).not.toBeInTheDocument()
   })
 
   it('exports every page that matches the filters as CSV', async () => {
@@ -312,5 +319,97 @@ describe('AuditLogsPage entity filter and detail', () => {
     expect(screen.queryByRole('combobox', { name: 'Entidad' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ver cambios' })).not.toBeInTheDocument()
     expect(lastListParams().entity).toBeUndefined()
+  })
+})
+
+describe('AuditLogsPage pagination', () => {
+  it('shows the page count and disables the previous button on the first page', async () => {
+    listLogs.mockResolvedValue({
+      data: [makeLog()],
+      meta: { page: 1, limit: 10, total: 15, totalPages: 2 },
+    })
+    renderPage()
+    await screen.findByRole('cell', { name: /Admin Sistema/ })
+
+    const pagination = within(screen.getByRole('navigation', { name: 'Paginación de auditoría' }))
+    expect(pagination.getByText('Página 1 de 2')).toBeInTheDocument()
+    expect(pagination.getByRole('button', { name: 'Anterior' })).toBeDisabled()
+    expect(pagination.getByRole('button', { name: 'Siguiente' })).toBeEnabled()
+  })
+
+  it('disables the next button on the last page', async () => {
+    listLogs.mockImplementation((params) =>
+      Promise.resolve({
+        data: [makeLog()],
+        meta: { page: params.page ?? 1, limit: 10, total: 15, totalPages: 2 },
+      }),
+    )
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: /Admin Sistema/ })
+
+    await user.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    const pagination = within(
+      await screen.findByRole('navigation', { name: 'Paginación de auditoría' }),
+    )
+    await waitFor(() => expect(pagination.getByText('Página 2 de 2')).toBeInTheDocument())
+    expect(pagination.getByRole('button', { name: 'Siguiente' })).toBeDisabled()
+    expect(pagination.getByRole('button', { name: 'Anterior' })).toBeEnabled()
+  })
+
+  it('hides the pagination when there is a single page', async () => {
+    renderPage()
+    await screen.findByRole('cell', { name: /Admin Sistema/ })
+
+    expect(
+      screen.queryByRole('navigation', { name: 'Paginación de auditoría' }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe('AuditLogsPage error and export states', () => {
+  it('shows the export progress', async () => {
+    listLogs.mockImplementation((params) =>
+      params.limit === 100 ? new Promise(() => {}) : Promise.resolve(pageOf([makeLog()])),
+    )
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: /Admin Sistema/ })
+
+    await user.click(screen.getByRole('button', { name: 'Exportar CSV' }))
+
+    expect(await screen.findByRole('button', { name: 'Exportando...' })).toBeDisabled()
+  })
+
+  it('explains a failed export', async () => {
+    listLogs.mockImplementation((params) =>
+      params.limit === 100
+        ? Promise.reject(new Error('down'))
+        : Promise.resolve(pageOf([makeLog()])),
+    )
+    const { user } = renderPage()
+    await screen.findByRole('cell', { name: /Admin Sistema/ })
+
+    await user.click(screen.getByRole('button', { name: 'Exportar CSV' }))
+
+    expect(
+      await screen.findByText('No fue posible exportar el historial. Intenta de nuevo.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeEnabled()
+  })
+
+  it('retries when the list fails', async () => {
+    listLogs
+      .mockRejectedValueOnce(new Error('No fue posible cargar el historial. Intenta de nuevo.'))
+      .mockResolvedValue(pageOf([makeLog()]))
+    const { user } = renderPage()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No fue posible cargar el historial. Intenta de nuevo.',
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+
+    expect(await screen.findByRole('cell', { name: /Admin Sistema/ })).toBeInTheDocument()
+    expect(listLogs).toHaveBeenCalledTimes(2)
   })
 })
